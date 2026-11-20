@@ -1,111 +1,404 @@
+import { isEqual } from "lodash"
 import type * as vscode from "vscode"
+import { z } from "zod"
 
 import type { MigratedData } from "."
-import validateData from "."
 import {
   LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
   LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
   LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants"
+import { StoredDataMigrationError } from "../../errors"
+import { Logger } from "../../utilities/logger"
 import * as data from "../data"
 
-export function v1_migrateFromV0(
-  unstableData: data.v0.LocalCourseData[],
-  memento: vscode.Memento,
-): data.v1.LocalCourseData[] {
-  interface LocalExerciseDataPartial {
-    id: number
-    deadline?: string | undefined
-    name?: string
-    softDeadline?: string | undefined
+/** A stored course or exercise a migration left out, and why. */
+export interface DroppedEntry {
+  key: string
+  /** Names the entry, e.g. `course 12 (python-course)` or `course 12, exercise 3`. */
+  entry: string
+  reason: string
+}
+
+/** A raw legacy value a migration left out, which rewriting `key` would otherwise lose. */
+export type UnreadableValue = Pick<data.v3.UnreadableLegacyValue, "key" | "value">
+
+/** The user data step of a migration run. */
+export interface UserDataMigration extends MigratedData<data.v3.UserData> {
+  /** Whether `user-data-v1` or its record needs rewriting though `data` is unset. */
+  isLegacyMirrorStale: boolean
+  dropped: DroppedEntry[]
+  /** To keep before `user-data-v1` is rewritten; see {@link data.v3.MigrationDiagnostics}. */
+  unreadable: UnreadableValue[]
+}
+
+type Omitted = Pick<UserDataMigration, "dropped" | "unreadable">
+
+// Shapes every pre-4.0 version wrote: v0 (`userData`, before 2.0) and v1/v2 (`user-data-v1`).
+// 0.1.0 could store a null description, versions before 0.9.0 lack the optional fields, and the
+// material URL is missing when the server omitted it.
+const legacyExerciseSchema = z.object({
+  id: z.number(),
+  passed: z.boolean(),
+  name: z.string().optional(),
+  deadline: z.string().nullish(),
+  softDeadline: z.string().nullish(),
+  availablePoints: z.number().optional(),
+  awardedPoints: z.number().optional(),
+})
+
+const legacyCourseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  organization: z.string(),
+  title: z.string().nullish(),
+  description: z.string().nullish(),
+  exercises: z.array(z.unknown()),
+  availablePoints: z.number().optional(),
+  awardedPoints: z.number().optional(),
+  perhapsExamMode: z.boolean().optional(),
+  newExercises: z.array(z.number()).optional(),
+  notifyAfter: z.number().optional(),
+  disabled: z.boolean().optional(),
+  materialUrl: z.string().nullish(),
+  material_url: z.string().nullish(),
+})
+
+const legacyUserDataSchema = z.object({ courses: z.array(z.unknown()) })
+
+/** What the v0 `exerciseData` key knew of an exercise that v0 course data may lack. */
+interface ExerciseFallback {
+  name?: string | undefined
+  deadline?: string | null | undefined
+  softDeadline?: string | null | undefined
+}
+
+function describeCourse(raw: unknown, index: number): string {
+  const course = z.object({ id: z.number(), name: z.string().optional() }).safeParse(raw)
+  if (!course.success) {
+    return `course at index ${index}`
   }
+  return course.data.name
+    ? `course ${course.data.id} (${course.data.name})`
+    : `course ${course.data.id}`
+}
 
-  const localExerciseData = memento.get<LocalExerciseDataPartial[]>(data.v0.EXERCISE_DATA_KEY)
-  const courseExercises = localExerciseData && new Map(localExerciseData.map((x) => [x.id, x]))
+/**
+ * Reads one legacy course into the current shape, dropping only the exercises that cannot be
+ * read; `undefined` when the course itself cannot be. Whatever it drops goes to `dropped`, with
+ * the raw course in `unreadable`.
+ */
+function readLegacyCourse(
+  raw: unknown,
+  index: number,
+  key: string,
+  omitted: Omitted,
+  exerciseFallbacks?: Map<number, ExerciseFallback>,
+): data.v3.TmcLocalCourseData | undefined {
+  const { dropped, unreadable } = omitted
+  const parsed = legacyCourseSchema.safeParse(raw)
+  if (!parsed.success) {
+    dropped.push({ key, entry: describeCourse(raw, index), reason: z.prettifyError(parsed.error) })
+    unreadable.push({ key, value: raw })
+    return undefined
+  }
+  const course = parsed.data
+  let isPartlyRead = false
+  const exercises = course.exercises.flatMap<data.v3.TmcLocalCourseExercise>((rawExercise, i) => {
+    const exercise = legacyExerciseSchema.safeParse(rawExercise)
+    if (!exercise.success) {
+      dropped.push({
+        key,
+        entry: `course ${course.id}, exercise at index ${i}`,
+        reason: z.prettifyError(exercise.error),
+      })
+      isPartlyRead = true
+      return []
+    }
+    const { id, passed, availablePoints, awardedPoints } = exercise.data
+    const fallback = exerciseFallbacks?.get(id)
+    return [
+      {
+        id,
+        availablePoints: availablePoints ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+        awardedPoints:
+          awardedPoints ??
+          (passed
+            ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
+            : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER),
+        name: exercise.data.name ?? fallback?.name ?? id.toString(),
+        deadline: exercise.data.deadline ?? fallback?.deadline ?? null,
+        passed,
+        softDeadline: exercise.data.softDeadline ?? fallback?.softDeadline ?? null,
+      },
+    ]
+  })
+  if (isPartlyRead) {
+    unreadable.push({ key, value: raw })
+  }
+  return {
+    id: course.id,
+    name: course.name,
+    title: course.title ?? course.name,
+    description: course.description ?? "",
+    organization: course.organization,
+    exercises,
+    availablePoints: course.availablePoints ?? 0,
+    awardedPoints: course.awardedPoints ?? 0,
+    perhapsExamMode: course.perhapsExamMode ?? false,
+    newExercises: course.newExercises ?? [],
+    notifyAfter: course.notifyAfter ?? 0,
+    disabled: course.disabled ?? false,
+    materialUrl: course.materialUrl ?? course.material_url ?? null,
+  }
+}
 
-  return unstableData.map<data.v1.LocalCourseData>((x) => {
-    const exercises = x.exercises.map<data.v1.LocalCourseData["exercises"][0]>((e) => {
-      const fallback = courseExercises?.get(e.id)
-      return {
-        ...e,
-        deadline: e.deadline ?? fallback?.deadline ?? null,
-        name: e.name ?? fallback?.name ?? e.id.toString(),
-        softDeadline: e.softDeadline ?? fallback?.softDeadline ?? null,
-      }
-    })
+function v0ExerciseFallbacks(memento: vscode.Memento): Map<number, ExerciseFallback> {
+  const exercises = z
+    .array(z.looseObject({ id: z.number() }))
+    .safeParse(memento.get(data.v0.EXERCISE_DATA_KEY))
+  if (!exercises.success) {
+    return new Map()
+  }
+  return new Map(
+    exercises.data.map((exercise) => {
+      const fallback = z
+        .object({
+          name: z.string().optional().catch(undefined),
+          deadline: z.string().nullish().catch(undefined),
+          softDeadline: z.string().nullish().catch(undefined),
+        })
+        .parse(exercise)
+      return [exercise.id, fallback]
+    }),
+  )
+}
 
-    return {
-      ...x,
-      availablePoints: x.availablePoints ?? 0,
-      awardedPoints: x.awardedPoints ?? 0,
-      description: x.description,
-      disabled: x.disabled ?? false,
-      exercises: exercises,
-      materialUrl: x.material_url ?? null,
-      newExercises: x.newExercises ?? [],
-      notifyAfter: x.notifyAfter ?? 0,
-      organization: x.organization,
-      perhapsExamMode: x.perhapsExamMode ?? false,
-      title: x.title ?? x.name,
+function toLegacyCourse(course: data.v3.TmcLocalCourseData): data.v2.LocalCourseData {
+  return {
+    id: course.id,
+    name: course.name,
+    title: course.title,
+    description: course.description,
+    organization: course.organization,
+    exercises: course.exercises.map((exercise) => ({
+      id: exercise.id,
+      availablePoints: exercise.availablePoints,
+      awardedPoints: exercise.awardedPoints,
+      name: exercise.name,
+      deadline: exercise.deadline,
+      passed: exercise.passed,
+      softDeadline: exercise.softDeadline,
+    })),
+    availablePoints: course.availablePoints,
+    awardedPoints: course.awardedPoints,
+    perhapsExamMode: course.perhapsExamMode,
+    newExercises: course.newExercises,
+    notifyAfter: course.notifyAfter,
+    disabled: course.disabled,
+    materialUrl: course.materialUrl,
+  }
+}
+
+/** The tmc courses of `userData` as 3.x reads `user-data-v1`; `undefined` deletes the key. */
+function legacyUserDataOf(userData: data.v3.UserData): data.v2.UserData | undefined {
+  return userData.courses.length > 0 ? { courses: userData.courses.map(toLegacyCourse) } : undefined
+}
+
+function legacyMirrorRecordOf(userData: data.v3.UserData | undefined): data.v3.LegacyMirrorRecord {
+  return { courseIds: userData?.courses.map((course) => course.id) ?? [] }
+}
+
+/**
+ * Rewrites `user-data-v1`, which 3.x reads after a downgrade, and its record from the tmc courses
+ * of `userData`, each unless it already holds them; `writeUserData` stores `userData` in between.
+ *
+ * Mirror first: if the v3 write fails, the next activation merges the change back from it. Record
+ * last: until v3 has the change, a course the mirror lost must still count as mirrored.
+ */
+export async function syncLegacyMirror(
+  memento: vscode.Memento,
+  userData: data.v3.UserData | undefined,
+  writeUserData?: () => Promise<void>,
+): Promise<void> {
+  const mirror = userData && legacyUserDataOf(userData)
+  if (!isEqual(memento.get(data.v1.USER_DATA_KEY), mirror)) {
+    await memento.update(data.v1.USER_DATA_KEY, mirror)
+  }
+  await writeUserData?.()
+  const record = legacyMirrorRecordOf(userData)
+  if (!isEqual(memento.get(data.v3.LEGACY_MIRROR_RECORD_KEY), record)) {
+    await memento.update(data.v3.LEGACY_MIRROR_RECORD_KEY, record)
+  }
+}
+
+/**
+ * Applies what an older version changed in `user-data-v1` since this version last mirrored
+ * `current` there; `undefined` when `user-data-v1` is unreadable as a whole.
+ *
+ * A tmc course whose stored copy differs from its mirror takes the stored fields, keeping the
+ * ones v1 cannot express (and, per exercise id, the exercise's); one only there was added. One
+ * missing there was removed, but only if `mirrored` holds its id: otherwise the mirror may never
+ * have held it. `current` stays authoritative for everything else: mooc courses and unchanged tmc
+ * courses. A course v1 holds but cannot read is left as `current` has it, and an entry without a
+ * readable id stops any removal, since it may be any course.
+ */
+function mergeLegacyChanges(
+  current: data.v3.UserData,
+  rawLegacy: unknown,
+  mirrored: ReadonlySet<number> | undefined,
+  omitted: Omitted,
+): data.v3.UserData | undefined {
+  const key = data.v1.USER_DATA_KEY
+  const legacy = legacyUserDataSchema.safeParse(rawLegacy)
+  if (!legacy.success) {
+    omitted.dropped.push({ key, entry: "every course", reason: z.prettifyError(legacy.error) })
+    omitted.unreadable.push({ key, value: rawLegacy })
+    return undefined
+  }
+  const readable = new Map<number, { raw: unknown; course: data.v3.TmcLocalCourseData }>()
+  const unreadableIds = new Set<number>()
+  let canRemove = true
+  legacy.data.courses.forEach((raw, index) => {
+    const course = readLegacyCourse(raw, index, key, omitted)
+    if (course) {
+      readable.set(course.id, { raw, course })
+      return
+    }
+    const id = z.object({ id: z.number() }).safeParse(raw)
+    if (id.success) {
+      unreadableIds.add(id.data.id)
+    } else {
+      canRemove = false
     }
   })
-}
 
-export function v1_resolveMissingFields(
-  localCourseData: data.v1.LocalCourseData[],
-): data.v2.LocalCourseData[] {
-  return localCourseData.map((course) => {
-    const exercises = course.exercises.map((x) => {
-      const resolvedAwardedPoints = x.passed
-        ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
-        : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER
-      return {
-        ...x,
-        availablePoints: x.availablePoints ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
-        awardedPoints: x.awardedPoints ?? resolvedAwardedPoints,
+  const courses = current.courses.flatMap<data.v3.TmcLocalCourseData>((course) => {
+    const stored = readable.get(course.id)
+    if (!stored) {
+      if (unreadableIds.has(course.id) || !canRemove || !mirrored?.has(course.id)) {
+        return [course]
       }
-    })
-    return { ...course, exercises }
+      Logger.info(`Removed course ${course.name}, which an older version removed.`)
+      return []
+    }
+    if (isEqual(stored.raw, toLegacyCourse(course))) {
+      return [course]
+    }
+    Logger.info(`Took the changes an older version made to course ${course.name}.`)
+    const currentExercises = new Map(course.exercises.map((x) => [x.id, x]))
+    return [
+      {
+        ...course,
+        ...stored.course,
+        exercises: stored.course.exercises.map((exercise) => ({
+          ...currentExercises.get(exercise.id),
+          ...exercise,
+        })),
+      },
+    ]
   })
+  const currentIds = new Set(current.courses.map((course) => course.id))
+  for (const { course } of readable.values()) {
+    if (!currentIds.has(course.id)) {
+      Logger.info(`Added course ${course.name}, which an older version added.`)
+      courses.push(course)
+    }
+  }
+  return { ...current, courses }
 }
 
-export function v3_migrateFromV2(prev: data.v2.UserData): data.v3.UserData {
-  // validateData returns the original object so fields a newer extension version persisted
-  // survive; `mooc_courses` is kept if already present.
+/** What a migration settled on for user data, defaults left out. */
+type Migrated = Partial<Pick<UserDataMigration, "data" | "supersededKeys" | "isLegacyMirrorStale">>
 
-  const maybeFuture = prev as Partial<data.v3.UserData>
+/**
+ * Brings user data up to v3 and keeps `user-data-v1` in step for a downgrade to 3.x.
+ *
+ * Reads only; the caller writes. With no v3 stored, the oldest legacy key holding data is the
+ * source, read course by course. With v3 stored, a legacy key never replaces it: changes an
+ * older version made to `user-data-v1` are merged in (see {@link mergeLegacyChanges}), and a
+ * v0 key is ignored.
+ *
+ * @throws {StoredDataMigrationError} when the source holds courses but none can be read.
+ */
+export default function migrateUserDataToLatest(memento: vscode.Memento): UserDataMigration {
+  const omitted: Omitted = { dropped: [], unreadable: [] }
+  const rawCurrent = memento.get<unknown>(data.v3.USER_DATA_KEY)
+  const rawLegacy = memento.get<unknown>(data.v1.USER_DATA_KEY) ?? undefined
+  const migrated =
+    rawCurrent === undefined
+      ? readLegacyUserData(memento, rawLegacy, omitted)
+      : mergeIntoCurrent(memento, rawCurrent, rawLegacy, omitted)
   return {
-    ...prev,
-    mooc_courses: maybeFuture.mooc_courses ?? [],
+    data: migrated.data,
+    supersededKeys: migrated.supersededKeys ?? [],
+    destinationKey: data.v3.USER_DATA_KEY,
+    isLegacyMirrorStale: migrated.isLegacyMirrorStale ?? false,
+    ...omitted,
   }
 }
 
-/** Every key user data has ever been stored under; one left out survives to shadow the migrated value. */
-const USER_DATA_KEYS = [
-  data.v0.USER_DATA_KEY,
-  data.v1.USER_DATA_KEY,
-  data.v2.USER_DATA_KEY,
-  data.v3.USER_DATA_KEY,
-]
-
-/** Brings older user data up to v3; `data` is `undefined` when v3 is already current. */
-export default function migrateUserDataToLatest(
+function mergeIntoCurrent(
   memento: vscode.Memento,
-): MigratedData<data.v3.UserData> {
-  // v0 => v1
-  const dataV0 = validateData(memento.get(data.v0.USER_DATA_KEY), data.v0.userDataSchema)
-  const dataV1 = dataV0
-    ? { courses: v1_migrateFromV0(dataV0.courses, memento) }
-    : validateData(memento.get(data.v1.USER_DATA_KEY), data.v1.userDataSchema)
+  rawCurrent: unknown,
+  rawLegacy: unknown,
+  omitted: Omitted,
+): Migrated {
+  if (!data.v3.userDataSchema.safeParse(rawCurrent).success) {
+    // Reading v3 reports it; merging into it would hide that.
+    return {}
+  }
+  if (memento.get(data.v0.USER_DATA_KEY) !== undefined) {
+    Logger.warn(`Ignored "${data.v0.USER_DATA_KEY}": "${data.v3.USER_DATA_KEY}" is newer.`)
+  }
+  // The stored value, not zod's copy, keeps fields a newer version added.
+  const current = rawCurrent as data.v3.UserData
+  const record = data.v3.legacyMirrorRecordSchema.safeParse(
+    memento.get(data.v3.LEGACY_MIRROR_RECORD_KEY),
+  )
+  const mirrored = record.success ? new Set(record.data.courseIds) : undefined
+  const isMirrorIntact = isEqual(rawLegacy, legacyUserDataOf(current))
+  // This version deletes the mirror itself when it has no tmc course, so only a missing mirror
+  // recorded with courses was wiped by an older version.
+  const isMirrorDeletedForNoCourses = rawLegacy === undefined && !mirrored?.size
+  if (isMirrorIntact || isMirrorDeletedForNoCourses) {
+    const isRecordStale = !record.success || !isEqual(record.data, legacyMirrorRecordOf(current))
+    return { isLegacyMirrorStale: !isMirrorIntact || isRecordStale }
+  }
+  const merged = mergeLegacyChanges(current, rawLegacy ?? { courses: [] }, mirrored, omitted)
+  return { data: merged, isLegacyMirrorStale: merged === undefined }
+}
 
-  // v1 => v2
-  const dataV2 = dataV1
-    ? { ...dataV1, courses: v1_resolveMissingFields(dataV1?.courses) }
-    : validateData(memento.get(data.v2.USER_DATA_KEY), data.v2.userDataSchema)
-
+function readLegacyUserData(
+  memento: vscode.Memento,
+  rawLegacy: unknown,
+  omitted: Omitted,
+): Migrated {
+  const rawV0 = memento.get<unknown>(data.v0.USER_DATA_KEY) ?? undefined
+  const [key, raw] =
+    rawV0 !== undefined ? [data.v0.USER_DATA_KEY, rawV0] : [data.v1.USER_DATA_KEY, rawLegacy]
+  if (raw === undefined) {
+    return {}
+  }
+  const legacy = legacyUserDataSchema.safeParse(raw)
+  if (!legacy.success) {
+    throw new StoredDataMigrationError(
+      `The courses stored under "${key}" could not be read: ${z.prettifyError(legacy.error)}`,
+    )
+  }
+  const fallbacks = key === data.v0.USER_DATA_KEY ? v0ExerciseFallbacks(memento) : undefined
+  const courses = legacy.data.courses.flatMap((course, index) => {
+    const read = readLegacyCourse(course, index, key, omitted, fallbacks)
+    return read ? [read] : []
+  })
+  if (legacy.data.courses.length > 0 && courses.length === 0) {
+    throw new StoredDataMigrationError(
+      `None of the ${legacy.data.courses.length} courses stored under "${key}" could be read: ` +
+        omitted.dropped.map(({ entry, reason }) => `${entry}: ${reason}`).join("; "),
+    )
+  }
   return {
-    data: dataV2 && v3_migrateFromV2(dataV2),
-    supersededKeys: USER_DATA_KEYS,
-    destinationKey: data.v3.USER_DATA_KEY,
+    data: { courses, mooc_courses: [] },
+    supersededKeys: key === data.v0.USER_DATA_KEY ? [key] : [],
   }
 }

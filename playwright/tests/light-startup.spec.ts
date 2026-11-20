@@ -3,12 +3,12 @@ import { join } from "path"
 
 import { expect } from "@playwright/test"
 
-import { vsCodeTest } from "../fixtures"
+import { extensionGlobalStorage, vsCodeTest } from "../fixtures"
 import { MoocLoginPage } from "../pages/mooc-login"
 
 /** The folder activation downloads the CLI to, which a light start never touches. */
 function cliFolder(userDataDir: string): string {
-  return join(userDataDir, "User", "globalStorage", "moocfi.test-my-code", "cli")
+  return join(extensionGlobalStorage(userDataDir), "cli")
 }
 
 // No stored login and no course: the window TestMyCode starts light in.

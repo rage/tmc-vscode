@@ -107,6 +107,7 @@ interface FakeView {
   badge: vscode.ViewBadge | undefined
   message: string | undefined
   visible: boolean
+  selection: { id: string | undefined }[]
   reveal: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   onDidChangeVisibility: vscode.Event<unknown>
@@ -161,6 +162,7 @@ suite("CoursesTree", function () {
       badge: undefined,
       message: undefined,
       visible: true,
+      selection: [],
       reveal: vi.fn(async () => undefined),
       dispose: vi.fn(),
       onDidChangeVisibility: new vscode.EventEmitter<unknown>().event,
@@ -347,6 +349,20 @@ suite("CoursesTree", function () {
       expand: true,
     })
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmcView.focus")
+  })
+
+  test("reveals a course without focus when asked to leave the keyboard alone", async function () {
+    const [item] = show(tmcCourse())
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await tree.revealCourse(idOfTmcCourse(1), { isFocused: false })
+
+    expect(view.reveal).toHaveBeenCalledExactlyOnceWith(item, {
+      select: true,
+      focus: false,
+      expand: true,
+    })
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmcView.focus")
   })
 
   test("a course with exercises not downloaded is marked for downloading them all", function () {
@@ -933,6 +949,16 @@ suite("CoursesTree", function () {
       const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
       expect(item.label).toBe("01_hello")
       expect(options).toEqual({ select: true, focus: false })
+    })
+
+    test("keeps a selection the exercise is already part of", function () {
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+      const [item] = view.reveal.mock.calls[0] as [ExerciseTreeItem]
+      view.selection = [{ id: item.id }, { id: "another row" }]
+
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+
+      expect(view.reveal).toHaveBeenCalledOnce()
     })
 
     test("selects the exercise already open when the view first fills", function () {

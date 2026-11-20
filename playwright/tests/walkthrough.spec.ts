@@ -35,7 +35,7 @@ vsCodeTest("a session from before the walkthrough ticks off Log in", async ({ pa
 })
 
 vsCodeTest.describe(() => {
-  vsCodeTest.use({ seedTmcCredentials: false })
+  vsCodeTest.use({ seedTmcCredentials: false, isCoursesMoocFiEnabled: true })
 
   vsCodeTest(
     "logging in from the walkthrough goes on to the add-course screen, then the course home",

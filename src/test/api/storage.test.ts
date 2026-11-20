@@ -11,7 +11,7 @@ suite("Storage class", function () {
   let storage: Storage
 
   beforeEach(function () {
-    storage = new Storage(createMockContext())
+    storage = new Storage(createMockContext().globalState)
   })
 
   test("should store and retrieve session state", async function () {

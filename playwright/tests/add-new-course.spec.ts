@@ -1,3 +1,6 @@
+import * as fs from "fs"
+import { join } from "path"
+
 import { expect } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
@@ -122,3 +125,25 @@ vsCodeTest("dismissing the palette's add-course pick adds nothing", async ({ pag
   await quickPick.expectClosed()
   await expect(coursesView.row("Python Course")).toBeHidden()
 })
+
+vsCodeTest(
+  "courses.mooc.fi courses are offered only once its experimental setting is on",
+  async ({ page, userDataDir, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    await coursesView.goto()
+
+    const addCourse = await coursesView.openAddCourse()
+    await expect(addCourse.card("Test Organization")).toBeVisible()
+    await expect(addCourse.section("courses.mooc.fi")).toBeHidden()
+    await expect(addCourse.webview.getByRole("button", { name: "More Actions" })).toBeHidden()
+
+    const settingsFile = join(userDataDir, "User", "settings.json")
+    const settings = JSON.parse(fs.readFileSync(settingsFile, "utf-8")) as Record<string, unknown>
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify({ ...settings, "testMyCode.experimental.coursesMoocFi": true }),
+    )
+
+    await expect(addCourse.section("courses.mooc.fi")).toBeVisible({ timeout: 30_000 })
+  },
+)

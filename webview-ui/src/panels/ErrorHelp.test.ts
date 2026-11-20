@@ -65,6 +65,23 @@ suite("ErrorHelp panel after a failed start", () => {
     )
   })
 
+  test("shows the details a failure carries, such as the migration log", async () => {
+    const panel = startupHelpPanel([
+      {
+        service: "user data",
+        error: "migration failed",
+        stack: "at migrate",
+        details: "2026-11-19T10:00:00.000Z 3.5.5 -> 4.0.0: failed",
+      },
+    ])
+    render(ErrorHelp, { props: { panel } })
+
+    await fireEvent.click(screen.getByRole("button", { name: "Details of user data" }))
+    expect(screen.getByRole("group", { name: "Details of user data" })).toHaveTextContent(
+      "3.5.5 -> 4.0.0: failed",
+    )
+  })
+
   test.each([
     ["Restart Extension Host", "workbench.action.restartExtensionHost"],
     ["Show Logs", "tmc.logs"],

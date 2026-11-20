@@ -8,5 +8,5 @@
     // fixtures.ts reads the VS Code test version from ../config.js
     "allowJs": true
   },
-  "include": ["**/*", "../playwright.config.ts"]
+  "include": ["**/*", "../playwright.config.ts", "../playwright.upgrade.config.ts"]
 }

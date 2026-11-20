@@ -77,7 +77,7 @@ function storedTmcCourse(userData: UserData, courseId: number): storage.TmcLocal
 
 async function makeUserData(data: storage.UserData): Promise<[UserData, Storage]> {
   const context = createMockContext()
-  const store = new Storage(context)
+  const store = new Storage(context.globalState)
   await store.updateUserData(data)
   return [new UserData(store), store]
 }
@@ -198,7 +198,7 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
 
 suite("UserData construction", function () {
   test("starts empty when storage has no user data", function () {
-    const userData = new UserData(new Storage(createMockContext()))
+    const userData = new UserData(new Storage(createMockContext().globalState))
     expect(userData.getCourses()).toEqual([])
     expect(userData.getTmcCourses()).toEqual([])
     expect(userData.getMoocCourses()).toEqual([])
@@ -579,7 +579,7 @@ suite("UserData mixed-backend isolation", function () {
 
 suite("UserData persistence round-trip", function () {
   test("added courses are written to storage and reloadable", async function () {
-    const store = new Storage(createMockContext())
+    const store = new Storage(createMockContext().globalState)
     const userData = new UserData(store)
     expect(
       (await userData.addCourse(makeTmcKind(tmcCourse({ id: 4, name: "persisted-tmc" })))).ok,
@@ -869,7 +869,7 @@ suite("UserData construction over unreadable storage", function () {
   test("lets the corrupt-data error through so activation can degrade", function () {
     const context = createMockContext()
     context.globalState.update(USER_DATA_KEY, { courses: "not an array" })
-    expect(() => new UserData(new Storage(context))).toThrow(CorruptStoredDataError)
+    expect(() => new UserData(new Storage(context.globalState))).toThrow(CorruptStoredDataError)
   })
 })
 

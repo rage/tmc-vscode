@@ -7,6 +7,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // What courses.mooc.fi tells about an exercise after it leaves the student's hands: the
 // server's test results of a submission, and that a downloaded exercise was deleted from its
 // course. backend/mooc/fixtures.ts serves the courses.

@@ -17,6 +17,7 @@ export type NewExerciseHandling = "download" | "ask" | "courseHome"
  */
 export default class Settings implements vscode.Disposable {
   private _onChangeHideMetaFiles?: (hide: boolean) => void
+  private _onChangeCoursesMoocFiEnabled?: (isEnabled: boolean) => void
 
   private _disposables: vscode.Disposable[]
 
@@ -29,6 +30,9 @@ export default class Settings implements vscode.Disposable {
         if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
           this._onChangeHideMetaFiles?.(this.getHideMetaFiles())
         }
+        if (event.affectsConfiguration("testMyCode.experimental.coursesMoocFi")) {
+          this._onChangeCoursesMoocFiEnabled?.(this.isCoursesMoocFiEnabled())
+        }
       }),
     ]
   }
@@ -37,6 +41,12 @@ export default class Settings implements vscode.Disposable {
   // oxlint-disable-next-line accessor-pairs -- write-only callback registration API
   public set onChangeHideMetaFiles(callback: (hide: boolean) => void) {
     this._onChangeHideMetaFiles = callback
+  }
+
+  /** Called with {@link isCoursesMoocFiEnabled}'s new value whenever the setting changes. */
+  // oxlint-disable-next-line accessor-pairs -- write-only callback registration API
+  public set onChangeCoursesMoocFiEnabled(callback: (isEnabled: boolean) => void) {
+    this._onChangeCoursesMoocFiEnabled = callback
   }
 
   public dispose(): void {
@@ -68,6 +78,14 @@ export default class Settings implements vscode.Disposable {
   /** The JDK directory Java exercises run with, or `""` for the one on `PATH`. */
   public getJavaHome(): string {
     return Settings._configuration().get<string>("javaHome", "").trim()
+  }
+
+  /**
+   * Whether the student can add courses.mooc.fi courses (`testMyCode.experimental.coursesMoocFi`).
+   * Courses already added keep working either way.
+   */
+  public isCoursesMoocFiEnabled(): boolean {
+    return Settings._configuration().get<boolean>("experimental.coursesMoocFi", false)
   }
 
   private static _configuration(): vscode.WorkspaceConfiguration {

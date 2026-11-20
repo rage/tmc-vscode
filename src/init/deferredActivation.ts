@@ -8,10 +8,15 @@ import { CLIENT_NAME, EXTENSION_VERSION, TMC_LANGS_CONFIG_DIR } from "../config/
 import Storage from "../storage"
 import { v0, v1, v3 } from "../storage/data"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { isSamePath, Logger } from "../utilities"
-import { WALKTHROUGH } from "../window/walkthrough"
+import { isSamePath, Logger, versionChangeSince } from "../utilities"
+import { listWalkthroughUnlessUpdated, openWalkthroughWhenRegistered } from "../window/walkthrough"
 
-/** Global state keys that hold data from an older storage version, which only a full activation migrates. */
+/**
+ * Global state keys only a full activation can migrate or merge. This version also writes
+ * `user-data-v1`, but only while it has tmc courses, so the key still means a full activation.
+ * Unlike the backup's `LEGACY_KEYS` (`storage/migration/log.ts`), it omits session state, which a
+ * light activation also reads, and includes the pending exercise moves.
+ */
 const LEGACY_DATA_KEYS = [
   v0.USER_DATA_KEY,
   v0.EXERCISE_DATA_KEY,
@@ -71,7 +76,10 @@ export async function hasStoredLogin(folder: string | undefined): Promise<boolea
  * Whether this window can start TestMyCode light: it is not a course workspace, and
  * TestMyCode holds no course, legacy data or login yet.
  */
-export async function canDeferActivation(context: vscode.ExtensionContext): Promise<boolean> {
+export async function canDeferActivation(
+  context: vscode.ExtensionContext,
+  globalState: vscode.Memento,
+): Promise<boolean> {
   const workspaceFile = vscode.workspace.workspaceFile
   if (
     workspaceFile &&
@@ -79,12 +87,12 @@ export async function canDeferActivation(context: vscode.ExtensionContext): Prom
   ) {
     return false
   }
-  const storedKeys = new Set(context.globalState.keys())
+  const storedKeys = new Set(globalState.keys())
   if (LEGACY_DATA_KEYS.some((key) => storedKeys.has(key))) {
     return false
   }
   try {
-    const userData = new Storage(context).getUserData()
+    const userData = new Storage(globalState).getUserData()
     if (userData && userData.courses.length + userData.mooc_courses.length > 0) {
       return false
     }
@@ -106,6 +114,7 @@ export const LIGHT_CONTEXT_KEY = "test-my-code:Light"
  */
 export async function deferActivation(
   context: vscode.ExtensionContext,
+  globalState: vscode.Memento,
   activateFully: () => Promise<void>,
 ): Promise<void> {
   const standIns: vscode.Disposable[] = []
@@ -149,12 +158,19 @@ export async function deferActivation(
   void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, true)
 
   try {
-    const storage = new Storage(context)
-    if (storage.getSessionState()?.extensionVersion === undefined) {
+    const storage = new Storage(globalState)
+    const versionChange = versionChangeSince(
+      storage.getSessionState()?.extensionVersion,
+      EXTENSION_VERSION,
+    )
+    listWalkthroughUnlessUpdated(versionChange)
+    if (versionChange === "installed") {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
-      await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
+      void openWalkthroughWhenRegistered(undefined, { isUnasked: true }).catch((e) =>
+        Logger.warn("Could not open the walkthrough", e),
+      )
     }
   } catch (e) {
-    Logger.warn("Could not open the walkthrough", e)
+    Logger.warn("Skipped version check", e)
   }
 }

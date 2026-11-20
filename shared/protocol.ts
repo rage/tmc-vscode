@@ -53,6 +53,8 @@ const InitializationFailureSchema = z.object({
   stack: z.string(),
   /** What the student can do about this particular failure. */
   hint: z.string().optional(),
+  /** Diagnostics the error carries, such as the migration log. */
+  details: z.string().optional(),
 })
 
 /**
@@ -284,7 +286,11 @@ function catalogListingSchema<T extends z.ZodType>(items: T) {
   ])
 }
 
-export const MoocCatalogSchema = catalogListingSchema(CatalogCourseSchema)
+/** `disabled` while the experimental setting hides courses.mooc.fi courses. */
+export const MoocCatalogSchema = z.union([
+  catalogListingSchema(CatalogCourseSchema),
+  z.object({ kind: z.literal("disabled") }),
+])
 
 export type MoocCatalog = z.infer<typeof MoocCatalogSchema>
 

@@ -10,6 +10,8 @@ import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // End-to-end walk of the mooc (courses.mooc.fi) student flow against the mooc mock
 // (backend/mooc, routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts): device-flow login ->
 // picking an enrolled course -> its exercises in the Courses view -> downloading one from its

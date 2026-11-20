@@ -297,3 +297,46 @@ export const v3_0_0: v3.UserData = {
   ],
   mooc_courses: [],
 }
+
+/** 0.1.0 stored the server's description as is, which is null for a course without one. */
+export const v0_1_0_nullDescription = {
+  courses: [
+    {
+      id: 0,
+      description: null,
+      exercises: [{ id: 1, passed: true }],
+      name: "test-python-course",
+      organization: "test",
+    },
+  ],
+}
+
+/** 2.x and 3.x stored `settings.material_url` as is, so a server omitting it left no key. */
+export const v3_5_5_withoutMaterialUrl = {
+  courses: [
+    {
+      id: 7,
+      availablePoints: 1,
+      awardedPoints: 1,
+      description: "",
+      disabled: false,
+      exercises: [
+        {
+          id: 70,
+          availablePoints: 1,
+          awardedPoints: 1,
+          deadline: null,
+          name: "part01-e01",
+          passed: true,
+          softDeadline: null,
+        },
+      ],
+      name: "java-course",
+      newExercises: [],
+      notifyAfter: 0,
+      organization: "mooc",
+      perhapsExamMode: false,
+      title: "Java Course",
+    },
+  ],
+}

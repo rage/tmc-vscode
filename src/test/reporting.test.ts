@@ -147,7 +147,7 @@ async function harness(
     ),
   } as unknown as Dialog
 
-  const storage = new Storage(createMockContext())
+  const storage = new Storage(createMockContext().globalState)
   await storage.updateUserData({ courses: [], mooc_courses: [services.course ?? storedCourse()] })
 
   const langs = fakeService<Langs>(services.langs ?? {}, {
@@ -578,7 +578,7 @@ suite("reported once: course administration", function () {
   })
 
   test("a course that fails to add is one notification", async function () {
-    const { run, shown } = await harness({
+    const { run, shown, actionContext } = await harness({
       langs: {
         getTmcOrganizations: async () => Err(offline()),
         getEnrolledMoocCourses: async () =>
@@ -601,6 +601,7 @@ suite("reported once: course administration", function () {
       dispose() {},
     }
     vi.spyOn(vscode.window, "createQuickPick").mockReturnValue(quickPick as never)
+    vi.mocked(actionContext.settings.isCoursesMoocFiEnabled).mockReturnValue(true)
     const running = run("tmc.addNewCourse")
     await vi.waitFor(() => expect(quickPick.items.some((x) => x.choice)).toBe(true))
     quickPick.selectedItems = [quickPick.items.find((x) => x.choice)]

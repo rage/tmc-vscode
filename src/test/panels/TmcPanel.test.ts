@@ -27,11 +27,17 @@ import {
   InitializationError,
   presentationFor,
   RateLimitedError,
+  StoredDataMigrationError,
 } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView, submitFailedView } from "../../panels/submissionView"
-import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import {
+  MAIN_PANEL_VIEW_TYPE,
+  READY_TIMEOUT_MS,
+  SIDE_PANEL_VIEW_TYPE,
+  TmcPanel,
+} from "../../panels/TmcPanel"
 import { loginScreens } from "../../ui/loginScreens"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { shownCourseHome } from "../../ui/shownCourseHome"
@@ -240,6 +246,21 @@ suite("initializationErrorHelpPanel", () => {
 
     expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
     expect(failure?.hint).toContain("proxy, firewall or antivirus")
+  })
+
+  test("passes on the migration log a failed migration carries", () => {
+    const actionContext = createDegradedContext({
+      failures: {
+        userData: new StoredDataMigrationError("unreadable courses", "3.5.5 -> 4.0.0: failed"),
+      },
+    })
+
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
+
+    expect(topic.kind === "startup" && topic.failures[0]).toMatchObject({
+      service: "user data",
+      details: "3.5.5 -> 4.0.0: failed",
+    })
   })
 
   test("folds a failure's cause into the message", () => {
@@ -1128,6 +1149,90 @@ suite("TmcPanel hidden webviews", () => {
   })
 })
 
+/** The fake that the next panel created gets. */
+function nextFakePanel(): ReturnType<typeof createFakeWebviewPanel> {
+  const fake = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValueOnce(fake.panel)
+  return fake
+}
+
+suite("TmcPanel webviews that never say ready", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetPanels()
+  })
+  afterEach(() => {
+    resetPanels()
+    vi.useRealTimers()
+  })
+
+  test("a shown screen that stays blank is replaced, and the replacement resends it", async () => {
+    const shown = exerciseSubmissionPanel()
+    const stuck = nextFakePanel()
+    renderSidePanel(shown)
+    postToSidePanel(submissionViewFor(shown, "Graded"))
+    const replacement = nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    expect(stuck.dispose).toHaveBeenCalled()
+    await replacement.sendReady()
+
+    expect(postedMessages(replacement.panel)).toEqual([
+      expect.objectContaining({ type: "setPanel", panel: shown }),
+      submissionViewFor(shown, "Graded"),
+    ])
+  })
+
+  test("a screen revealed blank after being hidden is replaced", async () => {
+    const fake = nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    await fake.sendReady()
+    fake.hide()
+    fake.revealBlank()
+    nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    expect(fake.dispose).toHaveBeenCalled()
+  })
+
+  test("a screen that said ready, or is hidden, is left alone", async () => {
+    const fake = nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    await fake.sendReady()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    fake.hide()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    expect(fake.dispose).not.toHaveBeenCalled()
+  })
+
+  test("a replacement is given all the time it takes", () => {
+    nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    const replacement = nextFakePanel()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS * 3)
+
+    expect(replacement.dispose).not.toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeDefined()
+  })
+
+  test("replacing a login screen keeps the login going", () => {
+    const left = vi.fn()
+    const subscription = loginScreens.onDidLeave(left)
+    nextFakePanel()
+    renderMainPanel({ id: nextPanelId(), type: "Login", isAddingCourse: false })
+    nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    subscription.dispose()
+
+    expect(left).not.toHaveBeenCalled()
+  })
+})
+
 /** A `setCourseHomeView` addressed to `panel`. */
 function courseDataFor(panel: { id: number }): PanelMessage {
   return {
@@ -1530,6 +1635,24 @@ suite("TmcPanel main panel lifecycle", () => {
     await fake.reveal()
     TmcPanel.renderMain(extensionContext, actionContext, helpPanel())
     expect(shownCourseHome.isShowing(idOfTmcCourse(42))).toBe(false)
+  })
+
+  test("reloading a shown add-course screen redraws it as a new one, which lists again", async () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const route = { id: nextPanelId(), type: "AddCourse" } as const
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), route)
+    await fake.sendReady()
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+
+    TmcPanel.reloadAddCourse()
+
+    expect(fake.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        type: "setPanel",
+        panel: { id: route.id + 1, type: "AddCourse" },
+      }),
+    )
   })
 
   test("navigating the main panel leaves the side panel standing", async () => {

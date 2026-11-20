@@ -28,6 +28,7 @@ suite("Settings", function () {
       updateExercisesAutomatically: false,
       newExercises: "download",
       javaHome: " /usr/lib/jvm/java-21 ",
+      "experimental.coursesMoocFi": true,
     })
     settings = new Settings()
     changed = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0] as never
@@ -54,6 +55,15 @@ suite("Settings", function () {
     expect(notified).toEqual([false])
   })
 
+  test("a courses.mooc.fi setting change notifies the subscriber with the new value", async function () {
+    const notified: boolean[] = []
+    settings.onChangeCoursesMoocFiEnabled = (isEnabled): void => void notified.push(isEnabled)
+
+    await changeSection("testMyCode.experimental.coursesMoocFi")
+
+    expect(notified).toEqual([true])
+  })
+
   test("a change to an unrelated section notifies nobody", async function () {
     const configure = vi.spyOn(Logger, "configure").mockImplementation(() => {})
     const notified: boolean[] = []
@@ -72,6 +82,7 @@ suite("Settings", function () {
     expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
     expect(settings.getNewExerciseHandling()).toBe("download")
     expect(settings.getJavaHome()).toBe("/usr/lib/jvm/java-21")
+    expect(settings.isCoursesMoocFiEnabled()).toBe(true)
   })
 
   test("falls back to the declared defaults", function () {
@@ -83,6 +94,7 @@ suite("Settings", function () {
     expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
     expect(settings.getNewExerciseHandling()).toBe("ask")
     expect(settings.getJavaHome()).toBe("")
+    expect(settings.isCoursesMoocFiEnabled()).toBe(false)
   })
 
   test("asks about new exercises when the setting holds an unknown value", function () {

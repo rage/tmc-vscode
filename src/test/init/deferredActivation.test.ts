@@ -23,6 +23,10 @@ function openWorkspaceFile(file: string | undefined): void {
   })
 }
 
+function canDeferFor(context: vscode.ExtensionContext): Promise<boolean> {
+  return canDeferActivation(context, context.globalState)
+}
+
 suite("whether activation can be deferred", function () {
   let configDir: string
 
@@ -38,20 +42,20 @@ suite("whether activation can be deferred", function () {
   })
 
   test("yes in a plain window with nothing stored", async function () {
-    expect(await canDeferActivation(createMockContext())).toBe(true)
+    expect(await canDeferFor(createMockContext())).toBe(true)
   })
 
   test("yes with stored user data that holds no course", async function () {
     const context = createMockContext()
     await context.globalState.update(USER_DATA_KEY, { courses: [], mooc_courses: [] })
 
-    expect(await canDeferActivation(context)).toBe(true)
+    expect(await canDeferFor(context)).toBe(true)
   })
 
   test("yes in a workspace of the student's own", async function () {
     openWorkspaceFile(path.join(tmp.dirSync().name, "mine.code-workspace"))
 
-    expect(await canDeferActivation(createMockContext())).toBe(true)
+    expect(await canDeferFor(createMockContext())).toBe(true)
   })
 
   test("no in a course workspace", async function () {
@@ -60,28 +64,28 @@ suite("whether activation can be deferred", function () {
       path.join(workspaceFileFolderOf(context), workspaceFileName("a-course", "mooc")),
     )
 
-    expect(await canDeferActivation(context)).toBe(false)
+    expect(await canDeferFor(context)).toBe(false)
   })
 
   test("no once a course is added", async function () {
     const context = createMockContext()
     await context.globalState.update(USER_DATA_KEY, { courses: [tmcCourseData], mooc_courses: [] })
 
-    expect(await canDeferActivation(context)).toBe(false)
+    expect(await canDeferFor(context)).toBe(false)
   })
 
   test("no with stored courses it cannot read", async function () {
     const context = createMockContext()
     await context.globalState.update(USER_DATA_KEY, { courses: "not an array" })
 
-    expect(await canDeferActivation(context)).toBe(false)
+    expect(await canDeferFor(context)).toBe(false)
   })
 
   test("no with data from an older version to migrate", async function () {
     const context = createMockContext()
     await context.globalState.update(v0.USER_DATA_KEY, { courses: [] })
 
-    expect(await canDeferActivation(context)).toBe(false)
+    expect(await canDeferFor(context)).toBe(false)
   })
 
   test("no with a stored login", async function () {
@@ -89,7 +93,7 @@ suite("whether activation can be deferred", function () {
     fs.ensureDirSync(clientDir)
     fs.writeFileSync(path.join(clientDir, "credentials_mooc_lab-042.json"), "{}")
 
-    expect(await canDeferActivation(createMockContext())).toBe(false)
+    expect(await canDeferFor(createMockContext())).toBe(false)
   })
 })
 

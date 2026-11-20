@@ -31,4 +31,24 @@ function semVerCompare(
   return Math.trunc(Number(matchA[3] ?? "0")) - Math.trunc(Number(matchB[3] ?? "0"))
 }
 
-export { semVerCompare }
+/** A start that is the first of an install or of a newer minor or major version. */
+type VersionChange = "installed" | "updated"
+
+/**
+ * How `currentVersion` relates to `previousVersion`, the one that last ran: `installed` when no
+ * readable version ran before, `updated` on a newer minor or major version, and `undefined`
+ * otherwise (the same version, a patch update, or a downgrade).
+ */
+function versionChangeSince(
+  previousVersion: string | undefined,
+  currentVersion: string,
+): VersionChange | undefined {
+  const versionDiff = semVerCompare(currentVersion, previousVersion ?? "", "minor")
+  if (versionDiff === undefined) {
+    return "installed"
+  }
+  return versionDiff > 0 ? "updated" : undefined
+}
+
+export type { VersionChange }
+export { semVerCompare, versionChangeSince }

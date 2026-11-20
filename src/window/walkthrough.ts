@@ -3,7 +3,8 @@ import * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { EXTENSION_ID } from "../config/constants"
 import { trackContextKey } from "../ui/contextKeys"
-import { Logger } from "../utilities"
+import type { VersionChange } from "../utilities"
+import { Logger, sleep } from "../utilities"
 
 /** The Get Started walkthrough; its last part must match the `walkthroughs` entry in package.json. */
 export const WALKTHROUGH = `${EXTENSION_ID}#gettingStarted`
@@ -22,6 +23,74 @@ const WALKTHROUGH_TAB_LABELS = [
 /** Whether `tab` may be this walkthrough: VS Code gives extensions no input for it. */
 function isWalkthroughTab(tab: vscode.Tab | undefined): boolean {
   return tab !== undefined && WALKTHROUGH_TAB_LABELS.includes(tab.label) && tab.input === undefined
+}
+
+/** VS Code's 5 s wait in {@link startWalkthroughRegistration}, with slack. */
+const WALKTHROUGH_REGISTRATION_MS = 6_000
+
+let registered = Promise.resolve()
+
+/** Whether the student opened an editor while VS Code registered the walkthrough. */
+let isEditorOpenedMeanwhile = false
+
+/**
+ * Has VS Code register the walkthrough now. Its walkthrough service registers extensions'
+ * walkthroughs up to 5 s after it is first used (`gettingStartedService.ts`); marking an unknown
+ * step incomplete creates it and changes nothing.
+ */
+export function startWalkthroughRegistration(): void {
+  registered = sleep(WALKTHROUGH_REGISTRATION_MS)
+  isEditorOpenedMeanwhile = false
+  // A walkthrough tab has no input, nor has VS Code's own welcome page.
+  const tabsChanged = vscode.window.tabGroups.onDidChangeTabs(({ opened }) => {
+    isEditorOpenedMeanwhile ||= opened.some((tab) => tab.input !== undefined)
+  })
+  void registered.then(() => tabsChanged.dispose())
+  // VS Code throws for the unknown step after creating the service.
+  void Promise.resolve(
+    vscode.commands.executeCommand("welcome.markStepIncomplete", `${WALKTHROUGH}#registration`),
+  ).catch(() => {})
+}
+
+/**
+ * Lets VS Code show the walkthrough, which package.json hides until this window sets
+ * `test-my-code:WalkthroughListed`.
+ */
+async function listWalkthrough(): Promise<void> {
+  await vscode.commands.executeCommand("setContext", "test-my-code:WalkthroughListed", true)
+}
+
+/**
+ * Lists the walkthrough, except after an update: VS Code opens a walkthrough new to it, from an
+ * extension updated in the window, over the student's work if its `when` holds then.
+ */
+export function listWalkthroughUnlessUpdated(versionChange: VersionChange | undefined): void {
+  if (versionChange !== "updated") {
+    void listWalkthrough().catch((e) => Logger.warn("Could not list the walkthrough", e))
+  }
+}
+
+/**
+ * Lists and opens the walkthrough once VS Code has registered it: on the student's next step given
+ * their `progress`, else where VS Code left it. Opened before that, it may never show: on a new
+ * profile VS Code's own walkthrough is active, and it then ignores later opens.
+ *
+ * @param isUnasked Opens nothing if the student opened an editor meanwhile, which it would cover.
+ */
+export async function openWalkthroughWhenRegistered(
+  progress?: () => WalkthroughProgress,
+  { isUnasked = false }: { isUnasked?: boolean } = {},
+): Promise<void> {
+  await listWalkthrough()
+  await registered
+  if (isUnasked && isEditorOpenedMeanwhile) {
+    return
+  }
+  if (progress) {
+    await showNextWalkthroughStep(progress, { isOpenedIfClosed: true })
+  } else {
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
+  }
 }
 
 /**

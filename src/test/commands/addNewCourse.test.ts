@@ -9,6 +9,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
 import { MOOC_BACKEND_URL } from "../../config/constants"
+import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import { openWebLink } from "../../utilities/webLink"
 import { tmcLocalCourse } from "../fixtures/courses"
@@ -137,6 +138,7 @@ function harness(
     organizationCourses?: ReturnType<typeof Ok> | ReturnType<typeof Err>
     coursesOf?: (slug: string) => Promise<ReturnType<typeof Ok> | ReturnType<typeof Err>>
     addedCourses?: LocalCourseData[]
+    isMoocEnabled?: boolean
   } = {},
 ): { context: ReadyActionContext; quickPick: FakeQuickPick; done: Promise<void> } {
   const quickPick = new FakeQuickPick()
@@ -158,6 +160,9 @@ function harness(
       startup: { langs, userData },
     }),
     dialog,
+    settings: {
+      isCoursesMoocFiEnabled: () => options.isMoocEnabled ?? true,
+    } as unknown as Settings,
   }
   return { context, quickPick, done: addNewCourse(context) }
 }
@@ -196,6 +201,15 @@ suite("Add New Course command", function () {
     ])
     expect(quickPick.items[1]?.description).toBe("MOOC.fi")
     expect(quickPick.busy).toBe(false)
+  })
+
+  test("lists only the TMC organizations while the courses.mooc.fi setting is off", async function () {
+    const { context, quickPick } = harness({ isMoocEnabled: false })
+    await flush()
+
+    expect(quickPick.rows).toEqual(["--- tmc.mooc.fi — organizations", "MOOC", "Test org"])
+    expect(quickPick.placeholder).toBe("Search tmc.mooc.fi organizations")
+    expect(context.startup.langs.getEnrolledMoocCourses).not.toHaveBeenCalled()
   })
 
   test("shows no rows until both backends have answered, so none moves under a click", async function () {

@@ -25,7 +25,7 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
+import { openWalkthroughWhenRegistered, walkthroughProgressOf } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -307,11 +307,9 @@ export function registerCommands(
     commands.showExerciseResults(readyContext, resourceOf(target)),
   )
 
-  register("tmc.showWelcome", async () => {
-    await showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
-      isOpenedIfClosed: true,
-    })
-  })
+  register("tmc.showWelcome", () =>
+    openWalkthroughWhenRegistered(() => walkthroughProgressOf(readyContext)),
+  )
 
   // Also run from the Courses view's exercise menu, whose row is no `LoginOptions`.
   register("tmc.showMoocLogin", async (options?: LoginOptions) =>

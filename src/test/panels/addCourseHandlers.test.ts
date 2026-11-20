@@ -17,6 +17,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions", () => ({
   MOOC_LOGIN: "mooc-login",
+  MOOC_DISABLED: "mooc-disabled",
   listEnrolledMoocCourses: vi.fn(),
   listTmcOrganizations: vi.fn(),
   listOrganizationCourses: vi.fn(),
@@ -173,6 +174,12 @@ suite("the add-course screen's handlers", function () {
     const error = new ConnectionError("dns error")
     vi.mocked(actions.listEnrolledMoocCourses).mockResolvedValueOnce(Err(error))
     expect((await listMooc(context(), panel)).val).toBe(error)
+  })
+
+  test("says the courses.mooc.fi courses are not offered while the setting is off", async function () {
+    vi.mocked(actions.listEnrolledMoocCourses).mockResolvedValue(actions.MOOC_DISABLED)
+
+    expect((await listMooc(context(), addCoursePanel())).val).toEqual({ kind: "disabled" })
   })
 
   test("lists the TMC organizations, pinned first, or that they need a login", async function () {

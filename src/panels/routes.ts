@@ -1,7 +1,7 @@
 import type * as vscode from "vscode"
 
 import type { ErrorHelpPanel, ExerciseSubmissionPanel, Panel } from "../../shared/lib"
-import { assertUnreachable, LocalCourseData, unwrap } from "../../shared/lib"
+import { assertUnreachable, BaseError, LocalCourseData, unwrap } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
 import { errorDetails } from "../api/errorDetails"
@@ -102,6 +102,9 @@ export function initializationErrorHelpPanel(
                 ),
                 stack: redactPersonalInfo(error.stack ?? "no stack trace"),
                 ...(step === "langs" ? { hint: cliHint } : {}),
+                ...(error instanceof BaseError && error.details
+                  ? { details: redactPersonalInfo(error.details) }
+                  : {}),
               },
             ]
           : []

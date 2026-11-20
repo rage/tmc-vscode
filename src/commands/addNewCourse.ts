@@ -120,6 +120,7 @@ function pickCourse(
   quickPick.matchOnDescription = true
   quickPick.ignoreFocusOut = true
 
+  let isMoocListed = true
   let moocRows: ChoiceItem[] | undefined
   let tmcRows: ChoiceItem[] | undefined
   const unavailable: string[] = []
@@ -144,7 +145,9 @@ function pickCourse(
   /** Redraws the first step's rows without touching the user's filter text. */
   const renderFirstStep = (): void => {
     // Naming the missing backend in the placeholder keeps a partial list from looking complete.
-    const search = `Search your courses or ${backendName("tmc")} organizations`
+    const search = isMoocListed
+      ? `Search your courses or ${backendName("tmc")} organizations`
+      : `Search ${backendName("tmc")} organizations`
     quickPick.placeholder =
       unavailable.length === 0
         ? search
@@ -166,6 +169,7 @@ function pickCourse(
   }
 
   const moocListing = actions.listEnrolledMoocCourses(actionContext).then((listing) => {
+    isMoocListed = listing !== actions.MOOC_DISABLED
     moocRows = moocListingRows(listing, isAdded, unavailable)
   })
   const tmcListing = actions.listTmcOrganizations(actionContext).then((listing) => {
@@ -254,10 +258,13 @@ function pickCourse(
 }
 
 function moocListingRows(
-  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN,
+  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN | typeof actions.MOOC_DISABLED,
   isAdded: (id: CourseIdentifier) => boolean,
   unavailable: string[],
 ): ChoiceItem[] {
+  if (listing === actions.MOOC_DISABLED) {
+    return []
+  }
   if (listing === actions.MOOC_LOGIN) {
     return [
       {

@@ -288,3 +288,75 @@ jobs:
           name: playwright-html-report
           path: ./playwright-report/
           if-no-files-found: ignore
+
+  upgrade_vsix:
+    name: Upgrade E2E VSIX
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      # One VSIX for every platform, as the release job builds it.
+      - name: Package the extension as an update to 3.5.5
+        run: bash bin/packageUpgradeVsix.sh
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: upgrade-e2e-vsix
+          path: ./.vscode-test/upgrade-e2e/next.vsix
+          if-no-files-found: error
+
+  upgrade_tests:
+    name: Upgrade E2E
+    needs: upgrade_vsix
+    permissions:
+      contents: read
+    env:
+      CI: true
+    strategy:
+      # A failure on one platform must not cancel the others.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          submodules: "true"
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      # Builds the course archives the mock serves and fetches the pinned CLI the spec seeds.
+      - name: Setup
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
+
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: upgrade-e2e-vsix
+          path: ./.vscode-test/upgrade-e2e/
+
+      - name: Upgrade E2E (Playwright)
+        uses: coactions/setup-xvfb@b6b4fcfb9f5a895edadc3bc76318fae0ac17c8b3 # v1.0.1
+        with:
+          run: pnpm run test:upgrade
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: upgrade-test-results-${{ matrix.os }}
+          path: ./test-results/
+          if-no-files-found: ignore

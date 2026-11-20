@@ -1073,7 +1073,7 @@ suite("a course refresh that changes the AI policy", function () {
   test("removes the settings once the course allows AI, and writes them back once it does not", async function () {
     declare(AI_SECTIONS)
     vi.spyOn(Logger, "info").mockImplementation(() => undefined)
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({
       courses: [],
       mooc_courses: [moocCourseData({ id: MOOC_COURSE_UUID, name: "python-course" })],
