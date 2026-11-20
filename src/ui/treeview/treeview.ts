@@ -702,7 +702,8 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     }
     const uri = vscode.window.activeTextEditor?.document.uri
     const item = uri && this._exerciseItemContaining(uri)
-    if (item) {
+    // Selecting it would undo rows the student has since added to the selection.
+    if (item && !this._view.selection.some((selected) => selected.id === item.id)) {
       await this._view.reveal(item, { select: true, focus: false })
     }
   }

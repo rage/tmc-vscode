@@ -107,6 +107,7 @@ interface FakeView {
   badge: vscode.ViewBadge | undefined
   message: string | undefined
   visible: boolean
+  selection: { id: string | undefined }[]
   reveal: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   onDidChangeVisibility: vscode.Event<unknown>
@@ -161,6 +162,7 @@ suite("CoursesTree", function () {
       badge: undefined,
       message: undefined,
       visible: true,
+      selection: [],
       reveal: vi.fn(async () => undefined),
       dispose: vi.fn(),
       onDidChangeVisibility: new vscode.EventEmitter<unknown>().event,
@@ -947,6 +949,16 @@ suite("CoursesTree", function () {
       const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
       expect(item.label).toBe("01_hello")
       expect(options).toEqual({ select: true, focus: false })
+    })
+
+    test("keeps a selection the exercise is already part of", function () {
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+      const [item] = view.reveal.mock.calls[0] as [ExerciseTreeItem]
+      view.selection = [{ id: item.id }, { id: "another row" }]
+
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+
+      expect(view.reveal).toHaveBeenCalledOnce()
     })
 
     test("selects the exercise already open when the view first fills", function () {
