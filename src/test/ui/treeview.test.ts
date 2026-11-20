@@ -349,6 +349,20 @@ suite("CoursesTree", function () {
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmcView.focus")
   })
 
+  test("reveals a course without focus when asked to leave the keyboard alone", async function () {
+    const [item] = show(tmcCourse())
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await tree.revealCourse(idOfTmcCourse(1), { isFocused: false })
+
+    expect(view.reveal).toHaveBeenCalledExactlyOnceWith(item, {
+      select: true,
+      focus: false,
+      expand: true,
+    })
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmcView.focus")
+  })
+
   test("a course with exercises not downloaded is marked for downloading them all", function () {
     const [item] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
 

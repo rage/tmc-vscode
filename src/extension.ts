@@ -679,16 +679,20 @@ async function activateInner(
   }
 
   if (readyContext && openingSwitch) {
+    const courseId = openCourseId(readyContext)
     // Outside a window reload, a released VS Code opens the Explorer in place of the extension
-    // view a workspace last showed in its sidebar.
-    void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
+    // view a workspace last showed in its sidebar. Activation can end after the student has
+    // started typing in the new window, so the view must not take the keyboard.
+    const shownCoursesView = courseId
+      ? coursesTree.revealCourse(courseId, { isFocused: false })
+      : vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
+    void Promise.resolve(shownCoursesView).catch((e) =>
       Logger.warn("Could not show the Courses view", e),
     )
     // The course home lists what to do next in the course just opened, so it goes in front of
     // the walkthrough, which still moves on to its next step behind it. Code the student opens
     // meanwhile goes in front instead: the walkthrough, once open, is the active editor, so
     // whether the student has one must be watched for rather than read afterwards.
-    const courseId = openCourseId(readyContext)
     let studentEditor = vscode.window.activeTextEditor
     const studentEditorWatch = vscode.window.onDidChangeActiveTextEditor((editor) => {
       studentEditor = editor ?? studentEditor
@@ -698,14 +702,16 @@ async function activateInner(
     })
       .catch((e) => Logger.warn("Could not show the next walkthrough step", e))
       .then(async () => {
-        studentEditorWatch.dispose()
+        if (!studentEditor && courseId) {
+          await vscode.commands.executeCommand("tmc.courseDetails", courseId)
+        }
+        // Also one opened while the course home was being shown, which covered it.
         if (studentEditor) {
           await vscode.window.showTextDocument(studentEditor.document, studentEditor.viewColumn)
-        } else if (courseId) {
-          await vscode.commands.executeCommand("tmc.courseDetails", courseId)
         }
       })
       .then(undefined, (e) => Logger.warn("Could not show the course home", e))
+      .finally(() => studentEditorWatch.dispose())
   }
 
   if (readyContext && versionChange === "installed") {

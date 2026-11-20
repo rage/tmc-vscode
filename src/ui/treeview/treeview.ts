@@ -734,13 +734,21 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     }
   }
 
-  /** Opens the view with the course's row selected, focused and expanded. */
-  public async revealCourse(courseId: CourseIdentifier): Promise<void> {
+  /**
+   * Opens the view with the course's row selected and expanded.
+   *
+   * @param isFocused false leaves the keyboard where it is, except when the view has no row for
+   * the course: then focusing the view is the only way to show it.
+   */
+  public async revealCourse(
+    courseId: CourseIdentifier,
+    { isFocused = true }: { isFocused?: boolean } = {},
+  ): Promise<void> {
     const item = this._currentRoots().find((root) =>
       CourseIdentifier.equals(root.courseId, courseId),
     )
     if (item) {
-      await this._view.reveal(item, { select: true, focus: true, expand: true })
+      await this._view.reveal(item, { select: true, focus: isFocused, expand: true })
     } else {
       await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
     }

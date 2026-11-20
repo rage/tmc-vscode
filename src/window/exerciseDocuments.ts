@@ -5,7 +5,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { isPathInside } from "../utilities"
+import { isPathInside, Logger } from "../utilities"
 
 type ExerciseFolder = Pick<WorkspaceExercise, "uri">
 
@@ -54,6 +54,10 @@ function exerciseTabs(exercise: ExerciseFolder): { tab: vscode.Tab; uri: vscode.
   )
 }
 
+// The revert command reverts whatever editor is active when it runs, and a webview the student
+// was in, such as the History that asked for a restore, can take that back after it is shown.
+const REVERT_ATTEMPTS = 3
+
 /**
  * Reloads every editor of `exercise`'s files from disk after its folder was rewritten there,
  * discarding unsaved edits. A saved editor needs it too: the CLI replaces the folder, and VS
@@ -66,17 +70,42 @@ export async function revertExerciseDocuments(exercise: ExerciseFolder): Promise
   }
   const previous = vscode.window.activeTextEditor
   for (const { tab, uri } of tabs) {
-    const document = await vscode.workspace.openTextDocument(uri)
-    await vscode.window.showTextDocument(document, {
-      viewColumn: tab.group.viewColumn,
-      preview: false,
-    })
-    // The revert command ignores any argument and reverts the active editor.
-    await vscode.commands.executeCommand("workbench.action.files.revert")
+    for (let attempt = 1; ; attempt++) {
+      const document = await vscode.workspace.openTextDocument(uri)
+      await vscode.window.showTextDocument(document, {
+        viewColumn: tab.group.viewColumn,
+        preview: false,
+      })
+      // The revert command ignores any argument.
+      await vscode.commands.executeCommand("workbench.action.files.revert")
+      if (await showsDiskContent(document)) {
+        break
+      }
+      if (attempt === REVERT_ATTEMPTS) {
+        Logger.warn(`Could not reload ${uri.fsPath} from disk`)
+        break
+      }
+    }
   }
   if (previous) {
     await vscode.window.showTextDocument(previous.document, previous.viewColumn)
   }
+}
+
+/** Whether `document` holds its file as it is on disk; true when the file cannot be read. */
+async function showsDiskContent(document: vscode.TextDocument): Promise<boolean> {
+  let onDisk: string
+  try {
+    onDisk = new TextDecoder().decode(await vscode.workspace.fs.readFile(document.uri))
+  } catch {
+    return true
+  }
+  return withoutBomOrCrlf(document.getText()) === withoutBomOrCrlf(onDisk)
+}
+
+// A document's text leaves out the file's BOM, and its line endings can be the editor's own.
+function withoutBomOrCrlf(text: string): string {
+  return text.replace(/^\uFEFF/, "").replaceAll("\r\n", "\n")
 }
 
 /**
