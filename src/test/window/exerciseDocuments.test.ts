@@ -67,6 +67,17 @@ function openTabs(...groups: { input: unknown }[][]): ReturnType<typeof vi.fn> {
   return close
 }
 
+function textDocument(uri: vscode.Uri, text: () => string): vscode.TextDocument {
+  return { uri, getText: text } as unknown as vscode.TextDocument
+}
+
+function onDisk(text: string): void {
+  Object.defineProperty(vscode.workspace, "fs", {
+    value: { readFile: vi.fn(async () => new TextEncoder().encode(text)) },
+    configurable: true,
+  })
+}
+
 const insideUri = vscode.Uri.file("/projects/course/exercise/src/main.py")
 const outsideUri = vscode.Uri.file("/projects/course/other/main.py")
 
@@ -81,9 +92,10 @@ suite("revertExerciseDocuments", function () {
       value: previous,
       configurable: true,
     })
-    vi.spyOn(vscode.workspace, "openTextDocument").mockImplementation(
-      async (uri) => ({ uri }) as unknown as vscode.TextDocument,
+    vi.spyOn(vscode.workspace, "openTextDocument").mockImplementation(async (uri) =>
+      textDocument(uri as vscode.Uri, () => "restored\n"),
     )
+    onDisk("\uFEFFrestored\r\n")
     const shown: unknown[] = []
     vi.spyOn(vscode.window, "showTextDocument").mockImplementation(
       async (shownDocument, options) => {
@@ -101,6 +113,38 @@ suite("revertExerciseDocuments", function () {
     expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
       "workbench.action.files.revert",
     )
+  })
+
+  test("reverts again when another editor became active before the revert ran", async function () {
+    openTabs([{ input: { uri: insideUri } }])
+    let text = "template\n"
+    vi.spyOn(vscode.workspace, "openTextDocument").mockImplementation(async (uri) =>
+      textDocument(uri as vscode.Uri, () => text),
+    )
+    vi.spyOn(vscode.window, "showTextDocument").mockResolvedValue({} as vscode.TextEditor)
+    onDisk("restored\n")
+    vi.mocked(vscode.commands.executeCommand)
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(async () => {
+        text = "restored\n"
+      })
+
+    await revertExerciseDocuments(exercise)
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2)
+  })
+
+  test("gives up on an editor that never shows the file on disk", async function () {
+    openTabs([{ input: { uri: insideUri } }])
+    vi.spyOn(vscode.workspace, "openTextDocument").mockImplementation(async (uri) =>
+      textDocument(uri as vscode.Uri, () => "template\n"),
+    )
+    vi.spyOn(vscode.window, "showTextDocument").mockResolvedValue({} as vscode.TextEditor)
+    onDisk("restored\n")
+
+    await revertExerciseDocuments(exercise)
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(3)
   })
 
   test("touches no editor when none shows the exercise", async function () {

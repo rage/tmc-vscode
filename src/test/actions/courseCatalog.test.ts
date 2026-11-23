@@ -5,6 +5,7 @@ import {
   listEnrolledMoocCourses,
   listOrganizationCourses,
   listTmcOrganizations,
+  MOOC_DISABLED,
   MOOC_LOGIN,
 } from "../../actions/courseCatalog"
 import type { ReadyActionContext } from "../../actions/types"
@@ -26,6 +27,7 @@ const moocCourses = [
 ]
 
 function context(options: {
+  isMoocEnabled?: boolean
   moocAuthenticated?: boolean
   getTmcOrganizations?: ReturnType<typeof vi.fn>
   getEnrolledMoocCourses?: ReturnType<typeof vi.fn>
@@ -36,10 +38,14 @@ function context(options: {
     getEnrolledMoocCourses: options.getEnrolledMoocCourses ?? vi.fn(async () => Ok(moocCourses)),
     getCourses: options.getCourses ?? vi.fn(async () => Ok([])),
   } as unknown as Langs
-  return createMockActionContext({
+  const actionContext = createMockActionContext({
     loggedIn: options.moocAuthenticated ?? true,
     startup: { langs },
   })
+  vi.mocked(actionContext.settings.isCoursesMoocFiEnabled).mockReturnValue(
+    options.isMoocEnabled ?? true,
+  )
+  return actionContext
 }
 
 suite("listEnrolledMoocCourses and listTmcOrganizations", function () {
@@ -55,6 +61,14 @@ suite("listEnrolledMoocCourses and listTmcOrganizations", function () {
     const ctx = context({ moocAuthenticated: false, getEnrolledMoocCourses })
 
     expect(await listEnrolledMoocCourses(ctx)).toBe(MOOC_LOGIN)
+    expect(getEnrolledMoocCourses).not.toHaveBeenCalled()
+  })
+
+  test("stands for courses.mooc.fi being off instead of fetching, while its setting is off", async function () {
+    const getEnrolledMoocCourses = vi.fn(async () => Ok(moocCourses))
+    const ctx = context({ isMoocEnabled: false, getEnrolledMoocCourses })
+
+    expect(await listEnrolledMoocCourses(ctx)).toBe(MOOC_DISABLED)
     expect(getEnrolledMoocCourses).not.toHaveBeenCalled()
   })
 

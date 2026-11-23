@@ -15,7 +15,7 @@ suite("Storage reads", function () {
   beforeEach(function () {
     Logger.configure(LogLevel.Verbose)
     context = createMockContext()
-    storage = new Storage(context)
+    storage = new Storage(context.globalState)
   })
 
   test("reports nothing stored as nothing stored", function () {

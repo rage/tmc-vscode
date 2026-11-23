@@ -6,6 +6,8 @@ import { AddCoursePage } from "../pages/add-course"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // E2E of the courses.mooc.fi device-flow login screen. The mock's default client approves
 // five seconds after the code is issued.
 //

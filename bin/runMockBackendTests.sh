@@ -7,7 +7,7 @@
 # when the suite grows. bin/verifyGatesCanFail.sh asserts this script still fails.
 set -euo pipefail
 
-MINIMUM_PASSING=251
+MINIMUM_PASSING=253
 
 cd "$(dirname "$0")/../backend"
 

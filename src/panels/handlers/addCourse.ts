@@ -30,6 +30,9 @@ export const addCourseHandlers = {
         return Err(NOT_SHOWN)
       }
       const listing = await actions.listEnrolledMoocCourses(actionContext)
+      if (listing === actions.MOOC_DISABLED) {
+        return Ok({ kind: "disabled" })
+      }
       if (listing === actions.MOOC_LOGIN) {
         return Ok({ kind: "loggedOut" })
       }

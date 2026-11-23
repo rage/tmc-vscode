@@ -140,6 +140,7 @@
     return terms.every((term) => text.includes(term))
   }
 
+  const isMoocListed = $derived(!(mooc.state === "loaded" && mooc.value.kind === "disabled"))
   const shownMoocCourses = $derived(
     mooc.state === "loaded" && mooc.value.kind === "listed"
       ? mooc.value.items.filter((course) =>
@@ -182,6 +183,10 @@
 
 {#snippet noMatches()}
   <p class="muted">Nothing here matches “{query.current.trim()}”.</p>
+{/snippet}
+
+{#snippet toolbar()}
+  <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
 {/snippet}
 
 {#snippet courseList(courses: CatalogCourse[], label: string)}
@@ -227,11 +232,7 @@
 {/snippet}
 
 <div class="add-course">
-  <PanelHeader title="Add Course">
-    {#snippet toolbar()}
-      <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
-    {/snippet}
-  </PanelHeader>
+  <PanelHeader title="Add Course" toolbar={isMoocListed ? toolbar : undefined} />
   <p class="muted intro">Pick the course you're taking.</p>
 
   <div class="search">
@@ -244,33 +245,35 @@
     />
   </div>
 
-  <Section title={MOOC}>
-    {#if mooc.state === "loading"}
-      <Spinner label="Loading your courses…" />
-    {:else if mooc.state === "failed"}
-      <ErrorNotice error={mooc.error} title="Could not list your {MOOC} courses">
-        {#snippet actions()}
-          <Button secondary onclick={() => void loadMooc()}>Try Again</Button>
-        {/snippet}
-      </ErrorNotice>
-    {:else if mooc.value.kind === "loggedOut"}
-      <Notice kind="info" title="Not logged in">
-        <p>Log in with your MOOC.fi account to see the courses you are enrolled in.</p>
-        {#snippet actions()}
-          <Button onclick={logIn}>Log In</Button>
-        {/snippet}
-      </Notice>
-    {:else if mooc.value.items.length === 0}
-      <p>You are not enrolled on any {MOOC} course with programming exercises yet.</p>
-      <div class="actions">
-        <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
-      </div>
-    {:else if shownMoocCourses.length === 0}
-      {@render noMatches()}
-    {:else}
-      {@render courseList(shownMoocCourses, `${MOOC} courses`)}
-    {/if}
-  </Section>
+  {#if isMoocListed}
+    <Section title={MOOC}>
+      {#if mooc.state === "loading"}
+        <Spinner label="Loading your courses…" />
+      {:else if mooc.state === "failed"}
+        <ErrorNotice error={mooc.error} title="Could not list your {MOOC} courses">
+          {#snippet actions()}
+            <Button secondary onclick={() => void loadMooc()}>Try Again</Button>
+          {/snippet}
+        </ErrorNotice>
+      {:else if mooc.value.kind === "loggedOut"}
+        <Notice kind="info" title="Not logged in">
+          <p>Log in with your MOOC.fi account to see the courses you are enrolled in.</p>
+          {#snippet actions()}
+            <Button onclick={logIn}>Log In</Button>
+          {/snippet}
+        </Notice>
+      {:else if mooc.value.kind === "listed" && mooc.value.items.length === 0}
+        <p>You are not enrolled on any {MOOC} course with programming exercises yet.</p>
+        <div class="actions">
+          <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
+        </div>
+      {:else if shownMoocCourses.length === 0}
+        {@render noMatches()}
+      {:else}
+        {@render courseList(shownMoocCourses, `${MOOC} courses`)}
+      {/if}
+    </Section>
+  {/if}
 
   <Section title={TMC}>
     {#if browsedOrganization}

@@ -32,7 +32,7 @@ suite("addNewCourse action (mooc)", function () {
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
     createWorkspaceFile = vi.fn()
     workspaceManagerMock.createWorkspaceFile = createWorkspaceFile as never
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({ courses: [], mooc_courses: [] })
     userData = new UserData(storage)
   })

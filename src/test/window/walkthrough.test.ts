@@ -5,9 +5,11 @@ import {
   hasReachedWalkthroughMilestone,
   isWalkthroughOpen,
   nextWalkthroughStep,
+  openWalkthroughWhenRegistered,
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
+  startWalkthroughRegistration,
   trackWalkthroughActive,
   WALKTHROUGH,
 } from "../../window/walkthrough"
@@ -104,6 +106,67 @@ suite("walkthrough", function () {
       { category: WALKTHROUGH, step: "openExercises" },
       false,
     )
+  })
+
+  test("has VS Code register the walkthrough, and opens it only once VS Code has", async function () {
+    vi.useFakeTimers()
+    try {
+      startWalkthroughRegistration()
+      const opened = openWalkthroughWhenRegistered()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(executeCommand).not.toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      await opened
+
+      expect(executeCommand.mock.calls).toEqual([
+        ["welcome.markStepIncomplete", `${WALKTHROUGH}#registration`],
+        ["setContext", "test-my-code:WalkthroughListed", true],
+        ["workbench.action.openWalkthrough", WALKTHROUGH, false],
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("opens unasked only if the student opened no editor while VS Code registered it", async function () {
+    const tabsChanged = new vscode.EventEmitter<vscode.TabChangeEvent>()
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { onDidChangeTabs: tabsChanged.event },
+      configurable: true,
+    })
+    const opensWalkthrough = (): boolean =>
+      executeCommand.mock.calls.some(
+        (call: unknown[]) => call[0] === "workbench.action.openWalkthrough",
+      )
+    const tabOpened = (input: unknown): void =>
+      tabsChanged.fire({ opened: [{ input } as vscode.Tab], closed: [], changed: [] })
+    vi.useFakeTimers()
+    try {
+      startWalkthroughRegistration()
+      const unasked = openWalkthroughWhenRegistered(undefined, { isUnasked: true })
+      tabOpened(undefined)
+      await vi.advanceTimersByTimeAsync(6_000)
+      await unasked
+      expect(opensWalkthrough()).toBe(true)
+
+      executeCommand.mockClear()
+      startWalkthroughRegistration()
+      const coveringPanel = openWalkthroughWhenRegistered(undefined, { isUnasked: true })
+      tabOpened({ viewType: "tmc-panel" })
+      await vi.advanceTimersByTimeAsync(6_000)
+      await coveringPanel
+      expect(opensWalkthrough()).toBe(false)
+
+      await openWalkthroughWhenRegistered()
+      expect(opensWalkthrough()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("says whether the walkthrough is the active tab, as the tabs change", function () {

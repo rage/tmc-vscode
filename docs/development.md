@@ -184,7 +184,9 @@ panel it posted and the latest message of each type aimed at it, and replays the
 when the webview says `ready`. Panels do not use `retainContextWhenHidden`: VS Code
 destroys a hidden panel's document and loads a fresh one on reveal, which sends
 `ready` and is rendered from the host again. A reply to a request the destroyed
-document made is dropped; the new document asks again.
+document made is dropped; the new document asks again. A shown document that has not said `ready`
+within `READY_TIMEOUT_MS` is replaced by a new panel once: VS Code's webview bootstrap can
+wait forever for its service worker.
 
 What only the webview knows — scroll position, open disclosures, a feedback draft,
 a paste link — goes in the webview state bag through `uiState`

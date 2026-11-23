@@ -496,6 +496,8 @@ export class UserData {
    * The in-memory maps are already mutated by the time this runs, so an `Err`
    * means the two copies have diverged and the caller must tell the user —
    * dropping it silently reverts their action at the next restart.
+   *
+   * @param changedCourse The one course the change touched, when it touched only one.
    */
   private async _updatePersistentData(
     changedCourse?: CourseIdentifier,
@@ -505,7 +507,8 @@ export class UserData {
       courses: Array.from(this._tmcCourses.values()),
       mooc_courses: Array.from(this._moocCourses.values()),
     }
-    return this._enqueueWrite(() => this._storage.updateUserData(snapshot))
+    const isMoocOnlyChange = changedCourse?.kind === "mooc"
+    return this._enqueueWrite(() => this._storage.updateUserData(snapshot, { isMoocOnlyChange }))
   }
 
   /**

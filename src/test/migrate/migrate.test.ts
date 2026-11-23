@@ -11,6 +11,7 @@ import Storage from "../../storage"
 import type { MoocLocalCourseData } from "../../storage/data"
 import { v0, v1, v3 } from "../../storage/data"
 import { obsoleteKeys } from "../../storage/migration"
+import { SerializedMemento } from "../../storage/serializedMemento"
 import { Logger, LogLevel } from "../../utilities"
 import * as exerciseData from "../fixtures/exerciseData"
 import * as extensionSettings from "../fixtures/extensionSettings"
@@ -64,13 +65,13 @@ suite("Extension data migration", function () {
     context = createMockContext()
     ;[dialogMock] = createDialogMock()
     settingsMock = createMockWorkspaceConfiguration()
-    storage = new Storage(context)
+    storage = new Storage(new SerializedMemento(context.globalState))
     ;[tmcMock] = createTMCMock()
   })
 
   /** Runs a migration whose exercise hand-over Langs refuses, and checks what it leaves behind. */
   async function expectRefusedExercisesPending(): Promise<void> {
-    const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+    const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
     expect(result.kind).toBe("done")
     expect(storage.getUserData()?.courses.length).toBeGreaterThan(0)
     expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
@@ -83,7 +84,7 @@ suite("Extension data migration", function () {
   }
 
   test("should succeed without any data", async function () {
-    const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+    const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
     expect(result.kind).toBe("done")
   })
 
@@ -93,7 +94,7 @@ suite("Extension data migration", function () {
     test("should succeed with valid data", async function () {
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0)
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
@@ -111,7 +112,7 @@ suite("Extension data migration", function () {
     test("should succeed with valid data", async function () {
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root))
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0)
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
@@ -130,7 +131,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0)
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_3_0(root))
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
@@ -152,7 +153,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
@@ -174,7 +175,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v1.USER_DATA_KEY, userData.v2_0_0)
       await context.globalState.update(v1.EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
       await context.globalState.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(storage.getUserData()).not.toBeUndefined()
       expect(storage.getSessionState()).not.toBeUndefined()
@@ -194,7 +195,8 @@ suite("Extension data migration", function () {
       v3.PENDING_EXERCISE_MIGRATION_KEY,
       v3.USER_DATA_KEY,
     ]
-    const currentKeys = [v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
+    // `user-data-v1` stays as the copy a downgrade to 3.x reads.
+    const currentKeys = [v1.USER_DATA_KEY, v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
 
     function survivingKeys(): string[] {
       return migrationKeys.filter((key) => context.globalState.get(key) !== undefined)
@@ -205,7 +207,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
       await context.globalState.update(v0.EXTENSION_VERSION_KEY, "1.3.4")
 
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(survivingKeys()).toEqual(currentKeys)
     })
@@ -215,7 +217,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v1.EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
       await context.globalState.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
 
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
       expect(survivingKeys()).toEqual(currentKeys)
     })
@@ -224,25 +226,22 @@ suite("Extension data migration", function () {
       await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
       await context.globalState.update(v3.SESSION_STATE_KEY, sessionState.v2_0_0)
 
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
-      expect(survivingKeys()).toEqual([v3.SESSION_STATE_KEY, v3.USER_DATA_KEY])
+      expect(survivingKeys()).toEqual(currentKeys)
       expect(storage.getUserData()).toEqual(userData.v3_0_0)
+      expect(context.globalState.get(v1.USER_DATA_KEY)).toEqual(userData.v2_1_0)
     })
 
     test("a second run does not replay the first run's source data", async function () {
       await context.globalState.update(v1.USER_DATA_KEY, userData.v2_1_0)
-      expect((await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).kind).toBe(
-        "done",
-      )
+      expect((await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)).kind).toBe("done")
 
       // What the user does between two activations: enrol on a mooc course (which the v1
       // snapshot has no field for) and drop a tmc one.
       await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
 
-      expect((await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).kind).toBe(
-        "done",
-      )
+      expect((await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)).kind).toBe("done")
       expect(storage.getUserData()).toEqual({ courses: [], mooc_courses: [moocCourse] })
     })
   })
@@ -255,7 +254,7 @@ suite("Extension data migration", function () {
 
     test("does not replay the old courses over ones added before it is retried", async function () {
       vi.mocked(tmcMock.migrateExercise).mockRejectedValueOnce(new Error("langs crashed"))
-      const first = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const first = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(first.kind).toBe("failed")
       expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
 
@@ -263,7 +262,7 @@ suite("Extension data migration", function () {
       expect(migratedCourses.length).toBeGreaterThan(0)
       await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
 
-      const second = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const second = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(second.kind).toBe("done")
       expect(storage.getUserData()).toEqual({ courses: [], mooc_courses: [moocCourse] })
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
@@ -271,18 +270,18 @@ suite("Extension data migration", function () {
 
     test("retries refused exercises quietly and forgets them once taken", async function () {
       vi.mocked(tmcMock.migrateExercise).mockResolvedValue(Err(new Error("refused")))
-      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeDefined()
       vi.mocked(dialogMock.progressNotification).mockClear()
       vi.mocked(dialogMock.warningNotification).mockClear()
 
-      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeDefined()
       expect(dialogMock.progressNotification).not.toHaveBeenCalled()
       expect(dialogMock.warningNotification).not.toHaveBeenCalled()
 
       vi.mocked(tmcMock.migrateExercise).mockResolvedValue(Ok.EMPTY)
-      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
       expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeUndefined()
     })
   })
@@ -300,14 +299,37 @@ suite("Extension data migration", function () {
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
       openLegacyWorkspace(root, "python-course.code-workspace")
 
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
 
       expect(result).toEqual({
         kind: "needsReload",
         workspaceName: "python-course.code-workspace",
+        hasMigratedUserData: false,
       })
       expect(storage.getUserData()).toBeUndefined()
       expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_9_0)
+    })
+
+    test("says the courses are migrated when v3 already holds them", async function () {
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
+      await storage.updateUserData(userData.v3_0_0)
+      openLegacyWorkspace(root, "python-course.code-workspace")
+
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
+
+      expect(result).toEqual(expect.objectContaining({ hasMigratedUserData: true }))
+    })
+
+    test("migrates in place instead without the TestMyCode tools", async function () {
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
+      openLegacyWorkspace(root, "python-course.code-workspace")
+
+      const result = await storage.migrateToLatest(dialogMock, undefined, settingsMock)
+
+      expect(result.kind).toBe("done")
+      expect(storage.getUserData()?.courses).toHaveLength(1)
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual({ dataPath: root })
     })
 
     // The caller writes the files and reopens the window; the migration must leave both alone.
@@ -315,7 +337,7 @@ suite("Extension data migration", function () {
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
       openLegacyWorkspace(root, "python-course.code-workspace")
 
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      const result = await storage.migrateToLatest(dialogMock, tmcMock, settingsMock)
 
       expect(result.kind).toBe("needsReload")
       expect(fs.existsSync(path.join(context.globalStoragePath, "workspaces"))).toBe(false)

@@ -14,7 +14,7 @@ import {
   FOCUS_REFRESH_INTERVAL,
   workspaceFileName,
 } from "../../config/constants"
-import { CorruptStoredDataError } from "../../errors"
+import { CorruptStoredDataError, StoredDataMigrationError } from "../../errors"
 import { activate } from "../../extension"
 import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
@@ -248,6 +248,12 @@ vi.mock("../../init/ensureLangsUpdated", () => ({
 vi.mock("../../init/deferredActivation", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   canDeferActivation: async (): Promise<boolean> => deferral.isAllowed,
+}))
+
+// Opens the walkthrough without waiting for VS Code to register it; walkthrough.test.ts covers that.
+vi.mock("../../window/walkthrough", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  startWalkthroughRegistration: (): void => {},
 }))
 
 vi.mock("../../init/verifyCliSchema", () => ({
@@ -545,6 +551,46 @@ suite("activation with unreadable stored data", function () {
   })
 })
 
+suite("activation whose migration fails", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  // Reading v3 now would find nothing and show an empty course list as if it were real.
+  test("degrades instead of reading courses it left unmigrated", async function () {
+    storedMigration.outcome = {
+      kind: "failed",
+      error: new StoredDataMigrationError("unreadable", "migration log"),
+      hasMigratedUserData: false,
+    }
+
+    await activate(createContext())
+
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+    expect(recorded.isCourseViewFilled).toBe(false)
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledExactlyOnceWith(
+      "TestMyCode could not start. Migrating stored data failed.",
+      expect.objectContaining({ title: "Show Details" }),
+    )
+  })
+
+  test("starts with the courses when only a later step failed", async function () {
+    storedMigration.outcome = {
+      kind: "failed",
+      error: new StoredDataMigrationError("langs crashed", "migration log"),
+      hasMigratedUserData: true,
+    }
+
+    await activate(createContext())
+
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(false)
+    expect(recorded.isCourseViewFilled).toBe(true)
+  })
+})
+
 suite("activation with usable storage", function () {
   beforeEach(resetActivationRecording)
 
@@ -791,7 +837,7 @@ suite("the startup course refresh", function () {
   test("offers nothing in a window another one has just switched to", async function () {
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
@@ -828,7 +874,7 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
@@ -852,7 +898,7 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: true,
       aiOffSettingsWritten: [],
     })
@@ -893,7 +939,7 @@ suite("the Courses view on startup", function () {
     })
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: true,
       aiOffSettingsWritten: [],
     })
@@ -1027,7 +1073,7 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
   beforeEach(function () {
     resetActivationRecording()
-    storedMigration.outcome = { kind: "needsReload", workspaceName }
+    storedMigration.outcome = { kind: "needsReload", workspaceName, hasMigratedUserData: false }
   })
 
   afterEach(function () {
@@ -1057,6 +1103,44 @@ suite("activation in a workspace the migration cannot use in place", function ()
     expect(recorded.isCourseViewFilled).toBe(false)
     expect(recorded.registeredCommandIds).toContain("tmc.logs")
   })
+
+  suite("when the workspace cannot be reopened", function () {
+    const unwritableWorkspaceName = path.join("not-a-folder", workspaceName)
+
+    function createContextWithUnwritableWorkspaceFile(): vscode.ExtensionContext {
+      const context = createContext()
+      const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+      fs.mkdirSync(workspaceFileFolder, { recursive: true })
+      fs.writeFileSync(path.join(workspaceFileFolder, "not-a-folder"), "")
+      return context
+    }
+
+    test("degrades when the courses are not migrated yet", async function () {
+      storedMigration.outcome = {
+        kind: "needsReload",
+        workspaceName: unwritableWorkspaceName,
+        hasMigratedUserData: false,
+      }
+
+      await activate(createContextWithUnwritableWorkspaceFile())
+
+      expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+      expect(recorded.isCourseViewFilled).toBe(false)
+    })
+
+    test("starts with the courses an earlier start migrated", async function () {
+      storedMigration.outcome = {
+        kind: "needsReload",
+        workspaceName: unwritableWorkspaceName,
+        hasMigratedUserData: true,
+      }
+
+      await activate(createContextWithUnwritableWorkspaceFile())
+
+      expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(false)
+      expect(recorded.isCourseViewFilled).toBe(true)
+    })
+  })
 })
 
 suite("the first start of a new version", function () {
@@ -1075,7 +1159,13 @@ suite("the first start of a new version", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        { category: WALKTHROUGH, step: "logIn" },
+        false,
+      ),
+    )
     expect(recorded.panelTypes).toEqual([])
   })
 
@@ -1087,12 +1177,47 @@ suite("the first start of a new version", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      expect.anything(),
+      false,
+    )
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
     expect(setStatusBarMessage).toHaveBeenCalledWith(
       `TestMyCode was updated to ${EXTENSION_VERSION}.`,
       expect.any(Number),
     )
+  })
+
+  // VS Code itself opens a walkthrough new to it in a window where the extension was updated.
+  test("an update keeps the walkthrough unlisted, so VS Code does not open it", async function () {
+    sessionState.previousVersion = "1.0.0"
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+  })
+
+  test("a fresh install and a start of the same version list the walkthrough", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const listings = (): number =>
+      executeCommand.mock.calls.filter(
+        ([command, key, value]) =>
+          command === "setContext" && key === "test-my-code:WalkthroughListed" && value === true,
+      ).length
+
+    await activate(createContext())
+    const listingsOnInstall = listings()
+    sessionState.previousVersion = EXTENSION_VERSION
+    await activate(createContext())
+
+    expect(listingsOnInstall).toBeGreaterThan(0)
+    expect(listings()).toBeGreaterThan(listingsOnInstall)
   })
 
   test("a patch release says nothing", async function () {
@@ -1212,20 +1337,67 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     await activate(createContext())
 
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
+      ),
+    )
+  })
+
+  test("a patch version change lists the walkthrough, as a full activation does", async function () {
+    sessionState.previousVersion = EXTENSION_VERSION.replace(/\d+$/, (patch) =>
+      String(Number(patch) > 0 ? Number(patch) - 1 : 1),
+    )
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
     expect(executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+    expect(executeCommand).not.toHaveBeenCalledWith(
       "workbench.action.openWalkthrough",
       WALKTHROUGH,
       false,
     )
   })
 
-  test("an update opens nothing", async function () {
+  test("an update opens nothing, and keeps the walkthrough unlisted", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
     await activate(createContext())
 
     expect(executeCommand.mock.calls.filter(([command]) => command !== "setContext")).toEqual([])
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+  })
+
+  test("lists the walkthrough before opening it on a fresh install", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
+      ),
+    )
+    const commands = executeCommand.mock.calls.map(([command, key]) =>
+      command === "setContext" ? `${command} ${String(key)}` : command,
+    )
+    const listed = commands.indexOf("setContext test-my-code:WalkthroughListed")
+    expect(listed).toBeGreaterThanOrEqual(0)
+    expect(listed).toBeLessThan(commands.indexOf("workbench.action.openWalkthrough"))
   })
 
   test("marks the window light, for the palette's entry commands, until it activates fully", async function () {
@@ -1245,8 +1417,14 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     expect(recorded.commandsRegisteredBeforeCliDownload).toBeDefined()
     expect(langsStub.authChecks).toBeGreaterThan(0)
-    expect(executeCommand).toHaveBeenCalledWith("setContext", "test-my-code:Initialized", true)
-    expect(executeCommand).toHaveBeenLastCalledWith("tmc.showMoocLogin", "argument")
+    const commands = executeCommand.mock.calls.map(([command, key]) =>
+      command === "setContext" ? `${command} ${String(key)}` : command,
+    )
+    expect(commands.indexOf("setContext test-my-code:Initialized")).toBeGreaterThanOrEqual(0)
+    expect(commands.lastIndexOf("tmc.showMoocLogin")).toBeGreaterThan(
+      commands.indexOf("setContext test-my-code:Initialized"),
+    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin", "argument")
   })
 
   test("showing the Courses view activates fully, once", async function () {

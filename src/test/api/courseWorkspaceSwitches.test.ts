@@ -1,13 +1,19 @@
+import * as fs from "fs"
+import * as path from "path"
+
+import * as tmp from "tmp"
+
 import { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
-import { createMockMemento } from "../mocks/vscode"
 
 suite("CourseWorkspaceSwitches", function () {
   let now: number
+  let globalStorage: string
   let switches: CourseWorkspaceSwitches
 
   beforeEach(function () {
     now = 0
-    switches = new CourseWorkspaceSwitches(createMockMemento(), () => now)
+    globalStorage = path.join(tmp.dirSync({ unsafeCleanup: true }).name, "globalStorage")
+    switches = new CourseWorkspaceSwitches(globalStorage, () => now)
   })
 
   test("the window a switch opens finds it, once", async function () {
@@ -15,11 +21,31 @@ suite("CourseWorkspaceSwitches", function () {
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
+    const openedWindow = new CourseWorkspaceSwitches(globalStorage, () => now)
 
-    expect(await switches.take("/w/a.code-workspace")).toEqual({
+    expect(await openedWindow.take("/w/a.code-workspace")).toEqual({
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
+    expect(await openedWindow.take("/w/a.code-workspace")).toBeUndefined()
+  })
+
+  test("a switch record that cannot be read counts as none", async function () {
+    fs.mkdirSync(globalStorage, { recursive: true })
+    fs.writeFileSync(path.join(globalStorage, "course-workspace-switch.json"), "{")
+
+    expect(await switches.take("/w/a.code-workspace")).toBeUndefined()
+  })
+
+  test("a switch that cannot be recorded still lets the switch go ahead", async function () {
+    fs.mkdirSync(path.dirname(globalStorage), { recursive: true })
+    fs.writeFileSync(globalStorage, "not a folder")
+
+    await switches.record("/w/a.code-workspace", {
+      isWalkthroughOpen: false,
+      aiOffSettingsWritten: [],
+    })
+
     expect(await switches.take("/w/a.code-workspace")).toBeUndefined()
   })
 

@@ -114,19 +114,21 @@ suite("User data migration", function () {
       expect(migrateUserData(memento).data).toBeUndefined()
     })
 
-    test("should succeed with backwards compatible future data", async function () {
-      const data = { ...userData.v2_1_0, batman: "Bruce Wayne" }
+    test("reads courses past keys it does not know", async function () {
+      const data = {
+        ...userData.v2_1_0,
+        batman: "Bruce Wayne",
+        courses: userData.v2_1_0.courses.map((course) => ({ ...course, robin: true })),
+      }
       await memento.update(USER_DATA_KEY_V1, data)
-      // The unknown `batman` key is preserved through the migration; the
-      // migration still adds the v3 `mooc_courses` field.
-      expect(migrateUserData(memento).data).toEqual({ ...userData.v3_0_0, batman: "Bruce Wayne" })
+      expect(migrateUserData(memento).data).toEqual(userData.v3_0_0)
     })
   })
 
   suite("with unstable data", function () {
     test("should fail if data is garbage", async function () {
       await memento.update(USER_DATA_KEY_V0, { batman: "Bruce Wayne" })
-      expect(() => migrateUserData(memento)).toThrow(/mismatch/)
+      expect(() => migrateUserData(memento)).toThrow(/could not be read/)
     })
 
     test("should find more exercise info from old exerciseData", async function () {
@@ -179,7 +181,7 @@ suite("User data migration", function () {
   suite("with stable data", function () {
     test("should fail with garbage version 1 data", async function () {
       await memento.update(USER_DATA_KEY_V1, { batman: "Bruce Wayne" })
-      expect(() => migrateUserData(memento)).toThrow(/mismatch/)
+      expect(() => migrateUserData(memento)).toThrow(/could not be read/)
     })
   })
 })

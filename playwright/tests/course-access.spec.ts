@@ -7,6 +7,8 @@ import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // What Course Details says about a courses.mooc.fi course beyond its exercises: where its
 // material is, and that the student is no longer enrolled on it or can no longer reach it at
 // all. backend/mooc serves the course.

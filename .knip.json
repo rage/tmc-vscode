@@ -25,6 +25,8 @@
       // lint-staged config, and the `vscode` mock vitest reaches through a
       // resolve alias.
       "entry": ["src/test/support/vscode.cjs", "bin/*.{js,mjs,ts}", ".husky/lint-staged-config.js"],
+      // bin/package.bash runs it; knip does not read shell scripts.
+      "ignoreDependencies": ["@vscode/vsce"],
       "project": [
         "src/**/*.{ts,cjs}",
         "shared/**/*.ts",

@@ -10,6 +10,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // What a screen says in place of a notification. A failure of something it started shows in it,
 // and a notification tells of the failure only while the screen is out of sight. A local pass
 // while logged out shows in the results screen. backend/mooc serves the course and fails a

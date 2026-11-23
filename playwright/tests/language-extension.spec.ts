@@ -5,6 +5,8 @@ import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // The test VS Code has no extensions installed, so the mock's Python course lacks its extension.
 const COURSE_TITLE = "MOOC Python Course"
 const INSTALL_SENTENCE = "Install the Python extension to run and debug your code."

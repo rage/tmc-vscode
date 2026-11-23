@@ -1,4 +1,5 @@
 import type { ReadyActionContext } from "../actions/types"
+import { TmcPanel } from "../panels/TmcPanel"
 
 export function registerSettingsCallbacks(actionContext: ReadyActionContext): void {
   const { settings } = actionContext
@@ -7,4 +8,5 @@ export function registerSettingsCallbacks(actionContext: ReadyActionContext): vo
   settings.onChangeHideMetaFiles = async (hide): Promise<void> => {
     await workspaceManager.excludeMetaFilesInWorkspace(hide)
   }
+  settings.onChangeCoursesMoocFiEnabled = (): void => TmcPanel.reloadAddCourse()
 }

@@ -7,6 +7,8 @@ import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // What a teacher changes on the course shows in Course Details once its Refresh is pressed.
 // backend/mooc republishes an exercise and changes the AI policy on request.
 

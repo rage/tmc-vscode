@@ -1218,6 +1218,10 @@ export const SCENARIOS: Scenario[] = [
     },
     { screen: "AddCourse", ui: { organization: "mooc" } },
   ),
+  addCourseScenario("tmc-only", {
+    requestMoocCatalog: { ok: true, value: { kind: "disabled" } },
+    requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+  }),
   addCourseScenario("not-enrolled", {
     requestMoocCatalog: { ok: true, value: { kind: "listed", items: [] } },
     requestTmcOrganizations: { ok: true, value: tmcOrganizations },

@@ -77,7 +77,7 @@ suite("updateCourse action (mooc)", function () {
 
   // Replaces the stored course, for a test that needs it in some other starting state.
   async function storeCourse(course: MoocLocalCourseData): Promise<void> {
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({ courses: [], mooc_courses: [{ ...course }] })
     userData = new UserData(storage)
   }
@@ -466,7 +466,7 @@ suite("updateCourse action (tmc)", function () {
     getTmcCourseData = vi.fn(async () => Ok(tmcCourseData))
     ;(langsMock as unknown as { getTmcCourseData: unknown }).getTmcCourseData = getTmcCourseData
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({ courses: [{ ...tmcCourse }], mooc_courses: [] })
     userData = new UserData(storage)
   })
@@ -488,7 +488,7 @@ suite("updateCourse action (tmc)", function () {
   })
 
   test("keeps the slug, organization and new-exercise state it was stored with", async function () {
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({
       courses: [
         {
@@ -518,7 +518,7 @@ suite("updateCourse action (tmc)", function () {
   })
 
   test("records an exercise the refresh brings as new", async function () {
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     const known = combineTmcApiExerciseData(
       tmcCourseData.details.exercises,
       tmcCourseData.exercises,
@@ -602,7 +602,7 @@ suite("updateCourse action (tmc)", function () {
   // The failure arms must start from an enabled course, or "still disabled" and
   // "just disabled" are indistinguishable.
   async function storeEnabledTmcCourse(): Promise<void> {
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({ courses: [{ ...tmcCourse, disabled: false }], mooc_courses: [] })
     userData = new UserData(storage)
   }
@@ -626,7 +626,7 @@ suite("updateCourse after addNewCourse", function () {
     ;(langsMock as unknown as { getTmcCourseData: unknown }).getTmcCourseData = vi.fn(async () =>
       Ok(tmcCourseData),
     )
-    const storage = new Storage(createMockContext())
+    const storage = new Storage(createMockContext().globalState)
     await storage.updateUserData({ courses: [], mooc_courses: [] })
     userData = new UserData(storage)
   })

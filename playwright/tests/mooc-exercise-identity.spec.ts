@@ -6,6 +6,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 function statusBarText(page: Page, text: string) {
   return page.locator('[id="workbench.parts.statusbar"]').getByText(text)
 }

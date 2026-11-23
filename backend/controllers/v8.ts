@@ -13,7 +13,7 @@ import type {
   SubmissionFeedbackResponse,
   SubmissionFinished,
 } from "../../shared/generated/langs"
-import { MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
+import { LEGACY_USERNAME, MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
 import { EXERCISE_SERVICES_SCOPE } from "../mooc/oauth"
 import type { BackendCourse, BackendExercise, ExerciseWithFile } from "../utils"
 import {
@@ -274,6 +274,9 @@ const requireAccessToken =
     res.status(401).json({ error: "Authentication required" })
   }
 
+const LEGACY_OAUTH_CLIENT_ID = "mock-legacy-client"
+const LEGACY_OAUTH_CLIENT_SECRET = "mock-legacy-secret"
+
 export interface RegisterV8RoutesOptions {
   /** Defaults to true, as tmc-server's own API is not open to a guest. */
   requireAuth?: boolean
@@ -464,6 +467,20 @@ export const registerV8Routes = (
   app.post("/feedback", authenticated, (_req, res: Response<SubmissionFeedbackResponse>) =>
     res.json({ api_version: 8, status: "ok" }),
   )
+
+  // The password login of tmc-langs 0.39 (extension 3.x), which the upgrade E2E starts from.
+  app.get("/api/v8/application/:clientName/credentials", (_req, res) =>
+    res.json({ application_id: LEGACY_OAUTH_CLIENT_ID, secret: LEGACY_OAUTH_CLIENT_SECRET }),
+  )
+
+  app.post("/oauth/token", express.urlencoded({ extended: false }), (req, res) => {
+    const { grant_type, username, password } = req.body as Record<string, string | undefined>
+    if (grant_type !== "password" || username !== LEGACY_USERNAME || password !== LEGACY_USERNAME) {
+      res.status(400).json({ error: "invalid_grant" })
+      return
+    }
+    res.json({ access_token: MOCK_TMC_ACCESS_TOKEN, token_type: "bearer", scope: "public" })
+  })
 
   // Spec-exempt and unauthenticated: isolates Playwright tests sharing this mock;
   // the real server has no counterpart.

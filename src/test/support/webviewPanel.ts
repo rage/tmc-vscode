@@ -15,6 +15,8 @@ export function createFakeWebviewPanel(): {
   hide: () => void
   /** Shows the panel again with a fresh document, which says it is ready. */
   reveal: () => Promise<void>
+  /** Shows the panel again with a fresh document that never says it is ready. */
+  revealBlank: () => void
 } {
   let listener: ((message: unknown) => Promise<void>) | undefined
   let disposeListener: (() => void) | undefined
@@ -79,5 +81,6 @@ export function createFakeWebviewPanel(): {
       setVisible(true)
       return sendReady()
     },
+    revealBlank: () => setVisible(true),
   }
 }

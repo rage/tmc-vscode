@@ -37,7 +37,7 @@ suite("resourceInitialization", function () {
   beforeEach(function () {
     Logger.configure(LogLevel.None)
     context = createMockContext()
-    storage = new Storage(context)
+    storage = new Storage(context.globalState)
     temporaryRoot = tmp.dirSync().name
   })
 

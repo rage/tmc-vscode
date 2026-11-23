@@ -255,4 +255,12 @@ suite("the add-course screen", () => {
       expect.objectContaining({ type: "addCourseAction", action: "findCourse" }),
     )
   })
+
+  test("without courses.mooc.fi, lists only tmc.mooc.fi and offers no way to find a course", async () => {
+    await renderScreen({ kind: "disabled" })
+
+    expect(screen.queryByRole("region", { name: "courses.mooc.fi" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "More Actions" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Show the courses of MOOC" })).toBeInTheDocument()
+  })
 })

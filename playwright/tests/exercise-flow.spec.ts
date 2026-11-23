@@ -7,6 +7,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // The way from a course just added to the code of its exercises, and from a passed exercise
 // to the next one, without the Explorer: backend/mooc/fixtures.ts serves the courses.
 

@@ -4,6 +4,8 @@ import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // Panels do not retain a hidden webview, so every reveal and every window reload renders the
 // panel afresh from what the extension host holds.
 vsCodeTest(
