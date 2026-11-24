@@ -1,6 +1,6 @@
-import * as fs from "fs"
 import * as path from "path"
 
+import * as fs from "fs-extra"
 import * as vscode from "vscode"
 
 import {
@@ -143,12 +143,12 @@ async function bringBackOwnExercises(
   const own = accountHandover.movedAside.filter((moved) => moved.accountIds.includes(accountId))
   for (const { folder } of own) {
     // Forgotten only when gone from a reachable place, not when its drive is just missing.
-    if (!(await pathExists(folder)) && (await pathExists(path.dirname(folder)))) {
+    if (!(await fs.pathExists(folder)) && (await fs.pathExists(path.dirname(folder)))) {
       await accountHandover.forgetMovedAside(folder)
     }
   }
   const present = await Promise.all(
-    own.map(async (moved) => (await pathExists(moved.folder)) && moved),
+    own.map(async (moved) => (await fs.pathExists(moved.folder)) && moved),
   )
   const newest = present.findLast((moved) => moved !== false)
   if (!newest) {
@@ -181,13 +181,4 @@ async function bringBackOwnExercises(
   await accountHandover.forgetMovedAside(newest.folder)
   await accountHandover.setExercisesAccountIds(newest.accountIds)
   void dialog.notification("Brought back your exercises that another login moved aside.")
-}
-
-async function pathExists(file: string): Promise<boolean> {
-  try {
-    await fs.promises.access(file)
-    return true
-  } catch {
-    return false
-  }
 }

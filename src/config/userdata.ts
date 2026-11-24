@@ -79,7 +79,7 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
 /**
  * Applies to `courses` the stored courses another window added, and drops those it removed:
  * stored ones absent from `known`, and known ones no longer stored. With `isRefreshingOthers`,
- * every course still in both takes its stored copy.
+ * every course still in both takes its stored copy where it differs.
  */
 function mergeCourses<Id, Course extends { id: Id }>(
   courses: Map<Id, Course>,
@@ -90,7 +90,12 @@ function mergeCourses<Id, Course extends { id: Id }>(
   let isChanged = false
   const storedIds = new Set(stored.map((course) => course.id))
   for (const course of stored) {
-    if (!courses.has(course.id) ? !known.has(course.id) : isRefreshingOthers) {
+    const current = courses.get(course.id)
+    if (
+      current === undefined
+        ? !known.has(course.id)
+        : isRefreshingOthers && !_.isEqual(current, course)
+    ) {
       courses.set(course.id, course)
       isChanged = true
     }
@@ -648,7 +653,12 @@ export class UserData {
    * comes to the foreground.
    */
   public async reloadFromStorage(): Promise<void> {
-    await this._pendingWrite
+    // Writes queued meanwhile too: their changes are not stored yet, so merging would revert them.
+    let awaited: Promise<unknown>
+    do {
+      awaited = this._pendingWrite
+      await awaited
+    } while (awaited !== this._pendingWrite)
     if (this._mergeStored(true)) {
       this._coursesChanged.fire(undefined)
     }

@@ -210,10 +210,6 @@ const MAX_CACHED_RESPONSES = 128
 /** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
 const MAX_LOGGED_ARG_LENGTH = 120
 
-/**
- * Replaces an oversized argument with its length, so the output channel users paste into
- * bug reports stays readable when a whole settings value goes through argv.
- */
 /** A server's Retry-After as words, rounded up to whole minutes from two minutes on. */
 export function formatWait(seconds: number): string {
   if (seconds < 120) {
@@ -223,6 +219,10 @@ export function formatWait(seconds: number): string {
   return `${Math.ceil(seconds / 60)} minutes`
 }
 
+/**
+ * Replaces an oversized argument with its length, so the output channel users paste into
+ * bug reports stays readable when a whole settings value goes through argv.
+ */
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
 }
@@ -1402,7 +1402,11 @@ export default class Langs {
       return { result: Promise.resolve(process), interrupt: (): void => {} }
     }
     let current = process.val
-    const interrupt = (): void => current.interrupt()
+    let isInterrupted = false
+    const interrupt = (): void => {
+      isInterrupted = true
+      current.interrupt()
+    }
     langsArgs.onInterruptHandle?.(interrupt)
     const auth: AuthAttribution = {
       backend: langsArgs.backend,
@@ -1416,6 +1420,9 @@ export default class Langs {
       }
       Logger.warn("The TestMyCode tools were busy, trying once more")
       await sleep(SPAWN_BUSY_RETRY_DELAY_MS)
+      if (isInterrupted) {
+        return first
+      }
       const retry = this._spawnLangsProcess(langsArgs)
       if (retry.err) {
         return retry

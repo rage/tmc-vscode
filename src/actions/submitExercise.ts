@@ -233,6 +233,8 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
   return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
     let isCancelled = false
+    // An upload reported as failed or cancelled may still have reached the server.
+    void pendingGradings.delete(submission.exerciseId)
     const submitted = await langs.submitMoocExercise(
       exerciseId,
       submission.exercise.uri.fsPath,

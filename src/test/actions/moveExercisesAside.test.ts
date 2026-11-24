@@ -5,13 +5,17 @@ import * as fs from "fs-extra"
 import { Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 
-import { bringBackMovedExercises } from "../../actions/moveExercisesAside"
+import { bringBackMovedExercises, moveExercisesAside } from "../../actions/moveExercisesAside"
 import type { ReadyActionContext } from "../../actions/types"
 import type Resources from "../../config/resources"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/refreshLocalExercises", () => ({
   refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../window/exerciseDocuments", () => ({
+  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+  closeExerciseEditors: vi.fn(async () => true),
 }))
 
 function folders(): { projects: string; aside: string } {
@@ -64,5 +68,29 @@ suite("bringBackMovedExercises", function () {
 
     expect(brought.val).toBe(false)
     expect(fs.existsSync(path.join(aside, "mine"))).toBe(true)
+  })
+})
+
+suite("moveExercisesAside", function () {
+  test("moves back what it moved when an entry is held", async function () {
+    const { projects } = folders()
+    fs.outputFileSync(path.join(projects, "a", "a.py"), "")
+    fs.outputFileSync(path.join(projects, "b", "b.py"), "")
+    const rename = fs.promises.rename
+    let renames = 0
+    const spy = vi.spyOn(fs.promises, "rename").mockImplementation(async (from, to) => {
+      renames += 1
+      if (renames === 2) {
+        throw Object.assign(new Error("busy"), { code: "EBUSY" })
+      }
+      await rename(from, to)
+    })
+    onTestFinished(() => spy.mockRestore())
+
+    const moved = await moveExercisesAside(contextWith(projects), new Date(0))
+
+    expect(moved.err).toBe(true)
+    expect(fs.readdirSync(projects).toSorted()).toEqual(["a", "b"])
+    expect(fs.existsSync(`${projects}-moved-1970-01-01T00-00-00`)).toBe(false)
   })
 })

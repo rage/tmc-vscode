@@ -1,6 +1,5 @@
 import * as path from "path"
 
-import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
@@ -226,6 +225,9 @@ async function activateFully(context: vscode.ExtensionContext, mementos: Memento
 /** When the last unprompted refresh started, in epoch milliseconds. */
 let lastBackgroundRefreshAt = 0
 
+/** Set by a logout and cleared by a login, so a later start does not report an expired session. */
+const LOGGED_OUT_KEY = "loggedOut"
+
 function refreshInBackground(
   ready: ReadyActionContext,
   openCourseRefresh: OpenCourseRefresh | undefined,
@@ -277,7 +279,7 @@ async function activateInner(
     builtInChecksums: TMC_LANGS_CHECKSUMS,
   })
   if (cliFolder(context) !== legacyCliFolder(context)) {
-    void fs.promises.rm(legacyCliFolder(context), { recursive: true, force: true }).catch(() => {})
+    void init.removeStaleCliFiles(legacyCliFolder(context), [])
   }
 
   // download langs if necessary
@@ -405,6 +407,7 @@ async function activateInner(
   if (langs.ok) {
     langs.val.on("login", async () => {
       await authState.set(true)
+      void globalState.update(LOGGED_OUT_KEY, undefined)
       sessionExpiry.onLogin()
       expiryNotifier.onLogin()
       // Names the account, for the status bar and the exercise hand-over.
@@ -412,6 +415,7 @@ async function activateInner(
     })
     langs.val.on("logout", async (expected, rejection) => {
       if (expected) {
+        await globalState.update(LOGGED_OUT_KEY, true)
         await authState.set(false)
         sessionExpiry.onLogout()
         return
@@ -740,10 +744,11 @@ async function activateInner(
         )
       }
     })
-    // Stored courses with no login is a session that ended while VS Code was closed.
+    // Stored courses with no login and no logout is a session that ended while VS Code was closed.
     if (
       authChecked.ok &&
       !authState.loggedIn &&
+      !globalState.get<boolean>(LOGGED_OUT_KEY) &&
       handoverContext.startup.userData.getCourses().length > 0
     ) {
       authState.markSessionExpired()

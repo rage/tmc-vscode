@@ -1141,6 +1141,16 @@ suite("a mooc grading left pending across a reload", () => {
     expect(waited.ok).toBe(true)
     expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
   })
+
+  test("is dropped when a later submission fails to upload", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    await submitExercise(moocContextWith({ status: "no-grading-yet" }).actionContext, moocExercise)
+    expect(pendingGradings.get(moocExercise.id)).toBeDefined()
+
+    await submitExercise(moocContextWithErr(new Error("upload failed")).actionContext, moocExercise)
+
+    expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
+  })
 })
 
 suite("cancelling a mooc submission's upload", () => {

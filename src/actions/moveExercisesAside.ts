@@ -6,6 +6,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { FileSystemError } from "../errors"
+import { Logger } from "../utilities"
 import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -15,8 +16,8 @@ import type { ReadyActionContext } from "./types"
  * is logged in now downloads their own and cannot submit another student's work as theirs.
  * Nothing is deleted; unsaved editor changes are saved first and the editors closed.
  *
- * @returns The folder the exercises are now in; `Err`, moving nothing, when an editor could not
- *   be saved or stayed open.
+ * @returns The folder the exercises are now in; `Err`, with the exercises left in place, when an
+ *   editor could not be saved or stayed open, or an entry could not be moved.
  */
 export async function moveExercisesAside(
   actionContext: ReadyActionContext,
@@ -44,10 +45,14 @@ export async function moveExercisesAside(
   // Entry by entry, without graceful-fs's minute of silent retries, to name what is held.
   try {
     await fs.ensureDir(target)
+    const moved: string[] = []
     for (const entry of await fs.readdir(projectsDirectory)) {
       try {
         await fs.promises.rename(path.join(projectsDirectory, entry), path.join(target, entry))
+        moved.push(entry)
       } catch (e) {
+        // Nothing records a partly moved folder, so a bring-back would never find these.
+        await moveBack(moved, target, projectsDirectory)
         const code = (e as NodeJS.ErrnoException).code
         const isHeld = code === "EBUSY" || code === "EPERM" || code === "EACCES"
         return Err(
@@ -71,6 +76,17 @@ export async function moveExercisesAside(
     return refreshed
   }
   return Ok(target)
+}
+
+async function moveBack(entries: string[], from: string, to: string): Promise<void> {
+  for (const entry of entries) {
+    try {
+      await fs.promises.rename(path.join(from, entry), path.join(to, entry))
+    } catch (e) {
+      Logger.warn(`Could not move ${entry} back from ${from}`, e)
+    }
+  }
+  await fs.promises.rmdir(from).catch(() => undefined)
 }
 
 /** Names, in the exercises folder, the folder a bring-back is moving exercises from. */

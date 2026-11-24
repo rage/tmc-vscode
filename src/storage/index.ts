@@ -41,7 +41,6 @@ export default class Storage {
     this._memento = memento
   }
 
-  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
   /**
    * The stored courses this version can read. A course it cannot, such as one a newer version
    * wrote, is left out here and kept as stored by {@link updateUserData}.
