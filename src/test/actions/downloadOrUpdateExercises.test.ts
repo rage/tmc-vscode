@@ -106,6 +106,7 @@ suite("downloadOrUpdateExercises action", function () {
         langs: tmcMock,
         userData: {
           getCourses: () => [storedCourse],
+          getCourse: () => Ok(storedCourse),
           getExercise: exerciseLookupOver([storedCourse]),
         } as never,
       },
@@ -154,6 +155,7 @@ suite("downloadOrUpdateExercises action", function () {
         ...actionContext().startup,
         userData: {
           getCourses: () => [storedCourse, lostCourse],
+          getCourse: () => Ok(storedCourse),
           getExercise: exerciseLookupOver([storedCourse, lostCourse]),
         } as never,
       },
@@ -855,7 +857,10 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     ...createMockActionContext({
       startup: {
         langs: tmcMock,
-        userData: { getExercise: () => Err(new Error("not stored")) } as never,
+        userData: {
+          getCourse: () => Err(new Error("not stored")),
+          getExercise: () => Err(new Error("not stored")),
+        } as never,
       },
     }),
     // The real Dialog, so the fractions the action reports pass through the

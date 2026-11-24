@@ -365,3 +365,35 @@ export function toStoredMoocCourse(
     ...(previous?.examAnswerableUntil ? { examAnswerableUntil: previous.examAnswerableUntil } : {}),
   }
 }
+
+/**
+ * The stored form of a started courses.mooc.fi exam, kept as a course of its exercises whose
+ * deadline is when the exam's answers close.
+ *
+ * @param exam The stored exam, or the one being added: its id, name and closing time.
+ */
+export function toStoredMoocExam(
+  exam: Pick<MoocLocalCourseData, "id" | "name" | "title" | "organization"> &
+    Partial<MoocLocalCourseData> & { examAnswerableUntil: string },
+  slides: TmcExerciseSlide[],
+): MoocLocalCourseData {
+  const previousExercises = exam.exercises ?? []
+  const exercises = combineMoocApiExerciseData(
+    slides.map((slide) => ({ ...slide, deadline: slide.deadline ?? exam.examAnswerableUntil })),
+    { course_id: exam.id, exercises: [], closed_chapters: [] },
+    previousExercises,
+  )
+  return {
+    id: exam.id,
+    name: exam.name,
+    title: exam.title,
+    description: null,
+    organization: exam.organization,
+    aiPolicy: exam.aiPolicy ?? "not_set",
+    exercises,
+    ...sumCoursePoints(exercises),
+    newExercises: exam.newExercises ?? [],
+    notifyAfter: exam.notifyAfter ?? 0,
+    examAnswerableUntil: exam.examAnswerableUntil,
+  }
+}

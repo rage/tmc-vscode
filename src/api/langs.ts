@@ -16,6 +16,8 @@ import type {
   MoocCourse,
   MoocDeviceLogin,
   MoocDownloadFailure,
+  MoocExam,
+  TmcExerciseSlide,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
   Notification,
@@ -891,6 +893,7 @@ export default class Langs {
    *
    * @param courseId The course every exercise belongs to, when they share one; without it the
    * CLI looks for each exercise in every course the user is enrolled in.
+   * @param isExam `courseId` is a started exam's id.
    * @param onDownloaded Called as each exercise finishes.
    * @param onInterruptHandle Receives the function that kills the download.
    */
@@ -899,13 +902,14 @@ export default class Langs {
     courseId: string | undefined,
     onDownloaded: (progress: ExerciseDownloadProgress) => void,
     onInterruptHandle?: (interrupt: () => void) => void,
+    isExam = false,
   ): Promise<Result<ExerciseDownloads, Error>> {
     const res = await this._fetch(
       {
         backend: "mooc",
         args: this._moocCmd(
           "download-or-update-course-exercises",
-          ...(courseId ? ["--course-id", courseId] : []),
+          ...(courseId ? [isExam ? "--exam-id" : "--course-id", courseId] : []),
           "--exercise-id",
           ...exerciseIds,
         ),
@@ -1276,6 +1280,19 @@ export default class Langs {
         args: this._tmcCmd("send-feedback", "--feedback-url", feedbackUrl, ...feedbackArgs),
       },
       "submission-feedback-response",
+    )
+  }
+
+  /** Lists the courses.mooc.fi exams the user has started and can still answer. */
+  public async getMoocExams(): Promise<Result<MoocExam[], Error>> {
+    return this._fetch({ backend: "mooc", args: this._moocCmd("exams") }, "mooc-exams")
+  }
+
+  /** The exercises of a started exam; their gradings stay hidden while it can be answered. */
+  public async getMoocExamExercises(examId: string): Promise<Result<TmcExerciseSlide[], Error>> {
+    return this._fetch(
+      { backend: "mooc", args: this._moocCmd("exam-exercises", "--exam-id", examId) },
+      "mooc-exercise-slides",
     )
   }
 

@@ -1,7 +1,8 @@
 import type { Result } from "ts-results"
 
-import type { Course, MoocCourse, Organization } from "../../shared/langsSchema"
+import type { Course, MoocCourse, MoocExam, Organization } from "../../shared/langsSchema"
 import { AuthorizationError } from "../errors"
+import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -30,6 +31,22 @@ export async function listEnrolledMoocCourses(
   }
   const courses = await actionContext.startup.langs.getEnrolledMoocCourses()
   return courses.err && courses.val instanceof AuthorizationError ? MOOC_LOGIN : courses
+}
+
+/**
+ * Lists the courses.mooc.fi exams the student has started and can still answer; none when the
+ * courses.mooc.fi courses are off or the exams cannot be listed.
+ */
+export async function listMoocExams(actionContext: ReadyActionContext): Promise<MoocExam[]> {
+  if (!actionContext.settings.isCoursesMoocFiEnabled() || !actionContext.authState.loggedIn) {
+    return []
+  }
+  const exams = await actionContext.startup.langs.getMoocExams()
+  if (exams.err) {
+    Logger.warn("Could not list the courses.mooc.fi exams", exams.val)
+    return []
+  }
+  return exams.val
 }
 
 /** Lists the TMC organizations, the add-course pick's way into TMC courses. */

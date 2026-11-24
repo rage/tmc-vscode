@@ -199,6 +199,7 @@ async function download(
       () => undefined,
       (mooc) => mooc.moocCourseId,
     )
+  const isExam = courseId?.kind === "mooc" && isStoredExam(actionContext, courseId)
 
   let cancelled = false
   const unrestored: ExerciseIdentifier[] = []
@@ -273,6 +274,7 @@ async function download(
             moocCourseId,
             onDownloaded,
             registerInterrupt,
+            isExam,
           )
           const freshMooc = freshDownloads(downloads)
           if (!downloadTemplate && !cancelled) {
@@ -591,4 +593,11 @@ function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>):
     }
   }
   return { successful, failed }
+}
+
+function isStoredExam(actionContext: ReadyActionContext, courseId: CourseIdentifier): boolean {
+  const stored = actionContext.startup.userData.getCourse(courseId)
+  return (
+    stored.ok && stored.val.kind === "mooc" && stored.val.data.examAnswerableUntil !== undefined
+  )
 }

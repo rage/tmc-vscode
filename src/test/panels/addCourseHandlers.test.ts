@@ -19,6 +19,8 @@ vi.mock("../../actions", () => ({
   MOOC_LOGIN: "mooc-login",
   MOOC_DISABLED: "mooc-disabled",
   listEnrolledMoocCourses: vi.fn(),
+  listMoocExams: vi.fn(async () => []),
+  addMoocExam: vi.fn(async () => Ok.EMPTY),
   listTmcOrganizations: vi.fn(),
   listOrganizationCourses: vi.fn(),
   addNewCourse: vi.fn(async () => Ok.EMPTY),
@@ -172,6 +174,30 @@ suite("the add-course screen's handlers", function () {
         },
       ],
     })
+  })
+
+  test("lists a started exam first and adds it as an exam", async function () {
+    const exam = {
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      name: "Final exam",
+      started_at: "2026-06-01T10:00:00Z",
+      answerable_until: "2026-06-01T13:00:00Z",
+    }
+    vi.mocked(actions.listMoocExams).mockResolvedValueOnce([exam])
+    const panel = addCoursePanel()
+    const actionContext = context()
+
+    const listed = await listMooc(actionContext, panel)
+    const [first] =
+      listed.unwrap().kind === "listed"
+        ? (listed.unwrap() as { items: { key: string; name: string; organization: string }[] })
+            .items
+        : []
+    expect(first).toMatchObject({ name: "Final exam", organization: "Exam" })
+
+    await add(actionContext, panel, first!.key)
+    expect(actions.addMoocExam).toHaveBeenCalledWith(actionContext, exam)
+    expect(actions.addNewCourse).not.toHaveBeenCalled()
   })
 
   test("says courses.mooc.fi needs a login, and passes on its failures", async function () {

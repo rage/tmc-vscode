@@ -17,7 +17,7 @@ import {
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { downloadFailures } from "../ui/downloadFailures"
 import { Logger } from "../utilities"
-import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
+import { toStoredMoocCourse, toStoredMoocExam, toStoredTmcCourse } from "../utilities/apiData"
 import { recordCourseAccessLoss } from "./courseAccess"
 import type { ReadyActionContext } from "./types"
 
@@ -43,10 +43,18 @@ export async function fetchStoredCourse(
       (await langs.getTmcCourseData(tmc.courseId, options)).map((data) =>
         makeTmcKind(toStoredTmcCourse(data, tmc.organization, tmc.previous)),
       ),
-    async (mooc) =>
-      (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
+    async (mooc) => {
+      const previous = mooc.previous
+      const examAnswerableUntil = previous?.examAnswerableUntil
+      if (previous && examAnswerableUntil) {
+        return (await langs.getMoocExamExercises(mooc.courseId)).map((slides) =>
+          makeMoocKind(toStoredMoocExam({ ...previous, examAnswerableUntil }, slides)),
+        )
+      }
+      return (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
         makeMoocKind(toStoredMoocCourse(data, mooc.previous)),
-      ),
+      )
+    },
   )
 }
 

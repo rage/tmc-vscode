@@ -16,6 +16,7 @@ import {
   sumCoursePoints,
   sumTmcApiCoursePoints,
   toStoredMoocCourse,
+  toStoredMoocExam,
 } from "../../utilities/apiData"
 import {
   MOOC_COURSE_UUID,
@@ -528,5 +529,27 @@ suite("what a mooc course adds to the stored course", function () {
       successorCourseId: "next",
       isStaff: true,
     })
+  })
+})
+
+suite("toStoredMoocExam", function () {
+  test("stores an exam's exercises with its closing time as their deadline", function () {
+    const stored = toStoredMoocExam(
+      {
+        id: "exam-1",
+        name: "final-exam",
+        title: "Final exam",
+        organization: "",
+        examAnswerableUntil: "2026-06-01T13:00:00Z",
+      },
+      moocExerciseSlides,
+    )
+
+    expect(stored).toMatchObject({
+      id: "exam-1",
+      title: "Final exam",
+      examAnswerableUntil: "2026-06-01T13:00:00Z",
+    })
+    expect(stored.exercises[0]?.deadline).toBe("2026-06-01T13:00:00Z")
   })
 })

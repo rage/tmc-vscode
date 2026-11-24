@@ -130,7 +130,7 @@ export function buildCourseHomeView(
     title: course.data.title,
     organization: course.data.organization,
     ...courseRunFields(course, locale),
-    description: course.data.description || null,
+    description: examNote(course, locale) ?? (course.data.description || null),
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
@@ -328,4 +328,15 @@ function reviewFields(
         }
       : {}),
   }
+}
+
+/** When a stored exam's answers close, as its course home's description. */
+function examNote(course: LocalCourseData, locale: string): string | undefined {
+  const closesAt =
+    course.kind === "mooc" && course.data.examAnswerableUntil
+      ? parseDate(course.data.examAnswerableUntil)
+      : null
+  return closesAt
+    ? `An exam. Its answers close on ${formatDateTime(closesAt, locale)}; results show after that.`
+    : undefined
 }
