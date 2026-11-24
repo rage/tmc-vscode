@@ -1,6 +1,6 @@
 import { upperFirst } from "lodash"
 import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
-import { Disposable, env, extensions, Uri, ViewColumn, window } from "vscode"
+import { Disposable, extensions, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
@@ -954,7 +954,7 @@ function webviewContent(webview: Webview, extensionUri: Uri): string {
 
   return /*html*/ `
             <!DOCTYPE html>
-            <html lang="${env.language}">
+            <html lang="en">
             <head>
                 <title>TestMyCode</title>
                 <meta charset="UTF-8" />

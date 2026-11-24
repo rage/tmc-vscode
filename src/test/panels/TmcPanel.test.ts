@@ -55,16 +55,6 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
 
-// jest-mock-vscode ships no `env` namespace; some tests below replace it.
-beforeAll(function () {
-  const vscodeModule: object = vscode
-  Object.defineProperty(vscodeModule, "env", {
-    value: { language: "en" },
-    configurable: true,
-    writable: true,
-  })
-})
-
 // Mounts a fresh side panel (resetting leftover panel state) and returns the fake webview
 // panel and its message listener.
 async function mountSidePanel(
