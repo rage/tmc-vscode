@@ -321,6 +321,11 @@ export class ProjectsDirMoveRefusedError extends BaseError {
   public override readonly name = "Projects Dir Move Refused Error"
 }
 
+/** Exercises set aside were not brought back, as the exercises folder has an entry of the same name. */
+export class ProjectsRestoreConflictError extends BaseError {
+  public override readonly name = "Projects Restore Conflict Error"
+}
+
 /**
  * Moving the exercises folder failed part way. `cause` is why; the message says where the
  * exercises are now, which can be either folder.
@@ -548,6 +553,8 @@ const LANGS_KIND_SENTENCES: Partial<Record<Kind, (error: BaseError) => string>> 
   "projects-dir-move-to-itself": () => "The exercises are already in that folder.",
   "projects-dir-move-into-itself": () =>
     "The exercises folder cannot be moved into a folder inside it. Choose a folder outside it.",
+  "projects-restore-conflict": (error) =>
+    `The exercises folder already has ${error.path ?? "files of the same name"}, so nothing was moved back.`,
   "projects-dir-unreachable": (error) =>
     `The exercises folder${inPath(error)} cannot be reached. Connect the drive or network ` +
     "folder it is on, or move the exercises folder.",

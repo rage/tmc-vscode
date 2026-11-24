@@ -28,6 +28,7 @@ import {
   OutOfTriesError,
   ProjectsDirMoveRefusedError,
   ProjectsDirUnreachableError,
+  ProjectsRestoreConflictError,
   ProxyError,
   RateLimitedError,
   RuntimeError,
@@ -86,6 +87,7 @@ const ERROR_CLASS_OF_KIND: Record<Kind, LangsErrorClass> = {
   "projects-dir-unreachable": ProjectsDirUnreachableError,
   "projects-dir-move-to-itself": ProjectsDirMoveRefusedError,
   "projects-dir-move-into-itself": ProjectsDirMoveRefusedError,
+  "projects-restore-conflict": ProjectsRestoreConflictError,
 }
 
 /** What the CLI reported about a failure, beside its message. */

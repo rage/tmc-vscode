@@ -1,11 +1,12 @@
 import * as fs from "fs"
 import * as path from "path"
 
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
+import { langsError } from "../../api/langsErrors"
 import { handOverExercises } from "../../commands/handOverExercises"
 import type Resources from "../../config/resources"
 import { submissionViews } from "../../ui/submissionViews"
@@ -13,6 +14,14 @@ import { idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import { makeTmpDirs } from "../utils"
+
+/** Moves every entry of `from` into `to`, as tmc-langs' set-aside and restore do. */
+function moveEntries(from: string, to: string): void {
+  fs.mkdirSync(to, { recursive: true })
+  for (const entry of fs.readdirSync(from)) {
+    fs.renameSync(path.join(from, entry), path.join(to, entry))
+  }
+}
 
 function setUp(
   loggedInAs: string | undefined,
@@ -26,6 +35,21 @@ function setUp(
         getMoocAccountId: vi.fn(async () => Ok(loggedInAs)),
         listLocalExercises: async () => Ok([]),
         listSettings: async () => Ok({}),
+        setProjectsAside: async (folder: string) => {
+          moveEntries(projectsDirectory, folder)
+          return Ok.EMPTY
+        },
+        restoreProjects: async (folder: string) => {
+          const [clash] = fs.readdirSync(projectsDirectory)
+          if (clash !== undefined) {
+            return Err(
+              langsError({ kind: "projects-restore-conflict", path: clash }, "", "", undefined),
+            )
+          }
+          moveEntries(folder, projectsDirectory)
+          fs.rmdirSync(folder)
+          return Ok.EMPTY
+        },
       } as never,
       resources: { projectsDirectory } as Resources,
       userData: {

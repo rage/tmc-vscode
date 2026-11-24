@@ -65,6 +65,7 @@ import {
     zPythonVer,
     zRefreshData,
     zRefreshExercise,
+    zRepositoryExercise,
     zReview,
     zReviewingStage,
     zRunResult,
@@ -435,6 +436,12 @@ export type RefreshData = z.infer<typeof RefreshData>;
  */
 export const RefreshExercise = zRefreshExercise;
 export type RefreshExercise = z.infer<typeof RefreshExercise>;
+
+/**
+ * An exercise found by [`prepare_exercise_repository`].
+ */
+export const RepositoryExercise = zRepositoryExercise;
+export type RepositoryExercise = z.infer<typeof RepositoryExercise>;
 
 /**
  * get /api/v8/core/courses/{course_id}/reviews

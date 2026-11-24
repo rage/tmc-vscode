@@ -703,6 +703,26 @@ export default class Langs {
   }
 
   /**
+   * Moves every entry of the projects directory into `folder`, under the lock other commands on
+   * the projects directory take. Moves nothing on failure; an entry another program holds is a
+   * `FileAccessError` naming it. {@link restoreProjects} moves them back.
+   *
+   * @param folder Absent or empty, outside the projects directory and on the same drive.
+   */
+  public async setProjectsAside(folder: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("set-projects-aside", folder) })
+  }
+
+  /**
+   * Moves the entries {@link setProjectsAside} put in `folder` back into the projects directory
+   * and deletes `folder`. Errs with `ProjectsRestoreConflictError`, moving nothing, when the
+   * projects directory already has an entry of the same name.
+   */
+  public async restoreProjects(folder: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("restore-projects", folder) })
+  }
+
+  /**
    * Gets the value for given key and asserts it's type. Uses TMC-langs `settings get` command
    * internally.
    */

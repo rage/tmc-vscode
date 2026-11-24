@@ -537,6 +537,12 @@ const validCliOutputFixtures: CliOutputFixture[] = [
     value: outputData("local-mooc-exercises", [localMoocExercise]),
   },
   {
+    name: "repository-exercises",
+    value: outputData("repository-exercises", [
+      { name: "ex1", part: "part01", path: "/repo/part01/ex1" },
+    ]),
+  },
+  {
     name: "local-exercises",
     value: outputData("local-exercises", [
       { backend: "tmc", ...localTmcExercise },

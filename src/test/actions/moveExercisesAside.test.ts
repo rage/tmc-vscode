@@ -1,13 +1,12 @@
-import * as os from "os"
-import * as path from "path"
-
-import * as fs from "fs-extra"
-import { Ok } from "ts-results"
-import { onTestFinished, vi } from "vitest"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
 
 import { bringBackMovedExercises, moveExercisesAside } from "../../actions/moveExercisesAside"
 import type { ReadyActionContext } from "../../actions/types"
+import type Langs from "../../api/langs"
+import { langsError } from "../../api/langsErrors"
 import type Resources from "../../config/resources"
+import { releaseExerciseEditors } from "../../window/exerciseDocuments"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/refreshLocalExercises", () => ({
@@ -17,79 +16,66 @@ vi.mock("../../window/exerciseDocuments", () => ({
   releaseExerciseEditors: vi.fn(async () => Ok.EMPTY),
 }))
 
-function folders(): { projects: string; aside: string } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tmc-aside-"))
-  onTestFinished(() => fs.removeSync(root))
-  const projects = path.join(root, "projects")
-  const aside = path.join(root, "projects-moved")
-  fs.ensureDirSync(projects)
-  fs.ensureDirSync(aside)
-  return { projects, aside }
-}
+const PROJECTS = "/home/student/tmcdata"
 
-function contextWith(projectsDirectory: string): ReadyActionContext {
+function contextWith(langs: Partial<Langs>): ReadyActionContext {
   return createMockActionContext({
-    startup: { resources: { projectsDirectory } as unknown as Resources },
+    startup: {
+      langs: langs as Langs,
+      resources: { projectsDirectory: PROJECTS } as unknown as Resources,
+    },
   })
 }
 
-suite("bringBackMovedExercises", function () {
-  test("ignores the files the OS puts in an emptied exercises folder", async function () {
-    const { projects, aside } = folders()
-    fs.writeFileSync(path.join(projects, ".DS_Store"), "")
-    fs.outputFileSync(path.join(aside, "course", "exercise", "a.py"), "print()")
+suite("moveExercisesAside", function () {
+  test("sets the projects aside into a stamped sibling folder", async function () {
+    const setProjectsAside = vi.fn(async () => Ok.EMPTY)
 
-    const brought = await bringBackMovedExercises(contextWith(projects), aside)
+    const moved = await moveExercisesAside(contextWith({ setProjectsAside }), new Date(0))
 
-    expect(brought.val).toBe(true)
-    expect(fs.existsSync(path.join(projects, "course", "exercise", "a.py"))).toBe(true)
-    expect(fs.existsSync(aside)).toBe(false)
+    expect(moved.val).toBe(`${PROJECTS}-moved-1970-01-01T00-00-00`)
+    expect(setProjectsAside).toHaveBeenCalledExactlyOnceWith(moved.val)
   })
 
-  test("finishes a bring-back that was cut short", async function () {
-    const { projects, aside } = folders()
-    fs.outputFileSync(path.join(projects, "first", "a.py"), "")
-    fs.writeFileSync(path.join(projects, ".tmc-bringing-back"), aside)
-    fs.outputFileSync(path.join(aside, "second", "b.py"), "")
+  test("passes on langs' refusal, naming the held entry", async function () {
+    const held = langsError({ kind: "file-in-use", path: `${PROJECTS}/a` }, "busy", "", undefined)
 
-    const brought = await bringBackMovedExercises(contextWith(projects), aside)
+    const moved = await moveExercisesAside(
+      contextWith({ setProjectsAside: vi.fn(async () => Err(held)) }),
+    )
 
-    expect(brought.val).toBe(true)
-    expect(fs.readdirSync(projects).toSorted()).toEqual(["first", "second"])
+    expect(moved.val).toBe(held)
   })
 
-  test("leaves another account's exercises folder alone", async function () {
-    const { projects, aside } = folders()
-    fs.outputFileSync(path.join(projects, "theirs", "a.py"), "")
-    fs.outputFileSync(path.join(aside, "mine", "b.py"), "")
+  test("moves nothing while an editor stays open", async function () {
+    vi.mocked(releaseExerciseEditors).mockResolvedValueOnce(Err(new Error("open")))
+    const setProjectsAside = vi.fn(async () => Ok.EMPTY)
 
-    const brought = await bringBackMovedExercises(contextWith(projects), aside)
+    const moved = await moveExercisesAside(contextWith({ setProjectsAside }))
 
-    expect(brought.val).toBe(false)
-    expect(fs.existsSync(path.join(aside, "mine"))).toBe(true)
+    expect(moved.err).toBe(true)
+    expect(setProjectsAside).not.toHaveBeenCalled()
   })
 })
 
-suite("moveExercisesAside", function () {
-  test("moves back what it moved when an entry is held", async function () {
-    const { projects } = folders()
-    fs.outputFileSync(path.join(projects, "a", "a.py"), "")
-    fs.outputFileSync(path.join(projects, "b", "b.py"), "")
-    const rename = fs.promises.rename
-    let renames = 0
-    const spy = vi.spyOn(fs.promises, "rename").mockImplementation(async (from, to) => {
-      renames += 1
-      if (renames === 2) {
-        throw Object.assign(new Error("busy"), { code: "EBUSY" })
-      }
-      await rename(from, to)
-    })
-    onTestFinished(() => spy.mockRestore())
+suite("bringBackMovedExercises", function () {
+  test("restores the folder through langs", async function () {
+    const restoreProjects = vi.fn(async () => Ok.EMPTY)
 
-    const moved = await moveExercisesAside(contextWith(projects), new Date(0))
+    const brought = await bringBackMovedExercises(contextWith({ restoreProjects }), "/aside")
 
-    expect(moved.err).toBe(true)
-    expect(fs.readdirSync(projects).toSorted()).toEqual(["a", "b"])
-    expect(fs.existsSync(`${projects}-moved-1970-01-01T00-00-00`)).toBe(false)
+    expect(brought.val).toBe(true)
+    expect(restoreProjects).toHaveBeenCalledExactlyOnceWith("/aside")
+  })
+
+  test("leaves the folder where it is when the exercises folder has what it would bring back", async function () {
+    const conflict = langsError({ kind: "projects-restore-conflict" }, "exists", "", undefined)
+
+    const brought = await bringBackMovedExercises(
+      contextWith({ restoreProjects: vi.fn(async () => Err(conflict)) }),
+      "/aside",
+    )
+
+    expect(brought.ok && brought.val).toBe(false)
   })
 })

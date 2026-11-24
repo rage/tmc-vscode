@@ -826,6 +826,25 @@
           "type": "object",
           "properties": {
             "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RepositoryExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "repository-exercises"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
               "$ref": "#/$defs/RunResult"
             },
             "output-data-kind": {
@@ -2720,14 +2739,19 @@
           "const": "projects-dir-unreachable"
         },
         {
-          "description": "The folder the exercises folder was to be moved to is the exercises folder itself.",
+          "description": "The folder given to move the exercises folder, or its contents, to or from is the\nexercises folder itself.",
           "type": "string",
           "const": "projects-dir-move-to-itself"
         },
         {
-          "description": "The folder the exercises folder was to be moved to is inside the exercises folder.",
+          "description": "The folder given to move the exercises folder, or its contents, to or from is inside the\nexercises folder.",
           "type": "string",
           "const": "projects-dir-move-into-itself"
+        },
+        {
+          "description": "Something named like an entry being brought back by `settings restore-projects` is already\nin the exercises folder (`path`); nothing was moved.",
+          "type": "string",
+          "const": "projects-restore-conflict"
         }
       ]
     },
@@ -3470,6 +3494,29 @@
         "points",
         "sandbox-image",
         "tmcproject-yml"
+      ]
+    },
+    "RepositoryExercise": {
+      "description": "An exercise found by [`prepare_exercise_repository`].",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The exercise directory's name.",
+          "type": "string"
+        },
+        "part": {
+          "description": "The directories between the repository root and the exercise directory, joined with `-`.\nTogether with `name`, the name `refresh-course` gives the exercise.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The exercise directory.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "part",
+        "name"
       ]
     },
     "Review": {

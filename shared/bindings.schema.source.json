@@ -2,6 +2,6 @@
   "//": "Provenance stamp for the vendored tmc-langs-cli output contract schema. Written by bin/updateLangsSchema.sh; do not hand-edit. CI asserts the vendored schema's sha256 matches the value below via 'bin/updateLangsSchema.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
   "source_repo": "tmc-langs-rust",
   "source_release": "unreleased",
-  "source_rev": "5bd0b3d98a4c79de51cb2fd98c69f27bfe30a9dc",
-  "sha256": "0936932c4210a2955745ae265d9a455df92611f02d0024a964f68b8e3830f681"
+  "source_rev": "c7c348c5cca7a11f3f76259fe55e0fe1d65ac21f",
+  "sha256": "cc78161725cccee887dfd3db2d6075c6d599fa3c321fd5bec4df1acc6118c43a"
 }

@@ -332,7 +332,8 @@ export const zKind = z.union([
     z.literal('executable-blocked'),
     z.literal('projects-dir-unreachable'),
     z.literal('projects-dir-move-to-itself'),
-    z.literal('projects-dir-move-into-itself')
+    z.literal('projects-dir-move-into-itself'),
+    z.literal('projects-restore-conflict')
 ]);
 
 /**
@@ -561,6 +562,15 @@ export const zPythonVer = z.object({
     major: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
     minor: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }).nullable(),
     patch: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }).nullable()
+});
+
+/**
+ * An exercise found by [`prepare_exercise_repository`].
+ */
+export const zRepositoryExercise = z.object({
+    name: z.string(),
+    part: z.string(),
+    path: z.string()
 });
 
 /**
@@ -1147,6 +1157,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': zRefreshData,
         'output-data-kind': z.literal('refresh-result')
+    }),
+    z.object({
+        'output-data': z.array(zRepositoryExercise),
+        'output-data-kind': z.literal('repository-exercises')
     }),
     z.object({
         'output-data': zRunResult,
