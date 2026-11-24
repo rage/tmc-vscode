@@ -17,7 +17,7 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - New settings: `testMyCode.newExercises` chooses whether new exercises are downloaded at once, offered in a notification, or only listed in the course home; `testMyCode.javaHome` sets the JDK Java exercises run with.
 - **courses.mooc.fi exams.** A started exam is listed in Add Course; its exercises can be downloaded and submitted until its answers close, and their results show after that.
 - The course home shows an exercise's instructions, where its peer or self review stands, a teacher's review with its comments, and a link to the model solution once courses.mooc.fi shows it. A course that has ended says so, and offers the version that continues it.
-- Your MOOC.fi account's name and email show in the status bar and the account menu. An old tmc.mooc.fi login from an earlier version is shown as one.
+- Your MOOC.fi account's name and email show in the status bar, the Accounts menu and the account menu. An old tmc.mooc.fi login from an earlier version is shown as one.
 - Results of a submission link to its page on courses.mooc.fi, a submission can be cancelled while it uploads, and a grading still running when VS Code restarts can be waited for again.
 - After a major update, one notification says what moved and opens the changelog.
 - **courses.mooc.fi courses (experimental).** Turn on `testMyCode.experimental.coursesMoocFi` to add the courses you are enrolled in on courses.mooc.fi. It is off by default; a course already added keeps working when it is off.
