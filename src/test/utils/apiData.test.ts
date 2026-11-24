@@ -427,3 +427,106 @@ suite("mooc tries, chapter locking and closed chapters", function () {
     expect(reopened.exercises[0]).toMatchObject({ id: slide!.exercise_id, passed: true })
   })
 })
+
+suite("what a mooc slide and its progress add to the stored exercise", function () {
+  const [slide] = moocExerciseSlides
+  const task = slide!.tasks[0]!
+
+  test("a slide whose every task is answered in the browser is browser-only", function () {
+    const browserTask = {
+      ...task,
+      public_spec: {
+        type: "browser" as const,
+        archive_name: "a.tar.zst",
+        stub_download_url: "https://example.com/stub",
+        student_file_paths: [],
+        checksum: "c",
+        browser_test: null,
+      },
+    }
+    const [browser] = combineMoocApiExerciseData([{ ...slide!, tasks: [browserTask] }], NO_PROGRESS)
+    const [editor] = combineMoocApiExerciseData([slide!], NO_PROGRESS)
+
+    expect(browser).toMatchObject({ browserOnly: true })
+    expect(editor).not.toHaveProperty("browserOnly")
+  })
+
+  test("instructions are the text of the assignment's blocks, nested ones included", function () {
+    const assignment = [
+      { name: "core/paragraph", attributes: { content: "Write a <b>loop</b> &amp; print." } },
+      {
+        name: "core/list",
+        attributes: {},
+        innerBlocks: [{ name: "core/list-item", attributes: { content: "First<br>Second" } }],
+      },
+    ]
+    const [stored] = combineMoocApiExerciseData(
+      [{ ...slide!, tasks: [{ ...task, assignment }] }],
+      NO_PROGRESS,
+    )
+
+    expect(stored?.instructions).toEqual(["Write a loop & print.", "First\nSecond"])
+  })
+
+  test("the review stage and a teacher's review are kept", function () {
+    const progress: CourseProgress = {
+      ...NO_PROGRESS,
+      exercises: [
+        {
+          ...moocCourseProgress.exercises[0]!,
+          exercise_id: slide!.exercise_id,
+          reviewing_stage: "peer_review",
+          teacher_review: {
+            decision: "custom_points",
+            justification: "Good work",
+            score_given: 1,
+            created_at: "2026-11-01T00:00:00Z",
+          },
+        },
+      ],
+    }
+    const [stored] = combineMoocApiExerciseData([slide!], progress)
+
+    expect(stored).toMatchObject({
+      reviewingStage: "peer_review",
+      teacherReview: { decision: "custom_points", justification: "Good work", scoreGiven: 1 },
+    })
+  })
+
+  test("a revealed model solution is noted", function () {
+    const solution = { type: "editor" as const, solution_download_url: "https://example.com/s" }
+    const [stored] = combineMoocApiExerciseData(
+      [{ ...slide!, tasks: [{ ...task, model_solution_spec: solution }] }],
+      NO_PROGRESS,
+    )
+
+    expect(stored).toMatchObject({ hasModelSolution: true })
+  })
+})
+
+suite("what a mooc course adds to the stored course", function () {
+  test("its url, language, run and staff fields are kept", function () {
+    const stored = toStoredMoocCourse({
+      course: {
+        ...moocCourse,
+        url: "https://courses.mooc.fi/org/uh/courses/python",
+        language_code: "fi-FI",
+        language_group_id: "group",
+        closed_at: "2026-12-31T00:00:00Z",
+        successor_course_id: "next",
+        is_staff: true,
+      },
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
+
+    expect(stored).toMatchObject({
+      url: "https://courses.mooc.fi/org/uh/courses/python",
+      languageCode: "fi-FI",
+      languageGroupId: "group",
+      closedAt: "2026-12-31T00:00:00Z",
+      successorCourseId: "next",
+      isStaff: true,
+    })
+  })
+})

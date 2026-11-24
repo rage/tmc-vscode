@@ -276,6 +276,7 @@ const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> =
   downloadFailed: "download failed",
   expired: "deadline passed, not downloaded",
   removed: "removed from the course",
+  browserOnly: "on the course page",
 }
 
 /**
@@ -862,6 +863,8 @@ export function isDownloadable(status: ExerciseView["status"]): boolean {
 
 function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
   switch (exercise.status) {
+    case "browserOnly":
+      return new vscode.ThemeIcon("globe", new vscode.ThemeColor("disabledForeground"))
     case "downloading":
       return new vscode.ThemeIcon("sync~spin")
     case "downloadFailed":

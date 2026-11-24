@@ -3,6 +3,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { MoocDownloadFailure } from "../../shared/langsSchema"
 import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
@@ -21,8 +22,11 @@ import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } fr
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
   ChapterNotOpenError,
+  ConnectionError,
   CourseAccessLostError,
+  ExerciseNotFoundError,
   ExerciseUpdateError,
+  UnsupportedExerciseError,
   isSessionLost,
   ServerError,
   presentationFor,
@@ -278,6 +282,7 @@ async function download(
   )
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
+  const moocFailures: MoocDownloadFailure[] = []
   for (const { backend, result } of legs) {
     if (result.err) {
       if (!cancelled) {
@@ -293,10 +298,13 @@ async function download(
     for (const { id } of [...downloaded, ...skipped]) {
       succeeded.add(ExerciseIdentifier.key(id))
     }
-    for (const [{ id }, reasons] of failed) {
+    for (const [{ id }, reasons, failure] of failed) {
       Logger.error(`Failed to download exercise ${exerciseName(actionContext, id)}: ${reasons}`)
       succeeded.delete(ExerciseIdentifier.key(id))
       exerciseReasons.push(reasons)
+      if (failure !== undefined) {
+        moocFailures.push(failure)
+      }
     }
   }
 
@@ -324,7 +332,7 @@ async function download(
   if (results.failed.length === 0) {
     return { ...results, warnings }
   }
-  const cause = failureCause(failedLegs, exerciseReasons)
+  const cause = failureCause(failedLegs, exerciseReasons, moocFailures)
   if (!options.isUnrequested) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
@@ -499,7 +507,11 @@ const SERVER_FAILURE_REASON = /\b5\d\d [A-Z][\w ]* from \S/
  * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons, in plain
  * words, with tmc-langs' own as the details the log gets.
  */
-function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
+function failureCause(
+  failedLegs: Error[],
+  exerciseReasons: string[][],
+  moocFailures: MoocDownloadFailure[],
+): Error {
   const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
   if (leg) {
     return leg
@@ -507,6 +519,37 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
   const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
   const details =
     reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
+  const isEveryFailure = (...kinds: MoocDownloadFailure[]): boolean =>
+    moocFailures.length > 0 &&
+    moocFailures.length === exerciseReasons.length &&
+    moocFailures.every((failure) => kinds.includes(failure))
+  if (isEveryFailure("browser-only", "several-editor-tasks")) {
+    return new UnsupportedExerciseError(
+      "These exercises are done on the course page, not in VS Code.",
+      details,
+    )
+  }
+  if (isEveryFailure("not-found")) {
+    return new ExerciseNotFoundError(
+      "The exercise is no longer in the course. Refresh the courses to see its exercises.",
+      details,
+    )
+  }
+  if (isEveryFailure("server-error")) {
+    return new ServerError("The server ran into a problem. Try again later.", details)
+  }
+  if (isEveryFailure("connection-error")) {
+    return new ConnectionError(
+      "Could not reach the server. Check your network connection.",
+      details,
+    )
+  }
+  if (isEveryFailure("file-missing", "extract-failed")) {
+    return new ExerciseUpdateError(
+      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
+      details,
+    )
+  }
   const closedChapter = reasons.map((reason) => CLOSED_CHAPTER_REASON.exec(reason)).find(Boolean)
   if (closedChapter && reasons.every((reason) => CLOSED_CHAPTER_REASON.test(reason))) {
     const [, name = "", opensAtText = ""] = closedChapter

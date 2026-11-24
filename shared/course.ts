@@ -93,6 +93,23 @@ export const SharedMoocCourseExerciseSchema = z.object({
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
   pageUrl: z.string().optional(),
+  /** Answered on the course page only, so never downloaded; absent means no. */
+  browserOnly: z.boolean().optional(),
+  /** The exercise's instructions as plain text paragraphs; absent when it has none. */
+  instructions: z.array(z.string()).optional(),
+  /** courses.mooc.fi reveals the model solution to the student; absent means no. */
+  hasModelSolution: z.boolean().optional(),
+  /** Where the student's answer is in a peer, self or teacher review; absent outside one. */
+  reviewingStage: z.string().optional(),
+  /** A teacher's grading of the student's answer; absent when there is none. */
+  teacherReview: z
+    .object({
+      decision: z.string(),
+      justification: z.string().nullable(),
+      scoreGiven: z.number(),
+      createdAt: z.string(),
+    })
+    .optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
@@ -138,6 +155,20 @@ export const SharedMoocCourseDataSchema = z.object({
   accessLoss: CourseAccessLossSchema.optional(),
   /** Absent means none. */
   closedChapters: z.array(MoocClosedChapterSchema).optional(),
+  /** The course's front page on courses.mooc.fi; absent from a backend that predates it. */
+  url: z.string().optional(),
+  /** The course's language, such as "fi-FI"; absent when unknown. */
+  languageCode: z.string().optional(),
+  /** Shared by the course's versions in other languages; absent when unknown. */
+  languageGroupId: z.string().optional(),
+  /** ISO timestamp of when the course ended; absent while it runs. */
+  closedAt: z.string().optional(),
+  /** The course that continues this one, such as its next run; absent when none. */
+  successorCourseId: z.string().optional(),
+  /** The student teaches or assists on the course; absent means no. */
+  isStaff: z.boolean().optional(),
+  /** Set when the stored course is an exam: when its answers close, as an ISO timestamp. */
+  examAnswerableUntil: z.string().optional(),
 })
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
@@ -501,6 +532,7 @@ export function moocCourseUrlOf(pageUrl: string): string | undefined {
  * (`removed`).
  */
 export type ExerciseStatus =
+  | "browserOnly"
   | "closed"
   | "downloading"
   | "downloadFailed"

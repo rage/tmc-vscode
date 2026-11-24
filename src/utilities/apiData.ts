@@ -85,8 +85,84 @@ export function combineMoocApiExerciseData(
           }
         : {}),
       ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
+      ...(isBrowserOnly(slide) ? { browserOnly: true } : {}),
+      ...instructionsOf(slide),
+      ...(slide.tasks.some((task) => task.model_solution_spec !== null)
+        ? { hasModelSolution: true }
+        : {}),
+      ...reviewOf(exerciseProgress),
     }
   })
+}
+
+/** Whether every task of `slide` is answered in the browser, so there is nothing to download. */
+function isBrowserOnly(slide: TmcExerciseSlide): boolean {
+  return slide.tasks.length > 0 && slide.tasks.every((task) => task.public_spec?.type === "browser")
+}
+
+/** The plain text of the slide's task instructions, one paragraph per block. */
+function instructionsOf(slide: TmcExerciseSlide): Pick<MoocLocalCourseExercise, "instructions"> {
+  const paragraphs = slide.tasks.flatMap((task) => blockTexts(task.assignment))
+  return paragraphs.length > 0 ? { instructions: paragraphs } : {}
+}
+
+/**
+ * The text of Gutenberg blocks, as the exercise service stores an assignment: each block's
+ * `attributes.content` HTML, then its inner blocks'.
+ */
+export function blockTexts(blocks: unknown): string[] {
+  if (!Array.isArray(blocks)) {
+    return []
+  }
+  return blocks.flatMap((block: unknown) => {
+    if (typeof block !== "object" || block === null) {
+      return []
+    }
+    const { attributes, innerBlocks } = block as { attributes?: unknown; innerBlocks?: unknown }
+    const content =
+      typeof attributes === "object" && attributes !== null
+        ? (attributes as { content?: unknown }).content
+        : undefined
+    const text = typeof content === "string" ? htmlToText(content) : ""
+    return [...(text ? [text] : []), ...blockTexts(innerBlocks)]
+  })
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&nbsp;": " ",
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replaceAll(/<br\s*\/?>/gi, "\n")
+    .replaceAll(/<[^>]*>/g, "")
+    .replaceAll(/&(amp|lt|gt|quot|#39|nbsp);/g, (entity) => HTML_ENTITIES[entity] ?? entity)
+    .trim()
+}
+
+function reviewOf(
+  progress: ExerciseProgress | undefined,
+): Pick<MoocLocalCourseExercise, "reviewingStage" | "teacherReview"> {
+  const stage = progress?.reviewing_stage
+  const review = progress?.teacher_review
+  return {
+    ...(stage ? { reviewingStage: stage } : {}),
+    ...(review
+      ? {
+          teacherReview: {
+            decision: review.decision,
+            justification: review.justification,
+            scoreGiven: review.score_given,
+            createdAt: review.created_at,
+          },
+        }
+      : {}),
+  }
 }
 
 function storedPoints(
@@ -280,5 +356,12 @@ export function toStoredMoocCourse(
     newExercises: previous?.newExercises ?? [],
     notifyAfter: previous?.notifyAfter ?? 0,
     ...(closedChapters.length > 0 ? { closedChapters } : {}),
+    ...(course.url ? { url: course.url } : {}),
+    ...(course.language_code ? { languageCode: course.language_code } : {}),
+    ...(course.language_group_id ? { languageGroupId: course.language_group_id } : {}),
+    ...(course.closed_at ? { closedAt: course.closed_at } : {}),
+    ...(course.successor_course_id ? { successorCourseId: course.successor_course_id } : {}),
+    ...(course.is_staff ? { isStaff: true } : {}),
+    ...(previous?.examAnswerableUntil ? { examAnswerableUntil: previous.examAnswerableUntil } : {}),
   }
 }

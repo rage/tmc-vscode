@@ -22,7 +22,7 @@ import type { MoocStoredStanding } from "../utilities/apiData"
 import { Logger } from "../utilities/logger"
 
 interface StoredCourse<Id> {
-  exercises: { id: Id }[]
+  exercises: { id: Id; browserOnly?: boolean | undefined }[]
   newExercises: Id[]
   offeredNewExercises?: Id[] | undefined
   notifyAfter: number
@@ -56,9 +56,17 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
       .flat()
       .map((exercise) => exercise.id),
   )
-  const arrived = [...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId))
+  // Done on the course page, so there is nothing to download or announce.
+  const browserOnlyIds = new Set(
+    refreshed.exercises.filter((exercise) => exercise.browserOnly).map((exercise) => exercise.id),
+  )
+  const arrived = [...refreshedIds].filter(
+    (exerciseId) => !storedIds.has(exerciseId) && !browserOnlyIds.has(exerciseId),
+  )
   refreshed.newExercises = _.uniq([
-    ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
+    ...stored.newExercises.filter(
+      (exerciseId) => refreshedIds.has(exerciseId) && !browserOnlyIds.has(exerciseId),
+    ),
     ...arrived,
   ])
   const isNew = new Set(refreshed.newExercises)

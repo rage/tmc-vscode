@@ -44,6 +44,7 @@
     downloadFailed: "Download failed",
     expired: "Deadline passed",
     removed: "Removed",
+    browserOnly: "On the course page",
   }
 
   function stateLabel(exercise: CourseHomeExercise): string {

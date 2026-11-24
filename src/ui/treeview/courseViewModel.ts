@@ -155,6 +155,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
             state.downloadStatusOf(id),
             hardDeadline !== null && state.now >= hardDeadline,
             newKeys.has(key),
+            ex.kind === "mooc" && ex.data.browserOnly === true,
           ),
       passed: ex.data.passed,
       isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
@@ -297,6 +298,7 @@ function resolveStatus(
   inFlight: ExerciseStatus | undefined,
   isExpired: boolean,
   isNew: boolean,
+  isBrowserOnly: boolean,
 ): ExerciseStatus {
   const isOnDisk = onDisk === WorkspaceStatus.Open || onDisk === WorkspaceStatus.Closed
   if (inFlight === "downloading" || (inFlight === "downloadFailed" && !isOnDisk)) {
@@ -308,6 +310,9 @@ function resolveStatus(
     case WorkspaceStatus.Closed:
       return "closed"
     default:
+      if (isBrowserOnly) {
+        return "browserOnly"
+      }
       if (isExpired) {
         return "expired"
       }

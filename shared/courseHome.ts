@@ -28,6 +28,7 @@ const DeadlineTextSchema = z.object({
 export type DeadlineText = z.infer<typeof DeadlineTextSchema>
 
 const ExerciseStatusSchema = z.enum([
+  "browserOnly",
   "closed",
   "downloading",
   "downloadFailed",
