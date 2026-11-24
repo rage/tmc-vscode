@@ -66,6 +66,7 @@ import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles } from "./keptCopies"
+import { pendingGradings } from "./pendingGradings"
 import { storedExerciseOf } from "./storedExercise"
 import type { ReadyActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
@@ -244,6 +245,41 @@ function isTerminalGradingFailure(error: Error): boolean {
   )
 }
 
+async function rememberPending(grading: UnfinishedGrading): Promise<void> {
+  await pendingGradings.set(grading.exerciseId, {
+    taskSubmissionId: grading.taskSubmissionId,
+    exercisePageUrl: grading.exercisePageUrl,
+  })
+}
+
+/**
+ * Offers the results screen `panel` the grading of `exercise`'s latest submission that a reload
+ * stopped waiting for, if there is one, as a grading still in progress.
+ *
+ * @returns Whether there was one.
+ */
+export function resumePendingGrading(
+  exercise: WorkspaceExercise,
+  courseId: CourseIdentifier,
+  availablePoints: number,
+  panel: ExerciseSubmissionPanel,
+): boolean {
+  const pending = pendingGradings.get(exercise.id)
+  if (!pending) {
+    return false
+  }
+  unfinishedGradings.set(panel.id, {
+    panel,
+    exercise,
+    exerciseId: exercise.id,
+    courseId,
+    availablePoints,
+    taskSubmissionId: pending.taskSubmissionId,
+    exercisePageUrl: pending.exercisePageUrl,
+  })
+  return true
+}
+
 function gradingJobLabel(exercise: WorkspaceExercise): string {
   return `Waiting for grading of ${exercise.exerciseSlug}`
 }
@@ -268,6 +304,9 @@ async function waitForMoocGrading(
     const isWorthWaiting = !isTerminalGradingFailure(waited.val)
     if (isWorthWaiting) {
       unfinishedGradings.set(panel.id, grading)
+      await rememberPending(grading)
+    } else {
+      await pendingGradings.delete(grading.exerciseId)
     }
     return {
       recorded: undefined,
@@ -288,6 +327,9 @@ async function waitForMoocGrading(
   }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
+    await rememberPending(grading)
+  } else {
+    await pendingGradings.delete(grading.exerciseId)
   }
   return {
     recorded: progress?.standing

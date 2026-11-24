@@ -7,6 +7,7 @@ import * as vscode from "vscode"
 
 import { LocalCourseData, LOGGED_OUT_MESSAGE, toError } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
+import { pendingGradings } from "./actions/pendingGradings"
 import type {
   ActionContext,
   DegradedStartup,
@@ -298,6 +299,7 @@ async function activateInner(
     langs = new Ok(langsInstance)
   }
 
+  pendingGradings.attach(globalState)
   const authState = createAuthState(langs)
   authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())

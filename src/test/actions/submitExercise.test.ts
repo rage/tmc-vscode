@@ -11,6 +11,8 @@ import {
   makeMoocKind,
   makeTmcKind,
 } from "../../../shared/lib"
+import { exerciseResultsPanel } from "../../actions/exerciseResults"
+import { pendingGradings } from "../../actions/pendingGradings"
 import {
   checkCanSubmit,
   keepWaitingForGrading,
@@ -56,6 +58,7 @@ import {
   idOfTmcExercise,
 } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+import { createMockContext } from "../mocks/vscode"
 import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window/exerciseDocuments", () => ({
@@ -1115,5 +1118,26 @@ suite("sendSubmissionFeedback action", () => {
 
     expect(first.err).toBe(true)
     expect(second.ok).toBe(true)
+  })
+})
+
+suite("a mooc grading left pending across a reload", () => {
+  test("is shown as still grading, and Keep Waiting fetches its result", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith({ status: "no-grading-yet" })
+    await submitExercise(actionContext, moocExercise)
+    expect(pendingGradings.get(moocExercise.id)?.taskSubmissionId).toBe(TASK_SUBMISSION_ID)
+    submissionViews.clear()
+
+    const panel = exerciseResultsPanel(actionContext, moocExercise).unwrap()
+
+    expect(submissionViews.latestFor(moocExercise.id)?.view).toMatchObject({
+      headline: "Your latest submission is still being graded",
+      canKeepWaiting: true,
+    })
+    wait.mockResolvedValue(Ok({ status: "grading-hidden" }))
+    const waited = await keepWaitingForGrading(actionContext, panel.id)
+    expect(waited.ok).toBe(true)
+    expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
   })
 })
