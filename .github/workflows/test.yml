@@ -339,10 +339,14 @@ jobs:
           chmod -R +x cli
           cd ..
 
-      # xvfb-maybe, which the script wraps Playwright in, does nothing off Linux.
+      # Not through `playwright-test`: its xvfb-maybe spawns `playwright` without a shell, which
+      # cannot find the `.cmd` shim on Windows (ENOENT), and it needs no X server off Linux anyway.
       - name: Playwright smoke subset
         shell: bash
-        run: pnpm run playwright-test mooc-login add-new-mooc-course mooc-results workspace-trust
+        run: |
+          pnpm run webview:build
+          pnpm exec cross-env NODE_ENV=development BACKEND=mockBackend pnpm run build
+          pnpm exec playwright test mooc-login add-new-mooc-course mooc-results workspace-trust
 
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: failure()
