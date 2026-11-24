@@ -26,9 +26,9 @@ const LOGOUT_TIMEOUT_MS = 15_000
  * shared computer is not logged in as this one. Exercises stay. Run by VS Code's
  * `vscode:uninstall` hook, outside the extension host, so it cannot use the `vscode` API.
  *
- * @param cliPath The CLI to log out with; without one, or when it fails, the files are only
- * deleted.
- * @returns The credential files removed by deleting them.
+ * @param configuredDir What `Langs` passes as `TMC_LANGS_CONFIG_DIR`, if anything.
+ * @param cliPath The CLI to log out with first; the logins it leaves are deleted either way.
+ * @returns The credential files deleted after the logout.
  */
 export function removeStoredLogins(
   configuredDir: string | undefined,

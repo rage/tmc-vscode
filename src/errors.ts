@@ -321,7 +321,7 @@ export class ProjectsDirMoveRefusedError extends BaseError {
   public override readonly name = "Projects Dir Move Refused Error"
 }
 
-/** Exercises set aside were not brought back, as the exercises folder has an entry of the same name. */
+/** Exercises set aside were not brought back: the exercises folder has an entry of that name. */
 export class ProjectsRestoreConflictError extends BaseError {
   public override readonly name = "Projects Restore Conflict Error"
 }
