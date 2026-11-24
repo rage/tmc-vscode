@@ -344,12 +344,17 @@ function reviewFields(
   }
 }
 
-/** When a stored exam's answers close, as its course home's description. */
+/** When a stored exam's answers close or closed, as its course home's description. */
 function examNote(course: LocalCourseData): string | undefined {
-  const closesOn =
-    course.kind === "mooc" && course.data.examAnswerableUntil
-      ? proseDateTime(course.data.examAnswerableUntil)
-      : undefined
+  if (course.kind !== "mooc" || !course.data.examAnswerableUntil) {
+    return undefined
+  }
+  const closesAt = course.data.examAnswerableUntil
+  if (LocalCourseData.isClosedExam(course, Date.now())) {
+    const closedOn = proseDate(closesAt)
+    return closedOn ? `An exam. It ended ${closedOn}.` : undefined
+  }
+  const closesOn = proseDateTime(closesAt)
   return closesOn ? `An exam. Its answers close ${closesOn}; results show after that.` : undefined
 }
 

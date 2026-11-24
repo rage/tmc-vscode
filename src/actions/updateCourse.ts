@@ -132,6 +132,10 @@ export async function updateCourse(
     return storedCourse
   }
   const courseData = storedCourse.val
+  if (LocalCourseData.isClosedExam(courseData, Date.now())) {
+    // courses.mooc.fi stops serving an exam once its answers close; the stored copy is final.
+    return Ok({ isUpdated: false, warnings: [] })
+  }
   const [updateResult, enrollments] = await Promise.all([
     fetchStoredCourse(
       langs,

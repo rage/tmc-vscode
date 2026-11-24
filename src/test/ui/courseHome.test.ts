@@ -181,6 +181,18 @@ suite("buildCourseHomeView", function () {
     })
   })
 
+  test("says when an exam's answers close, and once they have, that it ended", function () {
+    const view = (examAnswerableUntil: string): string | null =>
+      buildCourseHomeView(
+        contextFor(moocLocalCourse({ examAnswerableUntil })),
+        idOfMoocCourse(MOOC_COURSE_ID),
+        NOW,
+      ).unwrap().description
+
+    expect(view("2999-06-01T12:00:00Z")).toMatch(/^An exam\. Its answers close on /)
+    expect(view("2020-06-01T12:00:00Z")).toBe("An exam. It ended on Jun 1, 2020.")
+  })
+
   test("says when a mooc course has ended and offers the version that continues it", function () {
     const course = moocLocalCourse({
       closedAt: "2026-05-01T00:00:00Z",
@@ -202,7 +214,7 @@ suite("buildCourseHomeView", function () {
       isStaff: true,
       materialUrl: "https://courses.mooc.fi/org/o/courses/c",
     })
-    expect(view.endedNote).toMatch(/^This course ended on /)
+    expect(view.endedNote).toMatch(/^This course ended on (Apr 30|May 1), 2026\.$/)
   })
 
   test("says a review can change points already given, without calling them held back", function () {

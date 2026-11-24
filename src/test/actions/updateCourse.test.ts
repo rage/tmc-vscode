@@ -323,6 +323,16 @@ suite("updateCourse action (mooc)", function () {
     expect(userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
   })
 
+  test("leaves an exam whose answers have closed as stored, without asking the backend", async function () {
+    const exam = { ...storedMoocCourse, examAnswerableUntil: "2020-01-01T00:00:00Z" }
+    await storeCourse(exam)
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    expect(userData.getMoocCourses()[0]).toEqual(exam)
+  })
+
   test("tells the Courses view whether the backend answered", async function () {
     vi.spyOn(Logger, "warn").mockImplementation(() => {})
     const context = actionContext()

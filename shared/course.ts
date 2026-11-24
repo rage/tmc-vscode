@@ -497,6 +497,12 @@ export namespace LocalCourseData {
     return lcd.kind === "mooc" && !!lcd.data.examAnswerableUntil
   }
 
+  /** Whether the course is a courses.mooc.fi exam whose answers closed before `now`, in epoch ms. */
+  export function isClosedExam(lcd: LocalCourseData, now: number): boolean {
+    const closesAt = lcd.kind === "mooc" ? Date.parse(lcd.data.examAnswerableUntil ?? "") : NaN
+    return closesAt <= now
+  }
+
   export function getNewExercises(lcd: LocalCourseData): ExerciseIdentifier[] {
     return match(
       lcd,
