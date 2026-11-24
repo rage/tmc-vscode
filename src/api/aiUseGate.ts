@@ -140,6 +140,19 @@ function refusalForUnwritableFile(lapse: WorkspaceFileUnwritable): Refusal {
       showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
     }
   }
+  if (lapse.problem === "inUse" || lapse.problem === "protected") {
+    return {
+      error: new AiUseRefusedError(
+        lapse.problem === "inUse"
+          ? `${notApplied}: another program, such as a sync app or antivirus, holds ${fileName}. ` +
+              "Close it and try again."
+          : `${notApplied}: this computer does not let VS Code change ${fileName}, as folder ` +
+              "protection such as Windows Controlled Folder Access can. Allow VS Code and try again.",
+        "Reveal File",
+      ),
+      showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
+    }
+  }
   const message =
     lapse.problem === "unsaved"
       ? `${notApplied}: save or revert the changes to ${fileName} and try again.`
