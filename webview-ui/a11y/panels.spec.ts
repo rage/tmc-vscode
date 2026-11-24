@@ -245,6 +245,8 @@ test("a course is found and added from the keyboard alone", async ({ context, pa
   await serveHarness(context)
   await page.goto(`${ORIGIN}/frame.html?scenario=add-course%2Fcourses`)
   await expect(page.getByRole("heading", { level: 1, name: "Add Course" })).toBeFocused()
+  // Past the toolbar's Refresh and More Actions.
+  await page.keyboard.press("Tab")
   await page.keyboard.press("Tab")
   await page.keyboard.press("Tab")
   await expect(
