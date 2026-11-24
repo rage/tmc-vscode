@@ -19,6 +19,7 @@ import {
   type Course,
   type CourseWithExercises,
   type ExerciseSlide,
+  type GradingOutcome,
   type MoocExamFixture,
   type ExerciseTask,
   type MoocExerciseFixture,
@@ -136,6 +137,8 @@ interface MoocMockState {
   reviewProgressByExerciseId: Map<string, MockReviewProgress>
   /** Exams whose time is up: not served, and their gradings are no longer hidden. */
   endedExamIds: Set<string>
+  /** Outcomes a test set over the fixtures'; see {@link MoocMockControls.setGradingOutcome}. */
+  gradingOutcomeOverrides: Map<string, GradingOutcome>
   /** Courses whose settings reveal model solutions to every student. */
   modelSolutionRevealedCourseIds: Set<string>
   uploadsById: Map<string, UploadRecord>
@@ -215,6 +218,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   reviewByExerciseId: new Map(),
   reviewProgressByExerciseId: new Map(),
   endedExamIds: new Set(),
+  gradingOutcomeOverrides: new Map(),
   modelSolutionRevealedCourseIds: new Set(),
   chapterByExerciseId: new Map(),
   uploadsById: new Map(),
@@ -353,6 +357,11 @@ export interface MoocMockControls {
     exerciseId: string,
     progress: MockReviewProgress | undefined,
   ) => boolean
+  /**
+   * Makes an exercise's submissions grade with `outcome` instead of its fixture's, or with
+   * `undefined` restores that; false for an unknown exercise.
+   */
+  setGradingOutcome: (exerciseId: string, outcome: GradingOutcome | undefined) => boolean
   /** Ends an exam's answering time, or restores it; false for an unknown exam. */
   setExamEnded: (examId: string, ended: boolean) => boolean
   /** Makes the course's settings reveal model solutions to everyone; false for an unknown course. */
@@ -461,6 +470,7 @@ const createMoocMockControls = (
     state.reviewByExerciseId.clear()
     state.reviewProgressByExerciseId.clear()
     state.endedExamIds.clear()
+    state.gradingOutcomeOverrides.clear()
     state.modelSolutionRevealedCourseIds.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
@@ -618,6 +628,17 @@ const createMoocMockControls = (
       state.reviewProgressByExerciseId.set(exerciseId, progress)
     } else {
       state.reviewProgressByExerciseId.delete(exerciseId)
+    }
+    return true
+  },
+  setGradingOutcome: (exerciseId, outcome) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (outcome) {
+      state.gradingOutcomeOverrides.set(exerciseId, outcome)
+    } else {
+      state.gradingOutcomeOverrides.delete(exerciseId)
     }
     return true
   },
@@ -1101,13 +1122,60 @@ const GRADING_OUTCOMES = {
     feedback_text: "Awaiting manual grading",
     feedback_json: null,
   },
+  // services/tmc/src/server/grade.ts: a compile error still grades (and uses a try); the extras
+  // carry `feedback_key`, which the tmc-langs RunResult never has.
+  compileFailed: {
+    grading_progress: "FullyGraded",
+    score_given: 0,
+    feedback_text: "Could not compile the submission",
+    feedback_json: {
+      status: "COMPILE_FAILED",
+      testResults: [],
+      logs: { stdout: "", stderr: "src/main.py:1: SyntaxError: invalid syntax" },
+      feedback_key: "compile_failed",
+      validations: null,
+      valgrind_failed: false,
+    },
+  },
+  // A run that says nothing about the answer is `Failed`, which uses no try.
+  genericError: {
+    grading_progress: "Failed",
+    score_given: 0,
+    feedback_text: "The tests could not be run",
+    feedback_json: {
+      status: "GENERIC_ERROR",
+      testResults: [],
+      logs: { stderr: "sandbox error" },
+      feedback_key: "generic_error",
+      validations: null,
+      valgrind_failed: false,
+    },
+  },
+  timedOut: {
+    grading_progress: "Failed",
+    score_given: 0,
+    feedback_text: "Test timed out",
+    feedback_json: { feedback_key: "timed_out" },
+  },
+  // The service's /grade answer before the sandbox run reports; never leaves this state.
+  pending: {
+    grading_progress: "Pending",
+    score_given: 0,
+    feedback_text: null,
+    feedback_json: null,
+  },
 } as const
 
 const outcomeOf = (
   state: MoocMockState,
   record: SubmissionRecord,
 ): (typeof GRADING_OUTCOMES)[keyof typeof GRADING_OUTCOMES] =>
-  GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
+  GRADING_OUTCOMES[gradingOutcomeKey(state, record.exerciseId)]
+
+const gradingOutcomeKey = (state: MoocMockState, exerciseId: string): GradingOutcome =>
+  state.gradingOutcomeOverrides.get(exerciseId) ??
+  state.fixtures.exerciseById.get(exerciseId)?.gradingOutcome ??
+  "passing"
 
 /**
  * The caller's progress on an exercise: attempted once submitted, completed/scored once a
@@ -1159,7 +1227,7 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
   }
   const now = new Date().toISOString()
   const fixture = state.fixtures.exerciseById.get(record.exerciseId)
-  const outcome = fixture?.gradingOutcome ?? "passing"
+  const outcome = gradingOutcomeKey(state, record.exerciseId)
   const grading = outcomeOf(state, record)
   const pageUrl = fixture?.slide.page_url ?? null
   return {
@@ -1167,7 +1235,7 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
       grading_progress: grading.grading_progress,
       score_given: grading.score_given,
       grading_started_at: now,
-      grading_completed_at: outcome === "pendingManual" ? null : now,
+      grading_completed_at: outcome === "pendingManual" || outcome === "pending" ? null : now,
       feedback_json: grading.feedback_json,
       feedback_text: grading.feedback_text,
       // An exam exercise has neither a course progress nor a page.
@@ -2268,6 +2336,25 @@ export const registerMoocRoutes = (
       return
     }
     if (!controls.setExerciseReviewProgress(exerciseId, progress ?? undefined)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-grading-outcome", json, (req, res) => {
+    const { exercise_id: exerciseId, outcome } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      outcome?: unknown
+    }
+    const outcomes: unknown[] = [...Object.keys(GRADING_OUTCOMES), null]
+    if (typeof exerciseId !== "string" || !outcomes.includes(outcome)) {
+      res.status(400).json({
+        error: "exercise_id must be a string and outcome one of " + JSON.stringify(outcomes),
+      })
+      return
+    }
+    if (!controls.setGradingOutcome(exerciseId, (outcome as GradingOutcome | null) ?? undefined)) {
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
     }

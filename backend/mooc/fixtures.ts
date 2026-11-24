@@ -110,8 +110,18 @@ export const NIL_UUID = "00000000-0000-0000-0000-000000000000"
  *   - `passing`       -> FullyGraded, full score
  *   - `failing`       -> FullyGraded, zero score: failing tests still grade, as on the host
  *   - `pendingManual` -> PendingManual (terminal-for-student), partial score
+ *   - `compileFailed` -> FullyGraded, zero score, with the COMPILE_FAILED run result
+ *   - `genericError`, `timedOut` -> Failed: a run that says nothing about the answer
+ *   - `pending`       -> Pending forever: the sandbox never reports
  */
-export type GradingOutcome = "passing" | "failing" | "pendingManual"
+export type GradingOutcome =
+  | "passing"
+  | "failing"
+  | "pendingManual"
+  | "compileFailed"
+  | "genericError"
+  | "timedOut"
+  | "pending"
 
 export interface MoocExerciseFixture {
   slide: ExerciseSlide

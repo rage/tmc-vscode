@@ -2460,6 +2460,53 @@ describe("mooc mock exams, course facts and review progress", () => {
     assert.equal(unversioned.lastClientVersion, undefined)
   })
 
+  test("an exercise grades with the outcome a test sets, until it is cleared", async () => {
+    const exercise = passingExercise
+    const graded = async (): Promise<Record<string, unknown>> => {
+      const submitted = (await (await submitTo(exercise)).json()) as { task_submission_id: string }
+      await getJson(`/submissions/${submitted.task_submission_id}/grading`)
+      return (
+        await getJson<{ Grading: Record<string, unknown> }>(
+          `/submissions/${submitted.task_submission_id}/grading`,
+        )
+      ).Grading
+    }
+    const expectations = {
+      compileFailed: ["FullyGraded", "COMPILE_FAILED", "compile_failed"],
+      genericError: ["Failed", "GENERIC_ERROR", "generic_error"],
+      timedOut: ["Failed", undefined, "timed_out"],
+      pending: ["Pending", undefined, undefined],
+    } as const
+    for (const [outcome, [progress, status, key]] of Object.entries(expectations)) {
+      assert.equal(
+        mock.setGradingOutcome(exercise.slide.exercise_id, outcome as keyof typeof expectations),
+        true,
+      )
+      const grading = await graded()
+      const feedback = grading.feedback_json as Record<string, unknown> | null
+      assert.equal(grading.grading_progress, progress, outcome)
+      assert.equal(feedback?.status, status, outcome)
+      assert.equal(feedback?.feedback_key, key, outcome)
+    }
+    mock.setGradingOutcome(exercise.slide.exercise_id, undefined)
+    assert.equal((await graded()).grading_progress, "FullyGraded")
+    assert.equal(mock.setGradingOutcome(nonexistentExerciseId, "pending"), false)
+    assert.equal(
+      (
+        await post("set-grading-outcome", {
+          exercise_id: exercise.slide.exercise_id,
+          outcome: "timedOut",
+        })
+      ).status,
+      204,
+    )
+    assert.equal(
+      (await post("set-grading-outcome", { exercise_id: exercise.slide.exercise_id, outcome: "x" }))
+        .status,
+      400,
+    )
+  })
+
   test("the control routes drive the same state", async () => {
     assert.equal((await post("set-exam-ended", { exam_id: EXAM_ID, ended: true })).status, 204)
     assert.deepEqual(await getJson("/exams"), [])

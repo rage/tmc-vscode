@@ -84,7 +84,7 @@ const toCliStdoutGradingStatus = (wire: unknown): unknown => {
     testResults?: unknown[]
     logs?: Record<string, string>
   } | null
-  const test_results = run
+  const test_results = run?.status
     ? {
         status: run.status,
         test_results: run.testResults ?? [],
@@ -380,6 +380,30 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     // A normal run's logs are the program's output, which the CLI does not relay.
     expect(parsed.grading.test_results?.logs).toEqual({})
   })
+
+  test.each(["compileFailed", "genericError", "timedOut", "pending"] as const)(
+    "a %s grading validates as ExerciseTaskSubmissionStatus",
+    async function (outcome) {
+      mock.setGradingOutcome(passingExercise.slide.exercise_id, outcome)
+      const { taskSubmissionId } = await submit(passingExercise)
+      await fetch(api(`/submissions/${taskSubmissionId}/grading`))
+      const graded = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
+
+      const parsed = ExerciseTaskSubmissionStatus.parse(toCliStdoutGradingStatus(graded))
+      if (parsed.status !== "grading") {
+        throw new Error("expected a grading")
+      }
+      const expected = {
+        compileFailed: ["FullyGraded", "COMPILE_FAILED"],
+        genericError: ["Failed", "GENERIC_ERROR"],
+        timedOut: ["Failed", undefined],
+        pending: ["Pending", undefined],
+      }[outcome]
+      expect([parsed.grading.grading_progress, parsed.grading.test_results?.status]).toEqual(
+        expected,
+      )
+    },
+  )
 
   test("old-submissions list items validate as ExerciseSlideSubmissionListItem", async function () {
     const exerciseId = failingExercise.slide.exercise_id
