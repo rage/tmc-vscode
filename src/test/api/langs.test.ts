@@ -834,7 +834,7 @@ suite("Langs cross-backend independence", function () {
         dataOutput("tmc-exercise-download", {
           downloaded: [exercise],
           skipped: [],
-          failed: [[{ ...exercise, id: 2, path: "/p/f" }, ["no space left"]]],
+          failed: [[{ ...exercise, id: 2, path: "/p/f" }, ["no space left"], "other"]],
         }),
       ),
     )
@@ -842,7 +842,7 @@ suite("Langs cross-backend independence", function () {
     expect(result.unwrap()).toEqual({
       downloaded: [{ id: idOfTmcExercise(1), path: "/p/e" }],
       skipped: [],
-      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"], undefined]],
+      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"], "other"]],
     })
   })
 

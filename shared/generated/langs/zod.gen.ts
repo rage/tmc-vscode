@@ -159,7 +159,9 @@ export const zExerciseChapter = z.object({
  */
 export const zExercisePackagingConfiguration = z.object({
     exercise_file_paths: z.array(z.string()),
-    student_file_paths: z.array(z.string())
+    plugin: z.string().nullish(),
+    student_file_paths: z.array(z.string()),
+    tests_timeout_ms: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }).nullish()
 });
 
 export const zExercisePoint = z.object({
@@ -328,7 +330,9 @@ export const zKind = z.union([
     z.literal('disk-full'),
     z.literal('toolchain-missing'),
     z.literal('executable-blocked'),
-    z.literal('projects-dir-unreachable')
+    z.literal('projects-dir-unreachable'),
+    z.literal('projects-dir-move-to-itself'),
+    z.literal('projects-dir-move-into-itself')
 ]);
 
 /**
@@ -936,6 +940,17 @@ export const zTmcConfig = z.object({
     projects_dir: z.string()
 });
 
+/**
+ * Why a TMC exercise could not be downloaded.
+ */
+export const zTmcDownloadFailure = z.union([
+    z.literal('server-error'),
+    z.literal('connection-error'),
+    z.literal('other'),
+    z.literal('not-found'),
+    z.literal('extract-failed')
+]);
+
 export const zTmcExerciseDownload = z.object({
     'course-slug': z.string(),
     'exercise-slug': z.string(),
@@ -945,7 +960,11 @@ export const zTmcExerciseDownload = z.object({
 
 export const zDownloadOrUpdateTmcCourseExercisesResult = z.object({
     downloaded: z.array(zTmcExerciseDownload),
-    failed: z.array(z.tuple([zTmcExerciseDownload, z.array(z.string())])).nullish(),
+    failed: z.array(z.tuple([
+        zTmcExerciseDownload,
+        z.array(z.string()),
+        zTmcDownloadFailure
+    ])).nullish(),
     skipped: z.array(zTmcExerciseDownload)
 });
 
@@ -953,6 +972,7 @@ export const zTmcExerciseTask = z.object({
     assignment: z.unknown(),
     checksum: z.string().nullable(),
     exercise_service_slug: z.string(),
+    instructions_text: z.array(z.string()).optional(),
     model_solution_spec: zModelSolutionSpec.nullable(),
     order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     public_spec: zPublicSpec.nullable(),
@@ -969,7 +989,8 @@ export const zTmcExerciseSlide = z.object({
     exercise_order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     page_url: z.string().nullable(),
     slide_id: z.uuid(),
-    tasks: z.array(zTmcExerciseTask)
+    tasks: z.array(zTmcExerciseTask),
+    unsupported: zMoocDownloadFailure.nullish()
 });
 
 /**

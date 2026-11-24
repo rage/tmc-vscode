@@ -65,7 +65,7 @@ const createDownloadResult = (
 ): Result<ExerciseDownloads, Error> =>
   Ok({
     downloaded,
-    failed: failed.map(([download, reasons, failure]) => [download, reasons, failure]),
+    failed: failed.map(([download, reasons, failure]) => [download, reasons, failure ?? "other"]),
     skipped,
   })
 
@@ -287,7 +287,11 @@ suite("downloadOrUpdateExercises action", function () {
 
   test("says in plain words that an exercise package is broken, and logs tmc-langs' reason", async function () {
     const reason = "No project directory found in archive"
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    tmcMockValues.downloadTmcExercises = createDownloadResult(
+      [],
+      [],
+      [[helloWorld, [reason], "extract-failed"]],
+    )
 
     const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 
@@ -301,7 +305,11 @@ suite("downloadOrUpdateExercises action", function () {
   test("blames the server, not the package, for a server error, and logs tmc-langs' reason", async function () {
     const reason =
       "500 Internal Server Error from http://localhost:4001/mooc-archives/hello.tar.zst: fault"
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    tmcMockValues.downloadTmcExercises = createDownloadResult(
+      [],
+      [],
+      [[helloWorld, [reason], "server-error"]],
+    )
 
     const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 

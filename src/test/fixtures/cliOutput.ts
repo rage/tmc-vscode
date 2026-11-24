@@ -552,6 +552,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         [
           { id: 2, "course-slug": "course", "exercise-slug": "ex2", path: "/p/ex2" },
           ["download failed"],
+          "server-error",
         ],
       ],
     }),

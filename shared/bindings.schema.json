@@ -1571,14 +1571,15 @@
           }
         },
         "failed": {
+          "description": "Each failure with its error chain, outermost first, and why it failed.",
           "type": [
             "array",
             "null"
           ],
           "items": {
             "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
+            "maxItems": 3,
+            "minItems": 3,
             "prefixItems": [
               {
                 "$ref": "#/$defs/TmcExerciseDownload"
@@ -1588,6 +1589,9 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              {
+                "$ref": "#/$defs/TmcDownloadFailure"
               }
             ]
           }
@@ -1873,6 +1877,13 @@
           },
           "uniqueItems": true
         },
+        "plugin": {
+          "description": "The language plugin that recognised the exercise: `python3`, `apache-maven`,\n`apache-ant`, `csharp`, `make`, `r` or `No-Tests`. Absent only from CLIs older than this\nfield.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "student_file_paths": {
           "description": "Student folders or files which are copied from submission.",
           "type": "array",
@@ -1880,6 +1891,15 @@
             "type": "string"
           },
           "uniqueItems": true
+        },
+        "tests_timeout_ms": {
+          "description": "How long the exercise's tests may run: its `.tmcproject.yml`'s `tests_timeout_ms`, else\n[`DEFAULT_TESTS_TIMEOUT`]. Absent only from CLIs older than this field.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "required": [
@@ -2698,6 +2718,16 @@
           "description": "The exercises folder (`path`) is missing, e.g. on a drive that is not connected; it was\nnot recreated.",
           "type": "string",
           "const": "projects-dir-unreachable"
+        },
+        {
+          "description": "The folder the exercises folder was to be moved to is the exercises folder itself.",
+          "type": "string",
+          "const": "projects-dir-move-to-itself"
+        },
+        {
+          "description": "The folder the exercises folder was to be moved to is inside the exercises folder.",
+          "type": "string",
+          "const": "projects-dir-move-into-itself"
         }
       ]
     },
@@ -4476,6 +4506,29 @@
         "projects_dir"
       ]
     },
+    "TmcDownloadFailure": {
+      "description": "Why a TMC exercise could not be downloaded.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "server-error",
+            "connection-error",
+            "other"
+          ]
+        },
+        {
+          "description": "tmc.mooc.fi has no such exercise, or not for this user.",
+          "type": "string",
+          "const": "not-found"
+        },
+        {
+          "description": "The download could not be unpacked or written into the exercise folder.",
+          "type": "string",
+          "const": "extract-failed"
+        }
+      ]
+    },
     "TmcExerciseDownload": {
       "type": "object",
       "properties": {
@@ -4564,6 +4617,17 @@
           "items": {
             "$ref": "#/$defs/TmcExerciseTask"
           }
+        },
+        "unsupported": {
+          "description": "Why the exercise cannot be downloaded to work on in an editor: `browser-only` or\n`several-editor-tasks`, the failure `download-or-update-course-exercises` would report.\nAbsent when it can be downloaded, and from CLIs older than this field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MoocDownloadFailure"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4592,6 +4656,13 @@
         "exercise_service_slug": {
           "description": "The exercise service that owns the task. Specs are read only for [`TMC_SERVICE_SLUG`];\nany other service's task has neither spec.",
           "type": "string"
+        },
+        "instructions_text": {
+          "description": "The plain text of `assignment`, one entry per block that has text, nested blocks after\ntheir parent. Absent when it has none, and from CLIs older than this field.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "model_solution_spec": {
           "anyOf": [

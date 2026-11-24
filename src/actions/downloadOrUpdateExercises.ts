@@ -3,7 +3,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { Kind, MoocDownloadFailure } from "../../shared/langsSchema"
+import type { Kind, MoocDownloadFailure, TmcDownloadFailure } from "../../shared/langsSchema"
 import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
@@ -26,7 +26,6 @@ import {
   CourseAccessLostError,
   ExerciseUpdateError,
   isSessionLost,
-  ServerError,
   presentationFor,
 } from "../errors"
 import type { JobOptions } from "../ui/backgroundJobs"
@@ -487,22 +486,16 @@ async function restoreLatestSubmissions(
   return unrestored
 }
 
-/** An exercise tmc-langs did not download: its reasons, and on courses.mooc.fi their kind. */
+/** An exercise tmc-langs did not download: its reasons, and why it failed. */
 interface ExerciseFailure {
   id: ExerciseIdentifier
   reasons: string[]
-  kind: MoocDownloadFailure | undefined
+  kind: MoocDownloadFailure | TmcDownloadFailure
 }
 
-/** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
-const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
-
-/** tmc-langs' reason for a server that failed a request: "500 Internal Server Error from <url>". */
-const SERVER_FAILURE_REASON = /\b5\d\d [A-Z][\w ]* from \S/
-
 /**
- * What each courses.mooc.fi download failure is presented as: the CLI error kind worded the
- * same, or a cause of its own.
+ * What each download failure is presented as: the CLI error kind worded the same, or a cause
+ * of its own. tmc.mooc.fi's failures are a subset of courses.mooc.fi's.
  */
 const CAUSE_OF_FAILURE: Record<
   MoocDownloadFailure,
@@ -541,7 +534,7 @@ function failureCause(
   const reasons = [...new Set(failures.flatMap((failure) => failure.reasons).filter(Boolean))]
   const details =
     reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
-  const causes = new Set(failures.map(({ kind }) => kind && CAUSE_OF_FAILURE[kind]))
+  const causes = new Set(failures.map(({ kind }) => CAUSE_OF_FAILURE[kind]))
   const [cause] = causes
   if (causes.size === 1 && cause !== undefined && cause !== "other") {
     switch (cause) {
@@ -549,18 +542,11 @@ function failureCause(
         return closedChapterError(actionContext, failures, details)
       case "broken-package":
         return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
-      default:
-        return Object.assign(langsError({ kind: cause }, details, details, "mooc"), {
-          backend: "mooc",
-        })
+      default: {
+        const backend = failures[0]?.id.kind
+        return Object.assign(langsError({ kind: cause }, details, details, backend), { backend })
+      }
     }
-  }
-  // An archive URL names "archive" too, but the package is not to blame for the server's failure.
-  if (reasons.length > 0 && reasons.every((reason) => SERVER_FAILURE_REASON.test(reason))) {
-    return new ServerError(details, details)
-  }
-  if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
-    return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
   }
   return new ExerciseUpdateError("The download did not complete.", details)
 }

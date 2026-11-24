@@ -26,6 +26,7 @@ import {
   NotFoundError,
   ObsoleteClientError,
   OutOfTriesError,
+  ProjectsDirMoveRefusedError,
   ProjectsDirUnreachableError,
   ProxyError,
   RateLimitedError,
@@ -83,6 +84,8 @@ const ERROR_CLASS_OF_KIND: Record<Kind, LangsErrorClass> = {
   "toolchain-missing": ToolchainMissingError,
   "executable-blocked": ExecutableBlockedError,
   "projects-dir-unreachable": ProjectsDirUnreachableError,
+  "projects-dir-move-to-itself": ProjectsDirMoveRefusedError,
+  "projects-dir-move-into-itself": ProjectsDirMoveRefusedError,
 }
 
 /** What the CLI reported about a failure, beside its message. */

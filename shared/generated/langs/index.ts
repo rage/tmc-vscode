@@ -87,6 +87,7 @@ import {
     zTestDesc,
     zTestResult,
     zTmcConfig,
+    zTmcDownloadFailure,
     zTmcExerciseDownload,
     zTmcExerciseSlide,
     zTmcExerciseTask,
@@ -551,6 +552,12 @@ export type TestResult = z.infer<typeof TestResult>;
  */
 export const TmcConfig = zTmcConfig;
 export type TmcConfig = z.infer<typeof TmcConfig>;
+
+/**
+ * Why a TMC exercise could not be downloaded.
+ */
+export const TmcDownloadFailure = zTmcDownloadFailure;
+export type TmcDownloadFailure = z.infer<typeof TmcDownloadFailure>;
 
 export const TmcExerciseDownload = zTmcExerciseDownload;
 export type TmcExerciseDownload = z.infer<typeof TmcExerciseDownload>;

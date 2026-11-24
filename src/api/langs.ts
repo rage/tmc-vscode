@@ -16,6 +16,7 @@ import type {
   MoocCourse,
   MoocDeviceLogin,
   MoocDownloadFailure,
+  TmcDownloadFailure,
   MoocExam,
   TmcExerciseSlide,
   MoocOldSubmissionRestore,
@@ -221,8 +222,8 @@ export interface ExerciseDownloads {
   downloaded: ExerciseDownload[]
   /** Already up to date. */
   skipped: ExerciseDownload[]
-  /** Each with the reasons the CLI gave, and for mooc why it failed. */
-  failed: [ExerciseDownload, string[], MoocDownloadFailure | undefined][]
+  /** Each with the reasons the CLI gave, and why it failed. */
+  failed: [ExerciseDownload, string[], MoocDownloadFailure | TmcDownloadFailure][]
 }
 
 /** How a backend's copies of the locally downloaded exercises differ from the local ones. */
@@ -254,7 +255,7 @@ function toExerciseDownloads<T>(
   }: {
     downloaded: T[]
     skipped: T[]
-    failed?: [T, string[], MoocDownloadFailure?][] | null | undefined
+    failed?: [T, string[], MoocDownloadFailure | TmcDownloadFailure][] | null | undefined
   },
   toDownload: (exercise: T) => ExerciseDownload,
 ): ExerciseDownloads {
