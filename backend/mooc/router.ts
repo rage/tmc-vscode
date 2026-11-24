@@ -154,6 +154,8 @@ interface MoocMockState {
   // Last authenticated request's `Authorization` header and a count, surfaced via
   // `GET /mooc-mock/auth-state`: the mock runs in a separate process from the test.
   lastAuthorization: string | undefined
+  /** The `X-Client-Version` of the last authenticated request, if it sent one. */
+  lastClientVersion: string | undefined
   authenticatedRequestCount: number
   /** This instance's isolated device-flow + issued-token state; see oauth.ts. */
   oauth: MoocOAuthState
@@ -223,6 +225,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   delayNextArchiveMs: undefined,
   checksumsBeforeUpdate: new Map(),
   lastAuthorization: undefined,
+  lastClientVersion: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
   currentUserId: MOCK_DEFAULT_USER_ID,
@@ -472,6 +475,7 @@ const createMoocMockControls = (
     }
     state.checksumsBeforeUpdate.clear()
     state.lastAuthorization = undefined
+    state.lastClientVersion = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
     state.currentUserId = MOCK_DEFAULT_USER_ID
@@ -2071,6 +2075,7 @@ export const registerMoocRoutes = (
   app.get("/mooc-mock/auth-state", (_req, res) => {
     res.json({
       lastAuthorization: state.lastAuthorization,
+      lastClientVersion: state.lastClientVersion,
       authenticatedRequestCount: state.authenticatedRequestCount,
     })
   })
@@ -2439,6 +2444,7 @@ export const registerMoocRoutes = (
         return
       }
       state.lastAuthorization = header
+      state.lastClientVersion = req.headers[CLIENT_VERSION_HEADER] as string | undefined
       state.authenticatedRequestCount += 1
       next()
     })

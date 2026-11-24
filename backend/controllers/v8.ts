@@ -181,28 +181,47 @@ const seededSubmissions = (): SubmissionRecord[] => [
   },
 ]
 
+/**
+ * What courses.mooc.fi's introspection tells tmc-server about a mooc token: the token's own scopes
+ * (`active`), a verdict that cannot be reached (`unavailable`), or a verified token that resolves
+ * to no tmc-server user (`no-user`).
+ */
+export type IntrospectionOutcome = "active" | "unavailable" | "no-user"
+
 interface TmcMockState {
   submissions: SubmissionRecord[]
   nextSubmissionId: number
+  introspectionOutcome: IntrospectionOutcome
 }
 
 const createTmcMockState = (): TmcMockState => ({
   submissions: seededSubmissions(),
   nextSubmissionId: 2,
+  introspectionOutcome: "active",
 })
 
 /** Drives one legacy TMC mock's state; reach it with {@link tmcMockOf}. */
 export interface TmcMockControls {
   /** Discards submissions made since the last reset, keeping the seeded old one. */
   reset: () => void
+  /** Sets the verdict every mooc bearer gets from introspection; the legacy token is unaffected. */
+  setIntrospectionOutcome: (outcome: IntrospectionOutcome) => void
 }
 
 const createTmcMockControls = (state: TmcMockState): TmcMockControls => ({
   reset: () => {
     state.submissions = seededSubmissions()
     state.nextSubmissionId = 2
+    state.introspectionOutcome = "active"
+  },
+  setIntrospectionOutcome: (outcome) => {
+    state.introspectionOutcome = outcome
   },
 })
+
+/** What tmc-server answers when courses.mooc.fi cannot vouch for a token; the CLI matches the text. */
+export const INTROSPECTION_UNAVAILABLE_MESSAGE =
+  "courses.mooc.fi could not verify your login right now. Try again later."
 
 export const tmcMockOf = (app: Express): TmcMockControls => app.locals.tmcMock as TmcMockControls
 
@@ -260,12 +279,21 @@ const forFixture = <Fixture>(
  * `unauthorize_guest!` including the response body.
  */
 const requireAccessToken =
-  (options: RegisterV8RoutesOptions): RequestHandler =>
+  (options: RegisterV8RoutesOptions, state: TmcMockState): RequestHandler =>
   (req: Request, res: Response, next: NextFunction) => {
     const token = /^Bearer (.+)$/.exec(req.get("authorization") ?? "")?.[1]
+    if (
+      token !== undefined &&
+      token !== MOCK_TMC_ACCESS_TOKEN &&
+      state.introspectionOutcome === "unavailable"
+    ) {
+      res.status(503).json({ error: INTROSPECTION_UNAVAILABLE_MESSAGE })
+      return
+    }
     const isAuthenticated =
       token === MOCK_TMC_ACCESS_TOKEN ||
       (token !== undefined &&
+        state.introspectionOutcome === "active" &&
         (options.introspectMoocToken?.(token)?.includes(EXERCISE_SERVICES_SCOPE) ?? false))
     if (options.requireAuth === false || isAuthenticated) {
       next()
@@ -303,7 +331,7 @@ export const registerV8Routes = (
   const controls = createTmcMockControls(state)
   app.locals.tmcMock = controls
 
-  const authenticated = requireAccessToken(options)
+  const authenticated = requireAccessToken(options, state)
 
   // getTmcCourseData(0), settings leg
   app.get(
@@ -486,6 +514,21 @@ export const registerV8Routes = (
   // the real server has no counterpart.
   app.post("/tmc-mock/reset", (_req, res) => {
     controls.reset()
+    res.status(204).end()
+  })
+
+  app.post("/tmc-mock/set-introspection-outcome", express.json(), (req, res) => {
+    const { outcome } = (req.body ?? {}) as { outcome?: unknown }
+    const outcomes: unknown[] = [
+      "active",
+      "unavailable",
+      "no-user",
+    ] satisfies IntrospectionOutcome[]
+    if (!outcomes.includes(outcome)) {
+      res.status(400).json({ error: "outcome must be one of " + JSON.stringify(outcomes) })
+      return
+    }
+    controls.setIntrospectionOutcome(outcome as IntrospectionOutcome)
     res.status(204).end()
   })
 

@@ -2447,6 +2447,19 @@ describe("mooc mock exams, course facts and review progress", () => {
     assert.equal(normalized[0], normalized[1])
   })
 
+  test("auth-state reports the client version the last request advertised", async () => {
+    await authFetch(api("/courses"), { headers: { "x-client-version": "4.0.0-test" } })
+    const state = (await (await fetch(`${base}/mooc-mock/auth-state`)).json()) as {
+      lastClientVersion?: string
+    }
+    assert.equal(state.lastClientVersion, "4.0.0-test")
+    await authFetch(api("/courses"))
+    const unversioned = (await (await fetch(`${base}/mooc-mock/auth-state`)).json()) as {
+      lastClientVersion?: string
+    }
+    assert.equal(unversioned.lastClientVersion, undefined)
+  })
+
   test("the control routes drive the same state", async () => {
     assert.equal((await post("set-exam-ended", { exam_id: EXAM_ID, ended: true })).status, 204)
     assert.deepEqual(await getJson("/exams"), [])

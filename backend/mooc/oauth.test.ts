@@ -347,6 +347,18 @@ describe("mooc device-flow oauth mock", () => {
     assert.equal((await refresh(rotated.refresh_token)).status, 400)
   })
 
+  // sp331 gives each device login its own family: a second computer's login survives the first's reuse.
+  test("reuse revokes the chain of one login and no other login's", async () => {
+    const first = await login()
+    const second = await login()
+    await refresh(first.refresh_token)
+    await refresh(first.refresh_token) // reuse
+
+    assert.equal(mock.introspect(first.access_token), undefined)
+    assert.deepEqual(mock.introspect(second.access_token), ["exercise-services"])
+    assert.equal((await refresh(second.refresh_token)).status, 200)
+  })
+
   test("a refresh token presented by another client is invalid_grant", async () => {
     const minted = await login()
     const res = await refresh(minted.refresh_token, MOCK_OAUTH_CLIENT_IDS.never)
