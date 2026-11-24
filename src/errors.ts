@@ -1,5 +1,6 @@
 import type { RunnableCommand } from "../shared/lib"
 import { asSentence, BaseError, LOGGED_OUT_MESSAGE } from "../shared/lib"
+import { fileProblemOf } from "./utilities/fileProblem"
 
 export class AuthorizationError extends BaseError {
   public override readonly name: string = "Authorization Error"
@@ -400,13 +401,12 @@ const REPORT_ISSUE_ACTION: ErrorAction = {
   command: "workbench.action.openIssueReporter",
 }
 
-/** The errno names a security policy raises when it refuses to run a file that is there. */
-const POLICY_DENIAL_CODES = ["EACCES", "EPERM", "UNKNOWN"]
-
 function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
   const showHelp: ErrorAction = { label: "Show Help", command: "tmc.viewInitializationErrorHelp" }
-  switch (error.code) {
-    case "ENOENT":
+  // A security policy refusing to run a file that is there can surface as UNKNOWN.
+  const problem = error.code === "UNKNOWN" ? "denied" : fileProblemOf(error)
+  switch (problem) {
+    case "missing":
       return {
         message:
           "The TestMyCode tools are missing from this computer, perhaps removed by an antivirus program. Restart the extension to download them again.",
@@ -415,21 +415,20 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
           showHelp,
         ],
       }
-    case "EBUSY":
+    case "inUse":
       return {
         message:
           "Another program, such as an antivirus scan, is using the TestMyCode tools. Try again in a moment.",
         actions: [],
       }
-    default:
-      if (error.code !== undefined && POLICY_DENIAL_CODES.includes(error.code)) {
-        return {
-          message:
-            "This computer would not run the TestMyCode tools; a security policy may be blocking " +
-            "them. Ask your IT support to allow them.",
-          actions: [showHelp],
-        }
+    case "denied":
+      return {
+        message:
+          "This computer would not run the TestMyCode tools; a security policy may be blocking " +
+          "them. Ask your IT support to allow them.",
+        actions: [showHelp],
       }
+    default:
       return {
         message: "The TestMyCode tools could not be started. Show Help says what to try.",
         actions: [showHelp, REPORT_ISSUE_ACTION],

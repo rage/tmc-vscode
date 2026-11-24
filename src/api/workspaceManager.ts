@@ -22,7 +22,7 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import { isSamePath, Logger, SerialQueue } from "../utilities"
+import { fileProblemOf, isSamePath, Logger, SerialQueue } from "../utilities"
 import { missingAiOffSettings } from "./aiRestriction"
 import { languageExtensionForLanguageId } from "./languageExtensions"
 
@@ -704,8 +704,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     try {
       await fs.access(uri.fsPath, fs.constants.W_OK)
     } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code
-      if (code === "EACCES" || code === "EPERM") {
+      if (fileProblemOf(e) === "denied") {
         return "readOnly"
       }
     }
@@ -714,12 +713,11 @@ export default class WorkspaceManager implements vscode.Disposable {
       const handle = await fs.promises.open(uri.fsPath, "r+")
       await handle.close()
     } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code
-      if (code === "EBUSY") {
-        return "inUse"
-      }
-      if (code === "EACCES" || code === "EPERM") {
-        return "protected"
+      switch (fileProblemOf(e)) {
+        case "inUse":
+          return "inUse"
+        case "denied":
+          return "protected"
       }
     }
     // VS Code refuses every extension write to a settings file with unsaved changes.

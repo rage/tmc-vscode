@@ -3,6 +3,7 @@
 export * from "./apiData"
 export * from "./dateDeadline"
 export * from "./env"
+export * from "./fileProblem"
 export * from "./logger"
 export * from "./semanticVersion"
 export * from "./utils"

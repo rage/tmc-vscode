@@ -6,7 +6,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { FileSystemError } from "../errors"
-import { Logger } from "../utilities"
+import { fileProblemOf, Logger } from "../utilities"
 import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -53,12 +53,11 @@ export async function moveExercisesAside(
       } catch (e) {
         // Nothing records a partly moved folder, so a bring-back would never find these.
         await moveBack(moved, target, projectsDirectory)
-        const code = (e as NodeJS.ErrnoException).code
-        const isHeld = code === "EBUSY" || code === "EPERM" || code === "EACCES"
+        const problem = fileProblemOf(e)
         return Err(
           new FileSystemError(
             e,
-            isHeld
+            problem === "inUse" || problem === "denied"
               ? `${entry} is in use, so the exercises could not all be moved to ${target}. ` +
                   "Close terminals, programs and other VS Code windows using it, then log in again."
               : `Failed to move ${entry} to ${target}.`,
