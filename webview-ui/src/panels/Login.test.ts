@@ -54,6 +54,13 @@ suite("the login screen", () => {
     expect(screen.getByText("Waiting for you to approve the login in your browser.")).toBeVisible()
   })
 
+  test("spells the code for a screen reader and keeps the written code out of its way", async () => {
+    await renderWaiting()
+
+    expect(screen.getByText("W X Y Z dash 0 0 0 1")).toHaveClass("visually-hidden")
+    expect(screen.getByText("WXYZ-0001")).toHaveAttribute("aria-hidden", "true")
+  })
+
   test("Open MOOC.fi is the one primary button, and asks the host to open the page", async () => {
     await renderWaiting()
 

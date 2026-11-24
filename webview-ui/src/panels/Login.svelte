@@ -46,12 +46,17 @@
     announce(announcement(message.view))
   })
 
+  /** The code one character at a time, so a screen reader spells it rather than reading a word. */
+  function spelled(userCode: string): string {
+    return [...userCode].map((char) => (char === "-" ? "dash" : char)).join(" ")
+  }
+
   function announcement(next: LoginView): string {
     switch (next.phase) {
       case "requestingCode":
         return "Getting a login code"
       case "waiting":
-        return `Your login code is ${next.userCode}`
+        return `Your login code is ${spelled(next.userCode)}`
       case "failed":
         return FAILURE_TITLES[next.failure]
       case "loggedIn":
@@ -132,7 +137,10 @@
     {@const userCode = view.userCode}
     <p class="muted code-label">Your login code</p>
     <div class="code-row">
-      <p class="code">{userCode}</p>
+      <p class="code">
+        <span aria-hidden="true">{userCode}</span>
+        <span class="visually-hidden">{spelled(userCode)}</span>
+      </p>
       <Button secondary icon="copy" onclick={() => void copyCode(userCode)}>
         {copyState === "copied" ? "Copied" : "Copy"}
       </Button>
