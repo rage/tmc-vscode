@@ -51,6 +51,12 @@ validateRelease() {
         exitCode=1
     fi
 
+    if ! node --import tsx ./bin/updateLangsChecksums.ts --check
+    then
+        echo "Error: The built-in Langs checksums do not match the release."
+        exitCode=1
+    fi
+
     if [ $exitCode = 0 ]
     then
         echo "Validated release successfully"

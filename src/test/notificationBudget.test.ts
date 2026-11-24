@@ -80,7 +80,7 @@ const BUDGET: Budget = {
     withProgress: 1,
   },
   "src/init/commands.ts": { reportError: 1, statusMessage: 1 },
-  "src/init/ensureLangsUpdated.ts": { progressNotification: 1 },
+  "src/init/ensureLangsUpdated.ts": { progressNotification: 1, warningNotification: 1 },
   "src/panels/TmcPanel.ts": { offer: 1 },
   "src/panels/router.ts": { reportError: 1 },
   "src/storage/migration/exerciseData.ts": { progressNotification: 1, warningNotification: 1 },

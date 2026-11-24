@@ -9,6 +9,7 @@ declare const __TMC_BACKEND_URL__: string
 declare const __TMC_LANGS_CONFIG_DIR__: string | null
 declare const __TMC_LANGS_DL_URL__: string
 declare const __TMC_LANGS_VERSION__: string
+declare const __TMC_LANGS_CHECKSUMS__: Record<string, string> | null
 declare const __MOOC_BACKEND_URL__: string
 declare const __EXTENSION_VERSION__: string
 declare const __TMC_LANGS_MOOC_TRUST_LOCALHOST__: boolean
@@ -18,6 +19,8 @@ export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
 export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined
 export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__
 export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__
+/** SHA-256 of every CLI build of {@link TMC_LANGS_VERSION}; `null` in the profiles that serve a local build. */
+export const TMC_LANGS_CHECKSUMS = __TMC_LANGS_CHECKSUMS__
 export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
 /** Whether the CLI may send the login to a dev host such as project-331.local. */
 export const TRUST_DEV_MOOC_HOST = __TMC_LANGS_MOOC_TRUST_LOCALHOST__

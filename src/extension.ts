@@ -1,5 +1,6 @@
 import * as path from "path"
 
+import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
@@ -48,6 +49,7 @@ import {
   STARTUP_AUTH_CHECK_TIMEOUT,
   EXTENSION_VERSION,
   TMC_LANGS_CONFIG_DIR,
+  TMC_LANGS_CHECKSUMS,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
 } from "./config/constants"
@@ -79,7 +81,13 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import type { VersionChange } from "./utilities"
-import { cliFolder, Logger, setRedactedExtensionStorage, versionChangeSince } from "./utilities"
+import {
+  cliFolder,
+  legacyCliFolder,
+  Logger,
+  setRedactedExtensionStorage,
+  versionChangeSince,
+} from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   listWalkthroughUnlessUpdated,
@@ -259,7 +267,12 @@ async function activateInner(
   const cliPathResult = await init.ensureLangsUpdated(cliFolder(context), dialog, {
     downloadUrl: TMC_LANGS_DL_URL,
     version: TMC_LANGS_VERSION,
+    builtInChecksums: TMC_LANGS_CHECKSUMS,
+    cliPath: settings.getCliPath(),
   })
+  if (cliFolder(context) !== legacyCliFolder(context)) {
+    void fs.promises.rm(legacyCliFolder(context), { recursive: true, force: true }).catch(() => {})
+  }
 
   // download langs if necessary
   let langs: Result<Langs, Error>
@@ -272,6 +285,7 @@ async function activateInner(
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
+      httpProxy: () => settings.getHttpProxy(),
     })
     // A submit or paste would otherwise keep polling the backend past shutdown.
     context.subscriptions.push({ dispose: () => langsInstance.killAllProcesses() })

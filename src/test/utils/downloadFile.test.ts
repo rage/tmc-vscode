@@ -234,4 +234,119 @@ suite("downloadFile", function () {
 
     expect(result.err).toBe(true)
   })
+
+  test("has no total time budget by default: a slow but steady body completes", async function () {
+    const body = Buffer.alloc(3000, 7)
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": String(body.length) })
+      let sent = 0
+      const timer = setInterval(() => {
+        res.write(body.subarray(sent, sent + 1000))
+        sent += 1000
+        if (sent >= body.length) {
+          clearInterval(timer)
+          res.end()
+        }
+      }, 150)
+    })
+    const out = path.join(tmpDir.name, "slow.bin")
+
+    const result = await downloadFile(serverUrl(server), out, { stallTimeoutMs: 1000 })
+
+    expect(result.ok).toBe(true)
+    expect(fs.readFileSync(out).equals(body)).toBe(true)
+  })
+
+  test("an explicit total budget still ends a download that keeps trickling", async function () {
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": "100000" })
+      setInterval(() => res.write("x"), 50).unref()
+    })
+    const out = path.join(tmpDir.name, "trickle.bin")
+
+    const result = await downloadFile(serverUrl(server), out, {
+      stallTimeoutMs: 1000,
+      totalTimeoutMs: 300,
+    })
+
+    expect(result.err).toBe(true)
+  })
+
+  suite("resume", function () {
+    const body = Buffer.from(Array.from({ length: 5000 }, (_, i) => i % 251))
+
+    /** Serves `body`, honouring a Range request when `honourRange`. */
+    async function serveWithRange(honourRange: boolean): Promise<string[]> {
+      const ranges: string[] = []
+      server = await startServer((req, res) => {
+        const range = req.headers.range
+        ranges.push(range ?? "")
+        const start = honourRange && range ? Number(/bytes=(\d+)-/.exec(range)?.[1]) : 0
+        if (start > 0) {
+          res.writeHead(206, {
+            "content-length": String(body.length - start),
+            "content-range": `bytes ${start}-${body.length - 1}/${body.length}`,
+          })
+          res.end(body.subarray(start))
+        } else {
+          res.writeHead(200, { "content-length": String(body.length) })
+          res.end(body)
+        }
+      })
+      return ranges
+    }
+
+    test("continues a partial file with a Range request", async function () {
+      const ranges = await serveWithRange(true)
+      const out = path.join(tmpDir.name, "partial.bin")
+      fs.writeFileSync(out, body.subarray(0, 2000))
+      const progress: number[] = []
+
+      const result = await downloadFile(serverUrl(server as http.Server), out, {
+        resume: true,
+        onProgress: (percent) => progress.push(percent),
+      })
+
+      expect(result.ok).toBe(true)
+      expect(ranges).toEqual(["bytes=2000-"])
+      expect(fs.readFileSync(out).equals(body)).toBe(true)
+      expect(progress.at(-1)).toBe(100)
+    })
+
+    test("starts over when the server ignores the range and sends everything", async function () {
+      await serveWithRange(false)
+      const out = path.join(tmpDir.name, "partial.bin")
+      fs.writeFileSync(out, Buffer.alloc(2000, 9))
+
+      const result = await downloadFile(serverUrl(server as http.Server), out, { resume: true })
+
+      expect(result.ok).toBe(true)
+      expect(fs.readFileSync(out).equals(body)).toBe(true)
+    })
+
+    test("sends no Range for a file that does not exist yet, or without the option", async function () {
+      const ranges = await serveWithRange(true)
+      const out = path.join(tmpDir.name, "fresh.bin")
+      await downloadFile(serverUrl(server as http.Server), out, { resume: true })
+      fs.writeFileSync(out, "stale")
+      await downloadFile(serverUrl(server as http.Server), out)
+
+      expect(ranges).toEqual(["", ""])
+      expect(fs.readFileSync(out).equals(body)).toBe(true)
+    })
+
+    test("drops a partial file the server cannot resume, so the next attempt starts over", async function () {
+      server = await startServer((_req, res) => {
+        res.writeHead(416)
+        res.end()
+      })
+      const out = path.join(tmpDir.name, "partial.bin")
+      fs.writeFileSync(out, "partial")
+
+      const result = await downloadFile(serverUrl(server), out, { resume: true })
+
+      expect(result.err).toBe(true)
+      expect(fs.existsSync(out)).toBe(false)
+    })
+  })
 })

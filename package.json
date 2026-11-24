@@ -52,6 +52,7 @@
     "update-submodules": "git submodule foreach git pull origin master",
     "vendor:langs-openapi": "bash bin/updateLangsOpenapi.sh",
     "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
+    "vendor:langs-checksums": "node --import tsx ./bin/updateLangsChecksums.ts",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
     "watch": "node esbuild.mjs --watch",
     "webview:build": "pnpm --dir webview-ui run build",
@@ -422,6 +423,13 @@
           "default": "",
           "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH.",
           "order": 3
+        },
+        "testMyCode.cliPath": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Path to a tmc-langs-cli of the version this extension pins, installed by an administrator or by you, used instead of downloading one. Its SHA-256 must match the release. Leave empty to download it.",
+          "order": 4
         },
         "testMyCode.experimental.coursesMoocFi": {
           "type": "boolean",

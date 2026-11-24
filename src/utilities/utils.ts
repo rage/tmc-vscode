@@ -9,11 +9,9 @@ import type { ExtensionContext } from "vscode"
 import type { SubmissionFeedbackQuestion } from "../../shared/langsSchema"
 import type { FeedbackQuestion } from "../../shared/lib"
 import { BaseError } from "../../shared/lib"
+import { EXTENSION_ID } from "../config/constants"
 import { ConnectionError } from "../errors"
 import { Logger } from "./logger"
-
-/** Budget for a whole download, from request to last byte. */
-const DEFAULT_TOTAL_TIMEOUT_MS = 10 * 60 * 1000
 
 /** Budget between two consecutive chunks. Matches tmc-langs' own HTTP timeout. */
 const DEFAULT_STALL_TIMEOUT_MS = 30 * 1000
@@ -23,8 +21,13 @@ export interface DownloadOptions {
   onProgress?: (downloadedPct: number) => void
   /** Aborts the download; the call then resolves to an `Err`. */
   signal?: AbortSignal
-  /** Defaults to ten minutes. */
+  /** Budget for the whole download. Unset by default: a slow link that keeps sending is fine. */
   totalTimeoutMs?: number
+  /**
+   * Continues a partial file at `filePath` with a Range request instead of starting over. A
+   * server that ignores the range sends the whole body, which then replaces the partial file.
+   */
+  resume?: boolean
   /** Defaults to thirty seconds. A server that sends headers and then goes silent trips this. */
   stallTimeoutMs?: number
 }
@@ -55,7 +58,7 @@ export function isSamePath(a: string, b: string, pathModule: path.PlatformPath =
 /**
  * Downloads `url` to `filePath`, overwriting any existing file.
  *
- * Never hangs: bounded by a total and a per-chunk budget and the caller's signal. A body
+ * Never hangs: bounded by a per-chunk budget, an optional total one and the caller's signal. A body
  * shorter than its declared `Content-Length`, or a failed write such as a full disk, is an
  * `Err`, so a truncated file is never returned as complete.
  *
@@ -75,14 +78,23 @@ export async function downloadFile(
   const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS
   // A `for await` over a silent body never yields, so the watchdog must abort the request.
   const stallController = new AbortController()
-  const signals = [
-    stallController.signal,
-    AbortSignal.timeout(options?.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS),
-  ]
+  const signals = [stallController.signal]
+  if (options?.totalTimeoutMs !== undefined) {
+    signals.push(AbortSignal.timeout(options.totalTimeoutMs))
+  }
   if (options?.signal) {
     signals.push(options.signal)
   }
   const signal = AbortSignal.any(signals)
+
+  let resumeFrom = 0
+  if (options?.resume) {
+    try {
+      resumeFrom = fs.statSync(filePath).size
+    } catch {
+      // No partial file: start from the beginning.
+    }
+  }
 
   let stallTimer: NodeJS.Timeout | undefined
   const restartStallTimer = (): void => {
@@ -98,9 +110,26 @@ export async function downloadFile(
       restartStallTimer()
       // The host's fetch, not a bundled client: VS Code patches it for proxies, and undici
       // needs a newer Node than the oldest supported VS Code's Electron.
-      response = await fetch(url, { method: "get", signal })
+      response = await fetch(url, {
+        method: "get",
+        signal,
+        ...(resumeFrom > 0 ? { headers: { Range: `bytes=${resumeFrom}-` } } : {}),
+      })
     } catch (error) {
       return new Err(new ConnectionError(signal.aborted ? signal.reason : error))
+    }
+
+    if (resumeFrom > 0 && response.status === 416) {
+      // The partial file is not a prefix of what the server has; the next attempt starts over.
+      fs.rmSync(filePath, { force: true })
+      return new Err(new Error(`${url} refused to resume the download at byte ${resumeFrom}`))
+    }
+    const isResumed =
+      resumeFrom > 0 &&
+      response.status === 206 &&
+      response.headers.get("content-range")?.startsWith(`bytes ${resumeFrom}-`) === true
+    if (!isResumed) {
+      resumeFrom = 0
     }
 
     if (!response.ok) {
@@ -118,11 +147,11 @@ export async function downloadFile(
     if (!body) {
       return new Err(new Error("Unexpected null response body"))
     }
-    let downloaded = 0
+    let downloaded = resumeFrom
     // `fetch` decodes a compressed body, and `Content-Length` counts the bytes before that.
     const isEncoded = (response.headers.get("content-encoding") ?? "identity") !== "identity"
     const sizeString = response.headers.get("content-length")
-    const size = sizeString && !isEncoded ? Math.trunc(Number(sizeString)) : 0
+    const size = sizeString && !isEncoded ? resumeFrom + Math.trunc(Number(sizeString)) : 0
     try {
       restartStallTimer()
       // `pipeline` fails on a write error such as a full disk; a loop awaiting "drain" would hang.
@@ -138,7 +167,7 @@ export async function downloadFile(
             yield chunk
           }
         },
-        fs.createWriteStream(filePath),
+        fs.createWriteStream(filePath, { flags: isResumed ? "a" : "w" }),
       )
     } catch (error) {
       if (signal.aborted) {
@@ -215,6 +244,24 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
   return feedbackQuestions
 }
 
-export function cliFolder(context: ExtensionContext): string {
+/** Where earlier versions kept the CLI. */
+export function legacyCliFolder(context: ExtensionContext): string {
   return path.join(context.globalStorageUri.fsPath, "cli")
+}
+
+/**
+ * Where the CLI is installed. On Windows `globalStorage` is in the roaming profile, which would
+ * copy the 50 MB binary at every logon and logoff, so it goes to the local one instead.
+ */
+export function cliFolder(context: ExtensionContext): string {
+  const { APPDATA, LOCALAPPDATA } = process.env
+  if (
+    process.platform === "win32" &&
+    APPDATA &&
+    LOCALAPPDATA &&
+    isPathInside(APPDATA, context.globalStorageUri.fsPath, path.win32)
+  ) {
+    return path.join(LOCALAPPDATA, EXTENSION_ID, "cli")
+  }
+  return legacyCliFolder(context)
 }
