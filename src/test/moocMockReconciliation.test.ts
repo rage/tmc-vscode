@@ -3,6 +3,8 @@ import type { Server } from "http"
 import path from "path"
 
 import {
+  EXAM_ID,
+  examExercise,
   failingExercise,
   notEnrolledExerciseId,
   passingExercise,
@@ -19,6 +21,8 @@ import {
   ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   MoocCourse,
+  MoocCurrentUser,
+  MoocExam,
   CourseProgress,
   TmcExerciseSlide,
   TmcExerciseTask,
@@ -70,6 +74,9 @@ export const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
 const toCliStdoutGradingStatus = (wire: unknown): unknown => {
   if (wire === "NoGradingYet") {
     return { status: "no-grading-yet" }
+  }
+  if (wire === "GradingHidden") {
+    return { status: "grading-hidden" }
   }
   const { feedback_json, ...grading } = (wire as { Grading: Record<string, unknown> }).Grading
   const run = feedback_json as {
@@ -198,6 +205,68 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     for (const course of body) {
       expectValid(MoocCourse, course, "course")
     }
+  })
+
+  test("a course with every optional fact set validates as MoocCourse", async function () {
+    mock.setCourseFields(pythonCourse.id, {
+      closed_at: "2030-01-01T00:00:00.000Z",
+      successor_course_id: "22222222-2222-4222-8222-222222222222",
+      moved_to_course_id: "33333333-3333-4333-8333-333333333333",
+      is_staff: true,
+    })
+    const course = MoocCourse.parse(await (await fetch(api(`/courses/${pythonCourse.id}`))).json())
+    expect(course).toMatchObject({
+      url: expect.stringContaining(pythonCourse.slug) as unknown,
+      language_code: "en-US",
+      closed_at: "2030-01-01T00:00:00.000Z",
+      successor_course_id: "22222222-2222-4222-8222-222222222222",
+      moved_to_course_id: "33333333-3333-4333-8333-333333333333",
+      is_enrolled: true,
+      is_staff: true,
+    })
+    expect(course.language_group_id).not.toBeNull()
+  })
+
+  test("GET /me validates as MoocCurrentUser with a name and email", async function () {
+    const user = MoocCurrentUser.parse(await (await fetch(api("/me"))).json())
+    expect(user.name).toBe("Mock Student")
+    expect(user.email).toBe("mock.student@example.com")
+  })
+
+  test("exams, their slides and their hidden gradings validate against the CLI schemas", async function () {
+    const exams = (await (await fetch(api("/exams"))).json()) as unknown[]
+    expect(exams.map((exam) => MoocExam.parse(exam).id)).toEqual([EXAM_ID])
+    const slides = (await (
+      await fetch(api(`/exams/${EXAM_ID}/exercises`))
+    ).json()) as ExerciseSlide[]
+    for (const slide of slides) {
+      expectValid(TmcExerciseSlide, toCliStdoutSlide(slide), "exam exercise slide")
+    }
+    expect(TmcExerciseSlide.parse(toCliStdoutSlide(slides[0]!)).exam_id).toBe(EXAM_ID)
+    const { taskSubmissionId } = await submit(examExercise)
+    const hidden = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
+    expect(ExerciseTaskSubmissionStatus.parse(toCliStdoutGradingStatus(hidden))).toEqual({
+      status: "grading-hidden",
+    })
+  })
+
+  test("progress carrying a review stage and a teacher review validates as CourseProgress", async function () {
+    mock.setExerciseReviewProgress(passingExercise.slide.exercise_id, {
+      reviewing_stage: "reviewed_and_locked",
+      teacher_review: {
+        decision: "custom_points",
+        score_given: 0.5,
+        created_at: "2030-01-01T00:00:00.000Z",
+        justification: null,
+      },
+    })
+    const progress = CourseProgress.parse(
+      await (await fetch(api(`/courses/${pythonCourse.id}/progress`))).json(),
+    )
+    expect(progress.exercises[0]).toMatchObject({
+      reviewing_stage: "reviewed_and_locked",
+      teacher_review: { decision: "custom_points", score_given: 0.5 },
+    })
   })
 
   test("GET /courses/{id} payload validates as MoocCourse", async function () {

@@ -70,7 +70,9 @@ export interface ExerciseTask {
 export interface ExerciseSlide {
   slide_id: string
   exercise_id: string
+  /** The nil UUID for an exam exercise, which `exam_id` names instead. */
   course_id: string
+  exam_id?: string | null
   exercise_name: string
   exercise_order_number: number
   deadline: string | null
@@ -92,7 +94,15 @@ export interface Course {
   organization_name: string
   /** Absent, as from a host that predates it, means `not_set`. */
   ai_policy?: "not_set" | "no_ai" | "planning_only" | "limited" | "full_use" | "required"
+  language_code?: string | null
+  language_group_id?: string | null
+  moved_to_course_id?: string | null
+  closed_at?: string | null
+  successor_course_id?: string | null
 }
+
+/** The nil UUID the host reports as the course of an exam exercise. */
+export const NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 /**
  * Deterministic grading result the mock returns for an exercise's submissions
@@ -129,6 +139,8 @@ export const pythonCourse: Course = {
   name: "MOOC Python Course",
   description: "A test python course served by the local mooc mock backend.",
   organization_name: ORG,
+  language_code: "en-US",
+  language_group_id: "91000000-0000-4000-8000-000000000000",
 }
 
 export const extraCourse: Course = {
@@ -137,6 +149,8 @@ export const extraCourse: Course = {
   name: "MOOC Extra Course",
   description: null,
   organization_name: ORG,
+  language_code: "en-US",
+  language_group_id: "92000000-0000-4000-8000-000000000000",
   ai_policy: "full_use",
 }
 
@@ -148,6 +162,8 @@ export const variantsCourse: Course = {
   name: "MOOC Variants Course",
   description: null,
   organization_name: ORG,
+  language_code: "en-US",
+  language_group_id: "93000000-0000-4000-8000-000000000000",
 }
 
 // A course the student is NOT enrolled on; every submit gate starts with enrollment.
@@ -157,11 +173,28 @@ export const notEnrolledCourse: Course = {
   name: "MOOC Unenrolled Course",
   description: null,
   organization_name: ORG,
+  language_code: "en-US",
+  language_group_id: "94000000-0000-4000-8000-000000000000",
+}
+
+// Enrolled on nothing by default (see its entry in `courses`), so listings the other fixtures
+// define stay as they are; a test enrolls the student to use it. Its exercises' names collide
+// once case and whitespace are ignored, or look like paths.
+export const namesCourse: Course = {
+  id: "55555555-5555-4555-8555-555555555555",
+  slug: "mooc-names-course",
+  name: "MOOC Names Course",
+  description: null,
+  organization_name: ORG,
+  language_code: "fi-FI",
+  language_group_id: "95000000-0000-4000-8000-000000000000",
 }
 
 // Fixed, not computed from now, so a request gets the same answer in every run and timezone.
 const PAST_DEADLINE = "2000-01-01T00:00:00.000Z"
 const FUTURE_DEADLINE = "2100-01-01T00:00:00.000Z"
+
+export const EXAM_ID = "ab0ab0ab-0000-4000-8000-0000000000e0"
 
 /** One task of a fixture slide; its position in the array is its order number. */
 interface TaskFixture {
@@ -176,7 +209,9 @@ const makeExercise = (params: {
   baseUrl: string
   exerciseId: string
   slideId: string
-  course: Course
+  /** Absent for an exam exercise, which has no course or page. */
+  course?: Course
+  examId?: string
   tasks: TaskFixture[]
   name: string
   order: number
@@ -207,11 +242,14 @@ const makeExercise = (params: {
     slide: {
       slide_id: params.slideId,
       exercise_id: params.exerciseId,
-      course_id: params.course.id,
+      course_id: params.course?.id ?? NIL_UUID,
+      exam_id: params.examId ?? null,
       exercise_name: params.name,
       exercise_order_number: params.order,
       deadline: params.deadline ?? null,
-      page_url: `${params.baseUrl}/org/${ORG_SLUG}/courses/${params.course.slug}/${params.archiveSlug}`,
+      page_url: params.course
+        ? `${params.baseUrl}/org/${ORG_SLUG}/courses/${params.course.slug}/${params.archiveSlug}`
+        : null,
       chapter: null,
       tasks: params.tasks.map((task, orderNumber) => ({
         task_id: task.taskId,
@@ -239,8 +277,22 @@ export const nonexistentExerciseId = "ffffffff-0000-4000-8000-000000000000"
 // The exercise of {@link notEnrolledCourse}; the backend answers 422 `not_enrolled`, not 404.
 export const notEnrolledExerciseId = "eeeeeeee-0000-4000-8000-000000000000"
 
+/**
+ * An exam the student has started. It is answerable until `answerableUntil` unless a test ends it;
+ * its exercises belong to no course.
+ */
+export interface MoocExamFixture {
+  id: string
+  name: string
+  startedAt: string
+  answerableUntil: string
+  exercises: MoocExerciseFixture[]
+}
+
 export interface CourseWithExercises {
   course: Course
+  /** Whether the student teaches or assists on the course. */
+  staff: boolean
   /** Whether the mock's single student is enrolled; enrollment gates every other rule. */
   enrolled: boolean
   exercises: MoocExerciseFixture[]
@@ -248,6 +300,7 @@ export interface CourseWithExercises {
 
 export interface MoocFixtures {
   courses: CourseWithExercises[]
+  exams: MoocExamFixture[]
   /** Flat lookup by exercise id across all courses. */
   exerciseById: Map<string, MoocExerciseFixture>
   /** Archive lookup by the slug used in the stub_download_url path. */
@@ -263,6 +316,9 @@ export interface MoocFixtures {
   notClientCapableExercise: MoocExerciseFixture
   spacedNameExercise: MoocExerciseFixture
   notEnrolledExercise: MoocExerciseFixture
+  examExercise: MoocExerciseFixture
+  collidingNameExercises: MoocExerciseFixture[]
+  pathLikeNameExercise: MoocExerciseFixture
 }
 
 /**
@@ -451,11 +507,71 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     checksum: "mooc-checksum-unenrolled",
   })
 
+  const namesExercise = (
+    suffix: string,
+    name: string,
+    order: number,
+    archiveSlug: string,
+  ): MoocExerciseFixture =>
+    makeExercise({
+      baseUrl,
+      exerciseId: `${suffix.repeat(8)}-0000-4000-8000-000000000001`,
+      slideId: `${suffix.repeat(8)}-0000-4000-8000-000000000101`,
+      course: namesCourse,
+      tasks: [{ taskId: `${suffix.repeat(8)}-0000-4000-8000-000000000201`, type: "editor" }],
+      name,
+      order,
+      archiveSlug,
+      sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+      studentFiles: ["src/passing_exercise.py"],
+      checksum: `mooc-checksum-${archiveSlug}`,
+    })
+  const collidingNameExercises = [
+    namesExercise("5", "Hello World", 0, "names-hello-world"),
+    namesExercise("6", "hello  world", 1, "names-hello-world-spaced"),
+  ]
+  const pathLikeNameExercise = namesExercise(
+    "7",
+    '../Week 1/Sums: "a" <b> & c\\d?*.',
+    2,
+    "names-path-like",
+  )
+
+  // Answerable and in no course, so its submissions' gradings stay hidden.
+  const examExercise = makeExercise({
+    baseUrl,
+    exerciseId: "ab0ab0ab-0000-4000-8000-000000000001",
+    slideId: "ab0ab0ab-0000-4000-8000-000000000101",
+    examId: EXAM_ID,
+    tasks: [{ taskId: "ab0ab0ab-0000-4000-8000-000000000201", type: "editor" }],
+    name: "exam_exercise",
+    order: 0,
+    archiveSlug: "exam-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-exam",
+  })
+  const exams: MoocExamFixture[] = [
+    {
+      id: EXAM_ID,
+      name: "Mock exam",
+      startedAt: PAST_DEADLINE,
+      answerableUntil: FUTURE_DEADLINE,
+      exercises: [examExercise],
+    },
+  ]
+
   const courses: CourseWithExercises[] = [
-    { course: pythonCourse, enrolled: true, exercises: [passingExercise] },
-    { course: extraCourse, enrolled: true, exercises: [failingExercise, pendingManualExercise] },
+    { course: pythonCourse, staff: false, enrolled: true, exercises: [passingExercise] },
+    {
+      course: extraCourse,
+      staff: false,
+      enrolled: true,
+      exercises: [failingExercise, pendingManualExercise],
+    },
     {
       course: variantsCourse,
+      staff: false,
       enrolled: true,
       exercises: [
         browserExercise,
@@ -467,7 +583,13 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
         spacedNameExercise,
       ],
     },
-    { course: notEnrolledCourse, enrolled: false, exercises: [notEnrolledExercise] },
+    { course: notEnrolledCourse, staff: false, enrolled: false, exercises: [notEnrolledExercise] },
+    {
+      course: namesCourse,
+      staff: false,
+      enrolled: false,
+      exercises: [...collidingNameExercises, pathLikeNameExercise],
+    },
   ]
 
   const exerciseById = new Map<string, MoocExerciseFixture>()
@@ -478,9 +600,14 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
       exerciseByArchiveSlug.set(exercise.archiveSlug, exercise)
     }
   }
+  for (const exercise of exams.flatMap((exam) => exam.exercises)) {
+    exerciseById.set(exercise.slide.exercise_id, exercise)
+    exerciseByArchiveSlug.set(exercise.archiveSlug, exercise)
+  }
 
   return {
     courses,
+    exams,
     exerciseById,
     exerciseByArchiveSlug,
     passingExercise,
@@ -494,12 +621,16 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     notClientCapableExercise,
     spacedNameExercise,
     notEnrolledExercise,
+    examExercise,
+    collidingNameExercises,
+    pathLikeNameExercise,
   }
 }
 
 // The default-address fixture set, for readers that only need ids and names.
 export const {
   courses,
+  exams,
   exerciseById,
   exerciseByArchiveSlug,
   passingExercise,
@@ -513,7 +644,13 @@ export const {
   notClientCapableExercise,
   spacedNameExercise,
   notEnrolledExercise,
+  examExercise,
+  collidingNameExercises,
+  pathLikeNameExercise,
 } = createMoocFixtures(DEFAULT_MOOC_MOCK_BASE_URL)
 
 /** The account a fresh or reset mock's tokens act for. */
 export const MOCK_DEFAULT_USER_ID = "5c1b6f0e-6b52-4d0a-9a43-2f0c3e6a7d11"
+
+export const MOCK_USER_NAME = "Mock Student"
+export const MOCK_USER_EMAIL = "mock.student@example.com"

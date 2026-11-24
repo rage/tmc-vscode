@@ -13,18 +13,25 @@ import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import type { MoocExerciseFixture } from "./fixtures"
 import {
   browserExercise,
+  collidingNameExercises,
+  EXAM_ID,
+  examExercise,
   extraCourse,
   failingExercise,
   futureDeadlineExercise,
   limitedTriesExercise,
   MOCK_DEFAULT_USER_ID,
+  MOCK_USER_EMAIL,
+  MOCK_USER_NAME,
   mixedTaskExercise,
+  namesCourse,
   nonexistentExerciseId,
   notClientCapableExercise,
   notEnrolledCourse,
   notEnrolledExerciseId,
   passingExercise,
   pastDeadlineExercise,
+  pathLikeNameExercise,
   pendingManualExercise,
   pythonCourse,
   TMC_ARCHIVE_MIME,
@@ -123,16 +130,16 @@ describe("mooc mock conformance", () => {
     assert.equal(mock.setAiPolicy("no-such-course", "no_ai"), false)
   })
 
-  test("a course closed to students serves itself and its progress, not its material", async () => {
+  test("a course closed to students refuses itself, its progress and its material", async () => {
     const exerciseId = passingExercise.slide.exercise_id
     try {
       assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
       const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
-      assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
-      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 200)
+      assert.equal(await status(`/courses/${pythonCourse.id}`), 403)
+      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 403)
       const exercises = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
       assert.equal(exercises.status, 403)
-      assert.equal(((await exercises.json()) as { message_key: string }).message_key, "forbidden")
+      assert.equal(((await exercises.json()) as { message_key: string }).message_key, "no_access")
       assert.equal(await status(`/exercises/${exerciseId}`), 403)
     } finally {
       mock.reset()
@@ -195,7 +202,11 @@ describe("mooc mock conformance", () => {
 
   test("GET me names the account the token acts for, which a switch changes", async () => {
     const currentUser = async (): Promise<unknown> => (await authFetch(api("/me"))).json()
-    assert.deepEqual(await currentUser(), { id: MOCK_DEFAULT_USER_ID })
+    assert.deepEqual(await currentUser(), {
+      id: MOCK_DEFAULT_USER_ID,
+      name: MOCK_USER_NAME,
+      email: MOCK_USER_EMAIL,
+    })
 
     const otherUserId = "0d6a3a7e-1f0b-4c8e-8f3d-6b2a9c4e5f70"
     const switched = await fetch(`${base}/mooc-mock/set-current-user`, {
@@ -204,10 +215,10 @@ describe("mooc mock conformance", () => {
       body: JSON.stringify({ id: otherUserId }),
     })
     assert.equal(switched.status, 204)
-    assert.deepEqual(await currentUser(), { id: otherUserId })
+    assert.deepEqual(await currentUser(), { id: otherUserId, email: `${otherUserId}@example.com` })
 
     mock.reset()
-    assert.deepEqual(await currentUser(), { id: MOCK_DEFAULT_USER_ID })
+    assert.equal(((await currentUser()) as { id: string }).id, MOCK_DEFAULT_USER_ID)
   })
 
   test("GET courses/{id} returns a single course", async () => {
@@ -1515,17 +1526,17 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     assert.ok(seeded)
     await assertRefused(
       await authFetch(api(`/submissions/${seeded.taskSubmissionId}/grading`)),
-      "forbidden",
+      "no_access",
       "Cannot view another user's submission grading",
     )
     await assertRefused(
       await authFetch(api(`/submissions/${seeded.slideSubmissionId}/download`)),
-      "forbidden",
+      "no_access",
       "Cannot download another user's submission",
     )
     await assertRefused(
       await authFetch(api(`/submissions/${seeded.slideSubmissionId}/share`), { method: "POST" }),
-      "forbidden",
+      "no_access",
       "Cannot share another user's submission",
     )
   })
@@ -1817,7 +1828,7 @@ describe("mooc mock error envelopes", () => {
     },
     {
       name: "a bearer without the exercise-services scope",
-      messageKey: "forbidden",
+      messageKey: "insufficient_scope",
       run: async () =>
         read(
           await fetch(api("/courses"), {
@@ -2007,7 +2018,7 @@ describe("mooc mock error envelopes", () => {
     },
     {
       name: "sharing another student's submission",
-      messageKey: "forbidden",
+      messageKey: "no_access",
       run: async () => {
         const seeded = mock.seedForeignSubmission(passingExercise.slide.exercise_id)
         assert.ok(seeded)
@@ -2227,5 +2238,238 @@ describe("mooc mock injected failures", () => {
     assert.equal((await failNext({ operationId: "getClientCourses", status: 418 })).status, 400)
     assert.equal((await failNext({ status: 500 })).status, 400)
     assert.equal((await authFetch(clientApi(base, "/courses"))).status, 200)
+  })
+})
+
+describe("mooc mock exams, course facts and review progress", () => {
+  let server: Server
+  let base: string
+  let mock: MoocMockControls
+
+  before(async () => {
+    ;({ server, base, mock } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  beforeEach(() => {
+    mock.reset()
+  })
+
+  const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
+  const getJson = async <T>(p: string): Promise<T> => (await authFetch(api(p))).json() as Promise<T>
+  const post = (route: string, body: unknown): Promise<Response> =>
+    fetch(`${base}/mooc-mock/${route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    })
+
+  const submitTo = async (exercise: MoocExerciseFixture): Promise<Response> => {
+    const exerciseId = exercise.slide.exercise_id
+    const form = new FormData()
+    const fileId = randomUUID()
+    form.append(fileId, new Blob(["print('hi')"], { type: TMC_ARCHIVE_MIME }), "answer.tar.zst")
+    const uploaded = await authFetch(api(`/exercises/${exerciseId}/files`), {
+      method: "POST",
+      body: form,
+    })
+    if (uploaded.status !== 200) {
+      return uploaded
+    }
+    const { data_files } = (await uploaded.json()) as { data_files: { id: string }[] }
+    return authFetch(api(`/exercises/${exerciseId}/submit`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        answer_kind: "file",
+        data_files: data_files.map((file) => file.id),
+      }),
+    })
+  }
+
+  test("GET exams lists the started exam, and GET exams/{id}/exercises its exercise", async () => {
+    const exams = await getJson<{ id: string; name: string; answerable_until: string }[]>("/exams")
+    assert.deepEqual(
+      exams.map((exam) => exam.id),
+      [EXAM_ID],
+    )
+    const slides = await getJson<
+      { exercise_id: string; exam_id: string; course_id: string; deadline: string }[]
+    >(`/exams/${EXAM_ID}/exercises`)
+    assert.equal(slides.length, 1)
+    assert.equal(slides[0]!.exercise_id, examExercise.slide.exercise_id)
+    assert.equal(slides[0]!.exam_id, EXAM_ID)
+    assert.equal(slides[0]!.course_id, "00000000-0000-0000-0000-000000000000")
+    assert.equal(slides[0]!.deadline, exams[0]!.answerable_until)
+    assert.equal((await authFetch(api(`/exams/${nonexistentExerciseId}/exercises`))).status, 404)
+  })
+
+  test("an exam submission's grading stays hidden while the exam is answerable", async () => {
+    const submitted = await submitTo(examExercise)
+    assert.equal(submitted.status, 200)
+    const { task_submission_id } = (await submitted.json()) as { task_submission_id: string }
+    for (let poll = 0; poll < 3; poll++) {
+      assert.equal(await getJson(`/submissions/${task_submission_id}/grading`), "GradingHidden")
+    }
+    const [listed] = await getJson<{ score_given: unknown; grading_progress: unknown }[]>(
+      `/exercises/${examExercise.slide.exercise_id}/submissions`,
+    )
+    assert.deepEqual([listed!.score_given, listed!.grading_progress], [null, null])
+
+    mock.setExamEnded(EXAM_ID, true)
+    assert.deepEqual(await getJson("/exams"), [])
+    assert.equal((await authFetch(api(`/exams/${EXAM_ID}/exercises`))).status, 404)
+    assert.equal((await submitTo(examExercise)).status, 404)
+    const grading = await getJson<{ Grading: Record<string, unknown> }>(
+      `/submissions/${task_submission_id}/grading`,
+    )
+    assert.equal(grading.Grading.grading_progress, "FullyGraded")
+    assert.equal("exercise_progress" in grading.Grading, false)
+  })
+
+  test("an exam exercise takes no snapshot and shows no model solution", async () => {
+    const exerciseId = examExercise.slide.exercise_id
+    const snapshot = await authFetch(api(`/exercises/${exerciseId}/snapshots`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        purpose: "backup",
+        exercise_slide_id: examExercise.slide.slide_id,
+        exercise_task_id: examExercise.slide.tasks[0]!.task_id,
+        data_files: [randomUUID()],
+      }),
+    })
+    assert.equal(snapshot.status, 404)
+    const slide = await getJson<{ tasks: { model_solution_spec: unknown }[] }>(
+      `/exercises/${exerciseId}`,
+    )
+    assert.equal(slide.tasks[0]!.model_solution_spec, null)
+  })
+
+  test("a course lists its url, language, enrollment and staff facts", async () => {
+    const [course] = (await getJson<Record<string, unknown>[]>("/courses")).filter(
+      (c) => c.id === pythonCourse.id,
+    )
+    assert.equal(course!.url, `${base}/org/test-organization/courses/${pythonCourse.slug}`)
+    assert.equal(course!.language_code, "en-US")
+    assert.equal(typeof course!.language_group_id, "string")
+    assert.equal(course!.is_enrolled, true)
+    assert.equal(course!.is_staff, false)
+    assert.equal("moved_to_course_id" in course!, false)
+
+    assert.equal(
+      mock.setCourseFields(pythonCourse.id, {
+        closed_at: "2030-01-01T00:00:00.000Z",
+        successor_course_id: extraCourse.id,
+        moved_to_course_id: variantsCourse.id,
+        is_staff: true,
+      }),
+      true,
+    )
+    mock.setEnrolled(pythonCourse.id, false)
+    const changed = await getJson<Record<string, unknown>>(`/courses/${pythonCourse.id}`)
+    assert.equal(changed.closed_at, "2030-01-01T00:00:00.000Z")
+    assert.equal(changed.successor_course_id, extraCourse.id)
+    assert.equal(changed.moved_to_course_id, variantsCourse.id)
+    assert.equal(changed.is_enrolled, false)
+    assert.equal(changed.is_staff, true)
+    const listed = await getJson<{ id: string }[]>("/courses")
+    assert.ok(
+      listed.some((c) => c.id === pythonCourse.id),
+      "a staff course is listed unenrolled",
+    )
+    assert.equal(mock.setCourseFields("no-such-course", {}), false)
+  })
+
+  test("staff and a course whose settings reveal solutions see the model solution unsolved", async () => {
+    const exerciseId = failingExercise.slide.exercise_id
+    const solutionOf = async (): Promise<unknown> =>
+      (await getJson<{ tasks: { model_solution_spec: unknown }[] }>(`/exercises/${exerciseId}`))
+        .tasks[0]!.model_solution_spec
+    assert.equal(await solutionOf(), null)
+    mock.setModelSolutionRevealed(extraCourse.id, true)
+    assert.notEqual(await solutionOf(), null)
+    mock.setModelSolutionRevealed(extraCourse.id, false)
+    assert.equal(await solutionOf(), null)
+    mock.setCourseFields(extraCourse.id, { is_staff: true })
+    assert.notEqual(await solutionOf(), null)
+  })
+
+  test("the review process shows in a graded exercise's progress", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const teacherReview = {
+      decision: "custom_points",
+      score_given: 0.5,
+      created_at: "2030-01-01T00:00:00.000Z",
+      justification: "Partly right",
+    }
+    assert.equal(
+      mock.setExerciseReviewProgress(exerciseId, {
+        reviewing_stage: "waiting_for_teacher",
+        teacher_review: teacherReview,
+      }),
+      true,
+    )
+    const { exercises } = await getJson<{ exercises: Record<string, unknown>[] }>(
+      `/courses/${pythonCourse.id}/progress`,
+    )
+    assert.equal(exercises[0]!.reviewing_stage, "waiting_for_teacher")
+    assert.deepEqual(exercises[0]!.teacher_review, teacherReview)
+    mock.setExerciseReviewProgress(exerciseId, undefined)
+    const cleared = await getJson<{ exercises: Record<string, unknown>[] }>(
+      `/courses/${pythonCourse.id}/progress`,
+    )
+    assert.equal("reviewing_stage" in cleared.exercises[0]!, false)
+    assert.equal(mock.setExerciseReviewProgress(nonexistentExerciseId, undefined), false)
+  })
+
+  test("the names course serves colliding and path-like exercise names once enrolled", async () => {
+    assert.equal(
+      (await getJson<{ id: string }[]>("/courses")).some((c) => c.id === namesCourse.id),
+      false,
+    )
+    mock.setEnrolled(namesCourse.id, true)
+    const slides = await getJson<{ exercise_name: string }[]>(
+      `/courses/${namesCourse.id}/exercises`,
+    )
+    const names = slides.map((slide) => slide.exercise_name)
+    assert.deepEqual(
+      names.slice(0, 2),
+      collidingNameExercises.map((e) => e.slide.exercise_name),
+    )
+    assert.equal(names[2], pathLikeNameExercise.slide.exercise_name)
+    const normalized = names.slice(0, 2).map((name) => name.toLowerCase().replaceAll(/\s+/g, " "))
+    assert.equal(normalized[0], normalized[1])
+  })
+
+  test("the control routes drive the same state", async () => {
+    assert.equal((await post("set-exam-ended", { exam_id: EXAM_ID, ended: true })).status, 204)
+    assert.deepEqual(await getJson("/exams"), [])
+    assert.equal((await post("set-exam-ended", { exam_id: "x", ended: true })).status, 404)
+    assert.equal(
+      (await post("set-course-fields", { course_id: pythonCourse.id, fields: { is_staff: true } }))
+        .status,
+      204,
+    )
+    assert.equal(
+      (await post("set-model-solution-revealed", { course_id: pythonCourse.id, revealed: true }))
+        .status,
+      204,
+    )
+    assert.equal(
+      (
+        await post("set-exercise-review-progress", {
+          exercise_id: passingExercise.slide.exercise_id,
+          progress: { reviewing_stage: "locked" },
+        })
+      ).status,
+      204,
+    )
+    assert.equal((await post("set-exam-ended", { exam_id: 1 })).status, 400)
   })
 })

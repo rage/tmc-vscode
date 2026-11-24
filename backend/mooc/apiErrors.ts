@@ -41,6 +41,8 @@ export const API_ERRORS = {
   exercise_locked: { type: "forbidden", status: 403 },
   authentication_required_for_exam_exercise: { type: "unauthorized", status: 401 },
   forbidden: { type: "forbidden", status: 403 },
+  no_access: { type: "forbidden", status: 403 },
+  insufficient_scope: { type: "forbidden", status: 403 },
   rate_limited: { type: "rate_limit", status: 429 },
   invalid_course_code: { type: "sisu_error", status: 400 },
   generic_sisu_error: { type: "sisu_error", status: 502 },

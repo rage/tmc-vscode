@@ -443,7 +443,7 @@ describe("mooc resource-endpoint bearer auth mode", () => {
       assert.equal(res.status, 403)
       const body = (await res.json()) as Record<string, unknown>
       assert.equal(body.type, "forbidden")
-      assert.equal(body.message_key, "forbidden")
+      assert.equal(body.message_key, "insufficient_scope")
     })
 
     test("seeded valid scoped token -> 200", async () => {
