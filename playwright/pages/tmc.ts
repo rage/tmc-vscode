@@ -97,7 +97,7 @@ export class TmcPage {
    * Scoped to the toast list because VS Code also mirrors each notification into an
    * off-screen `.monaco-alert` aria-live node, which would match twice.
    */
-  public notificationToast(text: string): Locator {
+  public notificationToast(text: string | RegExp): Locator {
     return this.page.locator(".notifications-toasts").getByText(text)
   }
 
