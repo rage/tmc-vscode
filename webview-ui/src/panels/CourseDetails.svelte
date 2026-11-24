@@ -276,6 +276,25 @@
           title: "Could not reach the server",
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
+      view.successor !== undefined && {
+        key: "successor",
+        tone: "info",
+        title: "A new version of this course is available",
+        detail: view.endedNote ?? "The course continues in a new version.",
+        actions: [
+          {
+            label: "Add the New Version",
+            onclick: () => runCourseAction("addSuccessorCourse"),
+          },
+        ],
+      },
+      view.successor === undefined &&
+        view.endedNote !== undefined && {
+          key: "ended",
+          tone: "info",
+          title: "This course has ended",
+          detail: view.endedNote,
+        },
       view.accessLoss === "forbidden" && {
         key: "accessLoss",
         tone: "warning",
@@ -482,7 +501,10 @@
     </PanelHeader>
 
     {#if view.description}
-      <p class="description">{view.description}</p>
+      <p class="description" lang={view.languageCode}>{view.description}</p>
+    {/if}
+    {#if view.isStaff}
+      <p class="muted">You teach or assist on this course.</p>
     {/if}
     <div class="summary">
       {#if view.availablePoints > 0}

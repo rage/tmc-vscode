@@ -65,6 +65,14 @@ export const CourseHomeExerciseSchema = z.object({
   materialUrl: z.string().optional(),
   /** The page that shows the exercise's model solution, once its backend shows one. */
   solutionUrl: z.string().optional(),
+  /** The exercise's instructions, one paragraph per entry. */
+  instructions: z.array(z.string()).optional(),
+  /** Where the answer is in a peer, self or teacher review, as a sentence. */
+  reviewNote: z.string().optional(),
+  /** A teacher's review of the answer, as a sentence, and the teacher's own words. */
+  teacherReview: z
+    .object({ sentence: z.string(), justification: z.string().nullable() })
+    .optional(),
 })
 
 export type CourseHomeExercise = z.infer<typeof CourseHomeExerciseSchema>
@@ -90,6 +98,14 @@ export const CourseHomeViewSchema = z.object({
   title: z.string(),
   /** The tmc organization slug or the mooc organization name. */
   organization: z.string(),
+  /** The language of the course's own texts, such as "fi-FI"; absent when unknown. */
+  languageCode: z.string().optional(),
+  /** When the course ended, as a sentence; absent while it runs. */
+  endedNote: z.string().optional(),
+  /** The course continues in another one the student can add. */
+  successor: z.object({ courseId: z.string() }).optional(),
+  /** The student teaches or assists on the course; absent means no. */
+  isStaff: z.boolean().optional(),
   description: z.string().nullable(),
   materialUrl: z.string().nullable(),
   awardedPoints: z.number(),
@@ -166,6 +182,7 @@ export const CourseHomeActionSchema = z.enum([
   "revealInCoursesView",
   "findCourseOnline",
   "removeCourse",
+  "addSuccessorCourse",
 ])
 
 export type CourseHomeAction = z.infer<typeof CourseHomeActionSchema>

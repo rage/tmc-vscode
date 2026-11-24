@@ -2,7 +2,12 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { CourseHomeView, DeadlineText } from "../../shared/lib"
+import type {
+  CourseHomeExercise,
+  CourseHomeView,
+  DeadlineText,
+  SharedMoocCourseExercise,
+} from "../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -22,6 +27,7 @@ import {
   formatDateTime,
   formatDeadlineBriefly,
   formatNearRelativeTime,
+  parseDate,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
 import { lastExerciseReached } from "./lastExerciseReached"
@@ -122,6 +128,7 @@ export function buildCourseHomeView(
     backend: course.kind,
     title: course.data.title,
     organization: course.data.organization,
+    ...courseRunFields(course, locale),
     description: course.data.description || null,
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
@@ -250,8 +257,74 @@ export function buildCourseHomeView(
           isUpdateable: ex.isUpdateable,
           ...(materialUrl ? { materialUrl } : {}),
           ...(solutionUrl ? { solutionUrl } : {}),
+          ...reviewFields(ex.mooc, locale),
+          ...(ex.mooc?.instructions ? { instructions: ex.mooc.instructions } : {}),
         }
       }),
     })),
   })
+}
+
+/** What a mooc course's language, run and the student's role add to its course home. */
+function courseRunFields(
+  course: LocalCourseData,
+  locale: string,
+): Pick<CourseHomeView, "languageCode" | "endedNote" | "successor" | "isStaff"> {
+  if (course.kind !== "mooc") {
+    return {}
+  }
+  const { languageCode, closedAt, successorCourseId, isStaff } = course.data
+  const endedAt = closedAt ? parseDate(closedAt) : null
+  const hasEnded = endedAt !== null && endedAt.getTime() <= Date.now()
+  return {
+    ...(languageCode ? { languageCode } : {}),
+    ...(hasEnded ? { endedNote: `This course ended on ${formatDateTime(endedAt, locale)}.` } : {}),
+    ...(successorCourseId ? { successor: { courseId: successorCourseId } } : {}),
+    ...(isStaff ? { isStaff: true } : {}),
+  }
+}
+
+const REVIEWING_STAGE_NOTES: Record<string, string> = {
+  peer_review: "Give peer reviews on the course page to finish this exercise.",
+  self_review: "Review your own answer on the course page to finish this exercise.",
+  waiting_for_peer_reviews: "Your answer is waiting for other students to review it.",
+  waiting_for_teacher: "Your answer is waiting for a teacher to review it.",
+  reviewed_and_locked: "Your answer has been reviewed. The exercise takes no more answers.",
+  locked: "The exercise takes no more answers.",
+  not_answered_and_locked: "The exercise closed without an answer from you.",
+}
+
+const TEACHER_DECISIONS: Record<string, string> = {
+  zero_points: "no points",
+  custom_points: "points given by the teacher",
+  suspected_plagiarism: "suspected plagiarism",
+  unauthorized_ai_use: "unauthorized AI use",
+  bad_answer: "the answer was not accepted",
+  other: "other",
+  reject_and_reset: "rejected; answer again",
+}
+
+/** A mooc exercise's review stage and a teacher's review, as the course home words them. */
+function reviewFields(
+  exercise: SharedMoocCourseExercise | undefined,
+  locale: string,
+): Pick<CourseHomeExercise, "reviewNote" | "teacherReview"> {
+  const note = exercise?.reviewingStage ? REVIEWING_STAGE_NOTES[exercise.reviewingStage] : undefined
+  const review = exercise?.teacherReview
+  const reviewedAt = review ? parseDate(review.createdAt) : null
+  const decision = review ? TEACHER_DECISIONS[review.decision] : undefined
+  return {
+    ...(note ? { reviewNote: note } : {}),
+    ...(review
+      ? {
+          teacherReview: {
+            sentence:
+              `A teacher reviewed your answer${reviewedAt ? ` on ${formatDateTime(reviewedAt, locale)}` : ""}` +
+              `: ${review.scoreGiven} ${review.scoreGiven === 1 ? "point" : "points"}` +
+              `${decision ? `, ${decision}` : ""}.`,
+            justification: review.justification,
+          },
+        }
+      : {}),
+  }
 }

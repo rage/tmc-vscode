@@ -40,6 +40,7 @@
     submission: "Submission",
     paste: "Help request",
     backup: "Backup",
+    unrecognized: "Other",
   }
 
   onMount(() => void load())
@@ -106,6 +107,8 @@
         return { name: "comment-discussion" }
       case "backup":
         return { name: "archive" }
+      case "unrecognized":
+        return { name: "question" }
       case "submission":
         return entry.isPassed ? { name: "pass", tone: "passed" } : { name: "circle-large-outline" }
     }

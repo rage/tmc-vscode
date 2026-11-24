@@ -234,6 +234,27 @@
               <ActionMenu label="More Actions for {exercise.name}" {actions} />
             {/if}
           </span>
+          {#if exercise.reviewNote || exercise.teacherReview || exercise.instructions}
+            <div class="row-notes">
+              {#if exercise.reviewNote}
+                <p>{exercise.reviewNote}</p>
+              {/if}
+              {#if exercise.teacherReview}
+                <p>{exercise.teacherReview.sentence}</p>
+                {#if exercise.teacherReview.justification}
+                  <blockquote>{exercise.teacherReview.justification}</blockquote>
+                {/if}
+              {/if}
+              {#if exercise.instructions}
+                <details>
+                  <summary>Instructions</summary>
+                  {#each exercise.instructions as paragraph, i (i)}
+                    <p class="instructions">{paragraph}</p>
+                  {/each}
+                </details>
+              {/if}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -305,6 +326,17 @@
   }
   .row:hover {
     background: var(--tmc-list-hover);
+  }
+  .row-notes {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  .row-notes p,
+  .row-notes blockquote {
+    margin: var(--tmc-space-1) 0;
+  }
+  .instructions {
+    white-space: pre-wrap;
   }
   .icon {
     display: inline-flex;

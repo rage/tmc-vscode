@@ -464,6 +464,9 @@ export namespace LocalCourseData {
       lcd,
       (tmc) => tmc.materialUrl ?? undefined,
       (mooc) => {
+        if (mooc.url) {
+          return mooc.url
+        }
         const pageUrl = mooc.exercises.find((exercise) => exercise.pageUrl)?.pageUrl
         return pageUrl === undefined ? undefined : moocCourseUrlOf(pageUrl)
       },

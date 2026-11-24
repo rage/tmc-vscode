@@ -50,6 +50,8 @@ export interface ExerciseView {
   materialUrl: string | undefined
   /** The page that shows the exercise's model solution, once its backend shows one. */
   solutionUrl: string | undefined
+  /** The stored mooc exercise, for what only it carries; `undefined` otherwise. */
+  mooc: SharedMoocCourseExercise | undefined
 }
 
 /** A part of a course: a tmc course's exercises sharing a `partNN-` slug prefix, or a mooc chapter. */
@@ -172,6 +174,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       onDisk,
       materialUrl: ex.kind === "mooc" ? ex.data.pageUrl : undefined,
       solutionUrl: isRemoved ? undefined : modelSolutionUrl({ exercise: ex, course }),
+      mooc: ex.kind === "mooc" ? ex.data : undefined,
     }
     if (isRemoved) {
       removed.push(view)
@@ -248,6 +251,7 @@ function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
     onDisk,
     materialUrl: undefined,
     solutionUrl: undefined,
+    mooc: undefined,
   }
 }
 

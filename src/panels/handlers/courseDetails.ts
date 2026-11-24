@@ -9,7 +9,12 @@ import type {
   CourseHomeView,
   ExerciseIdentifier,
 } from "../../../shared/lib"
-import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../../../shared/lib"
+import {
+  assertUnreachable,
+  CourseIdentifier,
+  LocalCourseData,
+  makeMoocKind,
+} from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { installLanguageExtension, languageExtensionById } from "../../api/languageExtensions"
@@ -226,6 +231,27 @@ async function runCourseAction(
       // Asks first, which is the command layer's to do.
       await vscode.commands.executeCommand("tmc.removeCourse", courseId)
       return
+    case "addSuccessorCourse": {
+      const view = buildCourseHomeView(actionContext, courseId)
+      const successor = view.ok ? view.val.successor : undefined
+      if (!successor) {
+        return
+      }
+      const successorId = makeMoocKind({ moocCourseId: successor.courseId })
+      if (actionContext.startup.userData.getCourse(successorId).ok) {
+        await vscode.commands.executeCommand("tmc.courseDetails", successorId)
+        return
+      }
+      const added = await withOperation(
+        dialog,
+        { failure: "Failed to add the new version of the course.", shownIn },
+        () => actions.addNewCourse(actionContext, "", successorId),
+      )
+      if (added.ok) {
+        await vscode.commands.executeCommand("tmc.courseDetails", successorId)
+      }
+      return
+    }
     default:
       assertUnreachable(action)
   }

@@ -160,6 +160,50 @@ suite("the course home", () => {
     expect(screen.queryByText(/days/)).not.toBeInTheDocument()
   })
 
+  test("shows an exercise's review, teacher feedback and instructions under its row", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "part01",
+            name: "Part 1",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "01_hello", {
+                reviewNote: "Give peer reviews on the course page to finish this exercise.",
+                teacherReview: {
+                  sentence: "A teacher reviewed your answer.",
+                  justification: "Tidy.",
+                },
+                instructions: ["Print hello."],
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    expect(
+      screen.getByText("Give peer reviews on the course page to finish this exercise."),
+    ).toBeTruthy()
+    expect(screen.getByText("Tidy.")).toBeTruthy()
+    expect(screen.getByText("Instructions")).toBeTruthy()
+    expect(screen.getByText("Print hello.")).toBeTruthy()
+  })
+
+  test("offers to add the version that continues an ended course", async () => {
+    const panel = await renderHome(
+      courseHomeView({
+        endedNote: "This course ended on May 1, 2026.",
+        successor: { courseId: "next" },
+      }),
+    )
+
+    expect(screen.getByText("This course ended on May 1, 2026.")).toBeTruthy()
+    await fireEvent.click(screen.getByRole("button", { name: "Add the New Version" }))
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "addSuccessorCourse"))
+  })
+
   test("lists each part's exercises with their state, points and deadline", async () => {
     await renderHome(
       courseHomeView({

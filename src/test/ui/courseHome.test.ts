@@ -132,6 +132,62 @@ suite("buildCourseHomeView", function () {
     })
   })
 
+  test("shows a mooc exercise's instructions, review stage, teacher review and revealed solution", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          instructions: ["Print hello."],
+          reviewingStage: "peer_review",
+          teacherReview: {
+            decision: "custom_points",
+            justification: "Nice.",
+            scoreGiven: 1,
+            createdAt: "2026-05-01T10:00:00Z",
+          },
+          hasModelSolution: true,
+          pageUrl: "https://courses.mooc.fi/org/o/courses/c/chapter-1/page",
+        }),
+      ],
+    })
+
+    const [row] = buildCourseHomeView(contextFor(course), idOfMoocCourse(MOOC_COURSE_ID), NOW)
+      .unwrap()
+      .parts.flatMap((part) => part.exercises)
+
+    expect(row).toMatchObject({
+      instructions: ["Print hello."],
+      reviewNote: "Give peer reviews on the course page to finish this exercise.",
+      teacherReview: { justification: "Nice." },
+      solutionUrl: "https://courses.mooc.fi/org/o/courses/c/chapter-1/page",
+    })
+    expect(row?.teacherReview?.sentence).toContain("1 point, points given by the teacher.")
+  })
+
+  test("says when a mooc course has ended and offers the version that continues it", function () {
+    const course = moocLocalCourse({
+      closedAt: "2026-05-01T00:00:00Z",
+      successorCourseId: "next-course",
+      languageCode: "fi-FI",
+      isStaff: true,
+      url: "https://courses.mooc.fi/org/o/courses/c",
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view).toMatchObject({
+      successor: { courseId: "next-course" },
+      languageCode: "fi-FI",
+      isStaff: true,
+      materialUrl: "https://courses.mooc.fi/org/o/courses/c",
+    })
+    expect(view.endedNote).toMatch(/^This course ended on /)
+  })
+
   test("says a review can change points already given, without calling them held back", function () {
     const course = moocLocalCourse({
       exercises: [
