@@ -15,6 +15,11 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - **Get Started walkthrough.** A fresh install opens a walkthrough from logging in to your first submission, ticking off each step as you do it. "TestMyCode: Get Started" reopens it. Updating opens nothing over your work; the status bar says the extension was updated.
 - **Status bar.** One item shows whether you are logged in; another shows the open exercise and its points and lists its actions; a spinner shows work running out of sight.
 - New settings: `testMyCode.newExercises` chooses whether new exercises are downloaded at once, offered in a notification, or only listed in the course home; `testMyCode.javaHome` sets the JDK Java exercises run with.
+- **courses.mooc.fi exams.** A started exam is listed in Add Course; its exercises can be downloaded and submitted until its answers close, and their results show after that.
+- The course home shows an exercise's instructions, where its peer or self review stands, a teacher's review with its comments, and a link to the model solution once courses.mooc.fi shows it. A course that has ended says so, and offers the version that continues it.
+- Your MOOC.fi account's name and email show in the status bar, the Accounts menu and the account menu. An old tmc.mooc.fi login from an earlier version is shown as one.
+- Results of a submission link to its page on courses.mooc.fi, a submission can be cancelled while it uploads, and a grading still running when VS Code restarts can be waited for again.
+- After a major update, one notification says what moved and opens the changelog.
 - **courses.mooc.fi courses (experimental).** Turn on `testMyCode.experimental.coursesMoocFi` to add the courses you are enrolled in on courses.mooc.fi. It is off by default; a course already added keeps working when it is off.
 
 ### Changed
@@ -25,6 +30,21 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - Errors say what happened and what to do, with Show Details for the full error and recent log. A failure in a screen shows in that screen instead of in a notification.
 - Commands have new names, such as Open Course Home (was Go To Course Details), Delete Generated Files (was Clean Exercise), History (was Download Old Submission), Get Help (was Send Exercise To TMC Paste) and Move Exercises Folder... (was Change TMC Data Path).
 - TestMyCode does not run in virtual workspaces, such as a repository opened straight from GitHub.
+- TestMyCode now starts with every VS Code window instead of only in course workspaces, so that it can check for the TestMyCode tools, your login and new exercises; while you are logged in it checks for updates every 30 minutes.
+- Errors name their cause and next step: a slow or unreachable server, an untrusted certificate, a proxy, a file another program holds, a full disk, a missing Python or JDK, an exercise done only on the course page, or a course you no longer have access to. Error details carry the server's request id.
+- A login in another window, or logging out there, is noticed when this window comes to the front, and courses added in another window are kept. A stored course a newer version wrote no longer hides the others.
+- Logging out revokes the login at courses.mooc.fi. Uninstalling the extension removes the login on that computer; the exercises stay.
+- Switching the screen in the main panel no longer cancels a login waiting for approval.
+- Logging in as another account sets the previous account's courses aside with its exercises, and brings them back when it logs in again.
+- Moving the exercises folder saves and closes the exercises' editors first, warns about cloud-synced, network and removable folders, and says where the exercises are if the move stops part way.
+- Add Course lists again when you come back to it, has a Refresh button, and names a course's language. Palette Add Course opens the same screen.
+- Opening an exercise from the course home opens the course workspace.
+- Courses that do not allow AI cannot be worked on in editors with AI built in, such as Cursor or Windsurf.
+- The log is redacted like Show Details, and starts with the platform, tools version and servers.
+- The downloaded TestMyCode tools are checked against checksums built into the extension; an interrupted download resumes, and slow connections have no overall time limit.
+- New setting `testMyCode.cliPath` points to an administrator-installed TestMyCode tools binary. On Windows the tools are kept in the local profile instead of the roaming one, and on musl Linux the musl build is used.
+- VS Code's `http.proxy` settings are passed to the TestMyCode tools.
+- Dates in sentences are formatted in English with their time zone. Screens keep focus after actions and dismissals, and the login code is spelled out for screen readers.
 - Updated TMC-langs to 0.42.1.
 
 ### Removed
