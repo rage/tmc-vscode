@@ -3,7 +3,12 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import { bringBackMovedExercises, findAccountSwitch, moveExercisesAside } from "../actions"
+import {
+  bringBackMovedExercises,
+  findAccountSwitch,
+  moveExercisesAside,
+  refreshLocalExercises,
+} from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { NotificationButton } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
@@ -170,6 +175,8 @@ async function bringBackOwnExercises(
     if (restored.err) {
       Logger.warn("Could not bring back the courses set aside with the exercises", restored.val)
     }
+    // The exercises came back before their courses, which they are listed under.
+    await refreshLocalExercises(actionContext)
   }
   await accountHandover.forgetMovedAside(newest.folder)
   await accountHandover.setExercisesAccountIds(newest.accountIds)
