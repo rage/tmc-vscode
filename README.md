@@ -10,29 +10,39 @@ The source code for the extension is available at https://github.com/rage/tmc-vs
 
 ## Prerequisites
 
-- Visual Studio Code version 1.100 or above
-- A [courses.mooc.fi](https://courses.mooc.fi/) account
+- Visual Studio Code version 1.100 or above. Older editors keep receiving TestMyCode 3.5.x, which has no courses.mooc.fi support. 1.100 is the first version with the networking and extension APIs this version relies on.
+- A MOOC.fi account
 - Course-specific system environment
+
+## Supported systems
+
+- **Operating systems:** Windows (x86_64), macOS (Intel and Apple silicon) and Linux (x86_64 and arm64). The TestMyCode tools are downloaded once, on first use, from download.mooc.fi.
+- **Linux:** the tools need glibc 2.30 or newer; the next version of the tools needs only 2.28.
+- **Remote development** (WSL, Remote-SSH, Dev Containers, Codespaces): the extension runs on the remote side, so each remote has its own login and its own exercises.
+- **Proxies:** set `HTTPS_PROXY` (and `NO_PROXY` if needed) in the environment VS Code starts from. The next version of the tools also uses the system proxy on Windows and macOS; proxy auto-config (PAC) scripts alone are not supported.
+- **Editors:** Visual Studio Code, and editors built on it that can switch their built-in AI off, such as VSCodium. Courses that restrict AI assistance are refused in editors whose built-in AI cannot be switched off, such as Cursor and Windsurf.
+
+Problems with downloads, antivirus or networks: [troubleshooting](docs/troubleshooting.md). Installing for a lab or exam room: [administrators](docs/administrators.md).
 
 ## Getting started
 
-Instructions on how to install and use the extension in Visual Studio Code can be found [here](https://www.mooc.fi/en/installation/vscode).
+Instructions on how to install and use the extension in Visual Studio Code can be found [here](https://www.mooc.fi/en/installation/vscode). Questions and problems: [FAQ](docs/FAQ.md) and [troubleshooting](docs/troubleshooting.md).
 
 After installing, the **Get Started with TestMyCode** walkthrough takes you from logging in to your first submission. Reopen it any time with **TestMyCode: Get Started** from the Command Palette.
 
 ### Commands
 
-Every command is in the Command Palette under **TestMyCode**. While an exercise file is open, Run Tests and Submit Solution are in the editor's title bar, and the exercise's item in the status bar lists the other exercise actions.
+Every command is in the Command Palette under **TestMyCode**. While an exercise file is open, Run Tests and Submit are in the editor's title bar, and the exercise's item in the status bar lists the other exercise actions.
 
 ## Data collected by the extension
 
 The extension does not have trackers or telemetry. It’s open source, and anyone can verify what it does. See: https://github.com/rage/tmc-vscode.
 
-If you choose to submit your answer to a programming exercise to be graded to our server, the extension will send us the folder of that specific exercise. This folder contains only your solution to the exercise, and no other files are sent. This information will also include the language the server should use for error messages. The error message language is currently your computer’s locale. We may check the answers you submit for plagiarism, and we may use the IP address of the computer that submitted the exercise for blocking spam and preventing abuse.
+What is sent, and when, is listed in the [FAQ](docs/FAQ.md#what-does-the-extension-send-and-where).
 
-The same applies if you choose to share your solution with other students via the tmc.mooc.fi or courses.mooc.fi paste.
+## AI assistance in courses
 
-When you interact with our server, e.g. log in, download, or submit exercises, we will send the version of this plugin in the requests. This is used for blocking outdated and potentially misbehaving plugin versions.
+A course's AI policy is a classroom rule that the extension helps you keep; it is not a control. Inside VS Code the extension switches off Copilot, inline suggestions and the AI features of other extensions that a setting controls, and refuses to run tests, submit or use Get Help while an AI extension it cannot switch off is enabled. This is best effort: the server accepts submissions from any client. Only the policies `full_use` and `required` leave AI on; `not_set`, `limited` and `planning_only` are treated as no AI. See the [FAQ](docs/FAQ.md#why-are-copilot-and-other-ai-features-off).
 
 ## Contributing
 
