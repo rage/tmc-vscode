@@ -225,7 +225,8 @@ export function moocGradingView(
     tone: "info",
     explanation:
       "VS Code stopped waiting before the grading finished. Your submission was received, " +
-      "and its score will appear in the course progress once it has been graded.",
+      "and its score will appear in the course progress once it has been graded. If it is " +
+      "still not graded after a while, the grading may have been lost: submit again.",
     canKeepWaiting: true,
   } as const
   if (status.status === "no-grading-yet") {
@@ -272,6 +273,19 @@ export function moocGradingView(
       : { pendingReview: pendingReviewSentence(pendingReview, progressPoints) }
   switch (grading.grading_progress) {
     case "FullyGraded":
+      if (maxPoints === 0 && grading.test_results) {
+        // No points to pass by, so only the tests tell how it went.
+        const isAllPassed = grading.test_results.test_results.every((test) => test.successful)
+        return {
+          ...graded,
+          ...reviewNote,
+          phase: "finished",
+          headline: isAllPassed ? "All tests passed" : "Some tests failed",
+          tone: isAllPassed ? "passed" : "failed",
+          points: undefined,
+          canPaste: !isAllPassed,
+        }
+      }
       if (arePointsHeldForReview(pendingReview, progressPoints)) {
         // Only the grading's own score tells how the tests went.
         return {
@@ -307,6 +321,9 @@ export function moocGradingView(
         phase: "failed",
         headline: "Grading failed",
         tone: "failed",
+        ...(standing === "OutOfTries"
+          ? { explanation: "That was your last try, so this score is final." }
+          : {}),
         canPaste: true,
       }
     case "PendingManual":

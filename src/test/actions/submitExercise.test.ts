@@ -33,6 +33,7 @@ import {
   ExerciseNotFoundError,
   InsufficientScopeError,
   NotEnrolledError,
+  NotFoundError,
   OutOfTriesError,
   WorkspaceUntrustedError,
 } from "../../errors"
@@ -782,6 +783,15 @@ suite("submitExercise action, mooc", () => {
 
     const waited = await keepWaitingForGrading(actionContext, earlierPanelId)
     expect(waited.ok).toBe(true)
+  })
+
+  test("a grading the server refuses to show offers no keep waiting", async () => {
+    const { actionContext, wait } = moocContextWith(undefined)
+    wait.mockResolvedValue(Err(new NotFoundError("gone")))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()).toMatchObject({ phase: "failed", canKeepWaiting: false })
   })
 
   test("a failed status check after the submit still offers to keep waiting", async () => {

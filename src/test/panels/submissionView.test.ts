@@ -575,3 +575,38 @@ suite("testedLocallyView", function () {
     })
   })
 })
+
+suite("moocGradingView edge cases", () => {
+  test("a zero-point exercise is headed by its tests, not a pass", () => {
+    const failing = gradingOf({
+      grading_progress: "FullyGraded",
+      score_given: 0,
+      feedback_text: null,
+      test_results: {
+        status: "TESTS_FAILED",
+        test_results: [{ name: "t", successful: false, points: [], message: "no", exception: [] }],
+        logs: {},
+      },
+    })
+
+    expect(moocGradingView(failing, 0)).toMatchObject({
+      headline: "Some tests failed",
+      tone: "failed",
+    })
+  })
+
+  test("a failed grading on the last try says the score is final", () => {
+    expect(moocGradingView(moocGrading("Failed", 0, "OutOfTries"), 3)).toMatchObject({
+      headline: "Grading failed",
+      explanation: "That was your last try, so this score is final.",
+    })
+  })
+
+  test("a hidden exam grading and an unknown status read as received", () => {
+    expect(moocGradingView({ status: "grading-hidden" }, 3)).toMatchObject({
+      headline: "Submission received",
+      explanation: "Its result is shown once the exam ends.",
+    })
+    expect(moocGradingView({ status: "unrecognized" }, 3).headline).toBe("Submission received")
+  })
+})

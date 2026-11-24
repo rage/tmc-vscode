@@ -32,8 +32,14 @@ import {
   ChapterNotOpenError,
   NotEnrolledError,
   DeadlinePassedError,
+  ExerciseNotFoundError,
+  ForbiddenError,
+  InvalidRequestError,
+  isSessionLost,
   isSubmitRefusal,
+  NotFoundError,
   OutOfTriesError,
+  UnexpectedResponseError,
 } from "../errors"
 import { exerciseSubmissionPanel } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
@@ -226,6 +232,18 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
   }
 }
 
+/** Whether `error` is a refusal that waiting longer for the grading cannot change. */
+function isTerminalGradingFailure(error: Error): boolean {
+  return (
+    error instanceof NotFoundError ||
+    error instanceof ExerciseNotFoundError ||
+    error instanceof ForbiddenError ||
+    error instanceof InvalidRequestError ||
+    error instanceof UnexpectedResponseError ||
+    isSessionLost(error)
+  )
+}
+
 function gradingJobLabel(exercise: WorkspaceExercise): string {
   return `Waiting for grading of ${exercise.exerciseSlug}`
 }
@@ -246,11 +264,16 @@ async function waitForMoocGrading(
   )
   if (waited.err) {
     Logger.error("Failed to wait for the grading of a submission", waited.val)
-    unfinishedGradings.set(panel.id, grading)
+    // Waiting longer cannot change a refusal, only a server that did not answer.
+    const isWorthWaiting = !isTerminalGradingFailure(waited.val)
+    if (isWorthWaiting) {
+      unfinishedGradings.set(panel.id, grading)
+    }
     return {
       recorded: undefined,
       view: {
         ...gradingUnavailableView(toWebviewError(waited.val)),
+        canKeepWaiting: isWorthWaiting,
         submissionUrl: grading.exercisePageUrl,
       },
     }
@@ -259,7 +282,9 @@ async function waitForMoocGrading(
   const progress = status.status === "grading" ? status.grading.exercise_progress : null
   const view = {
     ...moocGradingView(status, grading.availablePoints),
-    submissionUrl: grading.exercisePageUrl,
+    submissionUrl:
+      (status.status === "grading" ? status.grading.submission_page_url : null) ??
+      grading.exercisePageUrl,
   }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
@@ -374,16 +399,31 @@ async function readyToSubmit(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
   }
-  const refusal = submitRefusalOf(courseExercise, new Date())
+  let storedCourse = course
+  let storedExercise = courseExercise
+  let refusal = submitRefusalOf(storedExercise, new Date())
+  if (refusal && storedCourse.kind === "mooc") {
+    // A deadline or tries the teacher changed, or a fast clock, would be refused for nothing.
+    const courseId = LocalCourseData.getCourseId(storedCourse)
+    const updated = await updateCourse(actionContext, courseId).catch((e: unknown) =>
+      Err(toError(e)),
+    )
+    const refetched = storedExerciseOf(actionContext, exercise)
+    if (updated.ok && updated.val.isUpdated && refetched.ok) {
+      storedCourse = refetched.val.course
+      storedExercise = refetched.val.exercise
+      refusal = submitRefusalOf(storedExercise, new Date())
+    }
+  }
   if (refusal) {
-    return Err(refusalError(refusal, courseExercise))
+    return Err(refusalError(refusal, storedExercise))
   }
   const trusted = checkWorkspaceTrust(actionContext)
   if (trusted.err) {
     return trusted
   }
   const { aiUseGate, userData } = actionContext.startup
-  let current = course
+  let current = storedCourse
   let refused = await aiUseGate.refusal(current, exercise.uri)
   if (refused && current.kind === "mooc") {
     // The teacher may have allowed AI since the course was last fetched.
@@ -401,7 +441,7 @@ async function readyToSubmit(
   if (refused) {
     return Err(refused)
   }
-  return Ok({ submit, course: current, courseExercise })
+  return Ok({ submit, course: current, courseExercise: storedExercise })
 }
 
 /**
