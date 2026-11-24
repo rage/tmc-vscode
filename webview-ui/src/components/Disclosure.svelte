@@ -89,7 +89,8 @@
     align-items: center;
     gap: var(--tmc-space-1);
     width: 100%;
-    min-height: var(--tmc-list-row-height);
+    /* WCAG 2.5.8 asks for 24px; the tree row height is 22px. */
+    min-height: 24px;
     padding: 0 var(--tmc-space-1);
     border: 1px solid transparent;
     border-radius: var(--tmc-radius);
