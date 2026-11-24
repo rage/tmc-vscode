@@ -734,14 +734,13 @@ export function presentationFor(error: Error): ErrorPresentation {
     }
   }
   if (
-    (error instanceof NotFoundError ||
-      error instanceof ServerError ||
-      error instanceof RuntimeError) &&
-    error.httpStatus !== undefined
+    error instanceof ServerError ||
+    ((error instanceof NotFoundError || error instanceof RuntimeError) &&
+      error.httpStatus !== undefined)
   ) {
     // The reported message quotes the raw response body, and the status is in Show Details.
     const message =
-      error.httpStatus >= 500
+      error instanceof ServerError || (error.httpStatus ?? 0) >= 500
         ? "The server ran into a problem. Try again later."
         : "The server refused the request. Try again later."
     return { message, actions: [] }

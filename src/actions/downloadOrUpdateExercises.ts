@@ -3,7 +3,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { MoocDownloadFailure } from "../../shared/langsSchema"
+import type { Kind, MoocDownloadFailure } from "../../shared/langsSchema"
 import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
@@ -19,14 +19,12 @@ import type Dialog from "../api/dialog"
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import { langsError } from "../api/langsErrors"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
   ChapterNotOpenError,
-  ConnectionError,
   CourseAccessLostError,
-  ExerciseNotFoundError,
   ExerciseUpdateError,
-  UnsupportedExerciseError,
   isSessionLost,
   ServerError,
   presentationFor,
@@ -283,8 +281,7 @@ async function download(
       }),
   )
   const failedLegs: Error[] = []
-  const exerciseReasons: string[][] = []
-  const moocFailures: MoocDownloadFailure[] = []
+  const failures: ExerciseFailure[] = []
   for (const { backend, result } of legs) {
     if (result.err) {
       if (!cancelled) {
@@ -303,10 +300,7 @@ async function download(
     for (const [{ id }, reasons, failure] of failed) {
       Logger.error(`Failed to download exercise ${exerciseName(actionContext, id)}: ${reasons}`)
       succeeded.delete(ExerciseIdentifier.key(id))
-      exerciseReasons.push(reasons)
-      if (failure !== undefined) {
-        moocFailures.push(failure)
-      }
+      failures.push({ id, reasons, kind: failure })
     }
   }
 
@@ -314,7 +308,7 @@ async function download(
   // Refused for want of a login the user knows they lack, the exercises were never really tried.
   const isRefusedForLogin =
     isLoggedOut &&
-    exerciseReasons.length === 0 &&
+    failures.length === 0 &&
     failedLegs.length > 0 &&
     failedLegs.every((error) => isSessionLost(error))
   downloadFailures.record(isRefusedForLogin ? [] : results.failed, results.successful)
@@ -334,7 +328,7 @@ async function download(
   if (results.failed.length === 0) {
     return { ...results, warnings }
   }
-  const cause = failureCause(failedLegs, exerciseReasons, moocFailures)
+  const cause = failureCause(actionContext, failedLegs, failures)
   if (!options.isUnrequested) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
@@ -493,8 +487,12 @@ async function restoreLatestSubmissions(
   return unrestored
 }
 
-/** tmc-langs' reason for a mooc exercise of a chapter not open yet: its name and opening time. */
-const CLOSED_CHAPTER_REASON = /is in chapter \d+ "(.*)", which opens at (.+)$/
+/** An exercise tmc-langs did not download: its reasons, and on courses.mooc.fi their kind. */
+interface ExerciseFailure {
+  id: ExerciseIdentifier
+  reasons: string[]
+  kind: MoocDownloadFailure | undefined
+}
 
 /** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
 const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
@@ -503,75 +501,91 @@ const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
 const SERVER_FAILURE_REASON = /\b5\d\d [A-Z][\w ]* from \S/
 
 /**
+ * What each courses.mooc.fi download failure is presented as: the CLI error kind worded the
+ * same, or a cause of its own.
+ */
+const CAUSE_OF_FAILURE: Record<
+  MoocDownloadFailure,
+  Kind | "closed-chapter" | "broken-package" | "other"
+> = {
+  "browser-only": "unsupported-exercise",
+  "several-editor-tasks": "unsupported-exercise",
+  "not-found": "exercise-not-found",
+  "server-error": "server-error",
+  "connection-error": "connection-error",
+  "closed-chapter": "closed-chapter",
+  "file-missing": "broken-package",
+  "extract-failed": "broken-package",
+  other: "other",
+}
+
+const BROKEN_PACKAGE_SENTENCE =
+  "The exercise on the server is not a valid exercise package; the course staff need to fix it."
+
+/**
  * The one error a failed download is reported with.
  *
  * A backend that failed as a whole is the cause worth naming, preferring one whose
- * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons, in plain
- * words, with tmc-langs' own as the details the log gets.
+ * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise failures when they
+ * all share one cause, with tmc-langs' reasons as the details the log gets.
  */
 function failureCause(
+  actionContext: ReadyActionContext,
   failedLegs: Error[],
-  exerciseReasons: string[][],
-  moocFailures: MoocDownloadFailure[],
+  failures: ExerciseFailure[],
 ): Error {
   const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
   if (leg) {
     return leg
   }
-  const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
+  const reasons = [...new Set(failures.flatMap((failure) => failure.reasons).filter(Boolean))]
   const details =
     reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
-  const isEveryFailure = (...kinds: MoocDownloadFailure[]): boolean =>
-    moocFailures.length > 0 &&
-    moocFailures.length === exerciseReasons.length &&
-    moocFailures.every((failure) => kinds.includes(failure))
-  if (isEveryFailure("browser-only", "several-editor-tasks")) {
-    return new UnsupportedExerciseError(
-      "These exercises are done on the course page, not in VS Code.",
-      details,
-    )
-  }
-  if (isEveryFailure("not-found")) {
-    return new ExerciseNotFoundError(
-      "The exercise is no longer in the course. Refresh the courses to see its exercises.",
-      details,
-    )
-  }
-  if (isEveryFailure("server-error")) {
-    return new ServerError("The server ran into a problem. Try again later.", details)
-  }
-  if (isEveryFailure("connection-error")) {
-    return new ConnectionError(
-      "Could not reach the server. Check your network connection.",
-      details,
-    )
-  }
-  if (isEveryFailure("file-missing", "extract-failed")) {
-    return new ExerciseUpdateError(
-      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
-      details,
-    )
-  }
-  const closedChapter = reasons.map((reason) => CLOSED_CHAPTER_REASON.exec(reason)).find(Boolean)
-  if (closedChapter && reasons.every((reason) => CLOSED_CHAPTER_REASON.test(reason))) {
-    const [, name = "", opensAtText = ""] = closedChapter
-    const when = proseDateTime(opensAtText) ?? "later"
-    return new ChapterNotOpenError(
-      `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens ${when}.`,
-      details,
-    )
+  const causes = new Set(failures.map(({ kind }) => kind && CAUSE_OF_FAILURE[kind]))
+  const [cause] = causes
+  if (causes.size === 1 && cause !== undefined && cause !== "other") {
+    switch (cause) {
+      case "closed-chapter":
+        return closedChapterError(actionContext, failures, details)
+      case "broken-package":
+        return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
+      default:
+        return Object.assign(langsError({ kind: cause }, details, details, "mooc"), {
+          backend: "mooc",
+        })
+    }
   }
   // An archive URL names "archive" too, but the package is not to blame for the server's failure.
   if (reasons.length > 0 && reasons.every((reason) => SERVER_FAILURE_REASON.test(reason))) {
-    return new ServerError("The server ran into a problem. Try again later.", details)
+    return new ServerError(details, details)
   }
   if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
-    return new ExerciseUpdateError(
-      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
-      details,
-    )
+    return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
   }
   return new ExerciseUpdateError("The download did not complete.", details)
+}
+
+/** The error for exercises of a chapter not open yet, naming it and when it opens as stored. */
+function closedChapterError(
+  actionContext: ReadyActionContext,
+  failures: ExerciseFailure[],
+  details: string,
+): ChapterNotOpenError {
+  const { userData } = actionContext.startup
+  const chapter = failures
+    .map(({ id }) => {
+      const stored = userData.getExerciseInClosedChapter(id)
+      return stored.ok ? LocalCourseData.getClosedChapterOf(stored.val.course, id) : undefined
+    })
+    .find(Boolean)
+  if (!chapter) {
+    return Object.assign(new ChapterNotOpenError(details), { langsKind: "chapter-not-open-yet" })
+  }
+  const when = proseDateTime(chapter.opensAt) ?? "later"
+  return new ChapterNotOpenError(
+    `The chapter "${chapter.name}" has not opened yet. Its exercises can be downloaded once it opens ${when}.`,
+    details,
+  )
 }
 
 function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>): DownloadResults {

@@ -20,7 +20,12 @@ import type { BackgroundJob } from "../../ui/backgroundJobs"
 import { backgroundJobs } from "../../ui/backgroundJobs"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
-import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -307,14 +312,32 @@ suite("downloadOrUpdateExercises action", function () {
     expect(warning?.error).toMatchObject({ details: reason })
   })
 
-  test("says when the chapter of an exercise not open yet opens", async function () {
+  test("says when the chapter of an exercise not open yet opens, as stored", async function () {
     // jest-mock-vscode ships no `env` namespace.
     const vscodeModule: object = vscode
     Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
-    const reason = 'Exercise 1 is in chapter 2 "Loops", which opens at 2030-01-01 00:00:00 UTC'
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    const course = moocLocalCourse({
+      closedChapters: [
+        {
+          name: "Loops",
+          number: 2,
+          opensAt: "2030-01-01T00:00:00Z",
+          exercises: [moocCourseExercise({ id: "e1", name: "loops" })],
+        },
+      ],
+    })
+    const context = actionContext()
+    Object.assign(context.startup.userData, {
+      getExerciseInClosedChapter: () => Ok({ course, exercise: {} }),
+    })
+    const reason = "Exercise e1 is in a chapter that has not opened yet"
+    tmcMockValues.downloadMoocExercises = createDownloadResult(
+      [],
+      [],
+      [[{ id: idOfMoocExercise("e1"), path: "/mooc/e1" }, [reason], "closed-chapter"]],
+    )
 
-    const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+    const result = await downloadResults(context, [idOfMoocExercise("e1")], TEST_COURSE_ID)
 
     const [warning] = result.warnings
     expect(warning?.error).toBeInstanceOf(errors.ChapterNotOpenError)
@@ -323,6 +346,35 @@ suite("downloadOrUpdateExercises action", function () {
     )
     expect(warning?.error).toMatchObject({ details: reason })
   })
+
+  test.each([
+    [["browser-only", "several-editor-tasks"], "This exercise cannot be done in VS Code"],
+    [["server-error"], "The server ran into a problem"],
+    [["connection-error"], "Could not reach the server"],
+    [["not-found"], "This exercise is no longer in the course"],
+  ] as const)(
+    "words mooc failures %j as presentationFor words their CLI kind",
+    async function (kinds, sentence) {
+      tmcMockValues.downloadMoocExercises = createDownloadResult(
+        [],
+        [],
+        kinds.map((kind, i) => [
+          { id: idOfMoocExercise(`e${i}`), path: `/mooc/e${i}` },
+          [`failed: ${kind}`],
+          kind,
+        ]),
+      )
+
+      const result = await downloadResults(
+        actionContext(),
+        kinds.map((_kind, i) => idOfMoocExercise(`e${i}`)),
+        TEST_COURSE_ID,
+      )
+
+      const [warning] = result.warnings
+      expect(errors.presentationFor(warning?.error ?? new Error()).message).toContain(sentence)
+    },
+  )
 
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
