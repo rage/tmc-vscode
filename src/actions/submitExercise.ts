@@ -468,31 +468,17 @@ async function readyToSubmit(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
   }
-  let storedCourse = course
-  let storedExercise = courseExercise
-  let refusal = submitRefusalOf(storedExercise, new Date())
-  if (refusal && storedCourse.kind === "mooc") {
-    // A deadline or tries the teacher changed, or a fast clock, would be refused for nothing.
-    const courseId = LocalCourseData.getCourseId(storedCourse)
-    const updated = await updateCourse(actionContext, courseId).catch((e: unknown) =>
-      Err(toError(e)),
-    )
-    const refetched = storedExerciseOf(actionContext, exercise)
-    if (updated.ok && updated.val.isUpdated && refetched.ok) {
-      storedCourse = refetched.val.course
-      storedExercise = refetched.val.exercise
-      refusal = submitRefusalOf(storedExercise, new Date())
-    }
-  }
+  // courses.mooc.fi refuses with a typed reason itself, and stored data can be out of date.
+  const refusal = course.kind === "mooc" ? undefined : submitRefusalOf(courseExercise, new Date())
   if (refusal) {
-    return Err(refusalError(refusal, storedExercise))
+    return Err(refusalError(refusal, courseExercise))
   }
   const trusted = checkWorkspaceTrust(actionContext)
   if (trusted.err) {
     return trusted
   }
   const { aiUseGate, userData } = actionContext.startup
-  let current = storedCourse
+  let current = course
   let refused = await aiUseGate.refusal(current, exercise.uri)
   if (refused && current.kind === "mooc") {
     // The teacher may have allowed AI since the course was last fetched.
@@ -510,7 +496,7 @@ async function readyToSubmit(
   if (refused) {
     return Err(refused)
   }
-  return Ok({ submit, course: current, courseExercise: storedExercise })
+  return Ok({ submit, course: current, courseExercise })
 }
 
 /**
@@ -550,9 +536,10 @@ async function storedExerciseWithAccess(
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: another operation in flight on
  * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
+ * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. A tmc exercise the
  * stored data says the backend would refuse is the error {@link refusalError} names, and one
- * hidden until its chapter opens a `ChapterNotOpenError`.
+ * hidden until its chapter opens a `ChapterNotOpenError`; courses.mooc.fi's own refusal shows in
+ * the panel.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,

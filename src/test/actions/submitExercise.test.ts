@@ -23,6 +23,7 @@ import {
 } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
+import { langsError } from "../../api/langsErrors"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -30,14 +31,12 @@ import { runForExercise } from "../../commands/runForExercise"
 import {
   AiUseRefusedError,
   BottleneckError,
-  ChapterLockedError,
   CourseAccessLostError,
   DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
   NotEnrolledError,
   NotFoundError,
-  OutOfTriesError,
   WorkspaceUntrustedError,
 } from "../../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -555,45 +554,42 @@ suite("submitExercise action, mooc", () => {
     expect(setStanding).not.toHaveBeenCalled()
   })
 
-  test("refuses up front an exercise the backend reported out of tries", async () => {
+  test("submits an exercise stored as out of tries, and shows courses.mooc.fi's refusal", async () => {
     const outOfTries = {
       ...moocCourse,
       exercises: [{ ...moocCourse.exercises[0]!, awardedPoints: 2, outOfTries: true }],
     }
-    const submit = vi.fn()
+    const submit = vi
+      .fn()
+      .mockResolvedValue(Err(langsError({ kind: "out-of-tries" }, "403", "", "mooc")))
     const { actionContext } = contextFor(makeMoocKind(outOfTries), { submitMoocExercise: submit })
 
     const result = await submitExercise(actionContext, moocExercise)
-    expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(OutOfTriesError)
-    expect((result.val as Error).message).toBe(
-      `You have no tries left on ${EXERCISE_SLUG}, so its 2/3 points are final.`,
+
+    expect(result.ok).toBe(true)
+    expect(submit).toHaveBeenCalledOnce()
+    expect(lastView()?.error?.message).toBe(
+      "You have no tries left on this exercise, so it can no longer be submitted.",
     )
-    expect(submit).not.toHaveBeenCalled()
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
   })
 
-  test.each([
-    [
-      "past its deadline",
-      { deadline: "2000-01-01T00:00:00Z" },
-      DeadlinePassedError,
-      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
-    ],
-    [
-      "in a chapter not unlocked yet",
-      { chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" as const } },
-      ChapterLockedError,
-      `Complete the chapters before the chapter "Loops" to submit ${EXERCISE_SLUG}.`,
-    ],
-  ])("refuses up front an exercise %s", async (_case, data, errorClass, message) => {
-    const refused = { ...moocCourse, exercises: [{ ...moocCourse.exercises[0]!, ...data }] }
+  test("refuses up front a tmc exercise past its deadline", async () => {
+    const late = {
+      ...tmcCourse,
+      exercises: [{ ...tmcCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+    }
     const submit = vi.fn()
-    const { actionContext } = contextFor(makeMoocKind(refused), { submitMoocExercise: submit })
+    const { actionContext } = contextFor(makeTmcKind(late), {
+      submitTmcExerciseAndWaitForResults: submit,
+    })
 
-    const result = await submitExercise(actionContext, moocExercise)
+    const result = await submitExercise(actionContext, tmcExercise)
 
-    expect(result.val).toBeInstanceOf(errorClass)
-    expect((result.val as Error).message).toBe(message)
+    expect(result.val).toBeInstanceOf(DeadlinePassedError)
+    expect((result.val as Error).message).toBe(
+      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
+    )
     expect(submit).not.toHaveBeenCalled()
   })
 
@@ -660,12 +656,14 @@ suite("submitExercise action, mooc", () => {
 
   test("checking whether it can submit refuses as the submit would, and submits nothing", async () => {
     const pastDeadline = {
-      ...moocCourse,
-      exercises: [{ ...moocCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+      ...tmcCourse,
+      exercises: [{ ...tmcCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
     }
     const submit = vi.fn()
-    const late = contextFor(makeMoocKind(pastDeadline), { submitMoocExercise: submit })
-    expect((await checkCanSubmit(late.actionContext, moocExercise)).val).toBeInstanceOf(
+    const late = contextFor(makeTmcKind(pastDeadline), {
+      submitTmcExerciseAndWaitForResults: submit,
+    })
+    expect((await checkCanSubmit(late.actionContext, tmcExercise)).val).toBeInstanceOf(
       DeadlinePassedError,
     )
 
