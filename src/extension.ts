@@ -52,6 +52,8 @@ import {
   TMC_LANGS_CHECKSUMS,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
+  MOOC_BACKEND_URL,
+  TMC_BACKEND_URL,
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
@@ -254,6 +256,10 @@ async function activateInner(
   Logger.banner(`${vscode.env.appName} version: ${vscode.version}`)
   Logger.banner(`${EXTENSION_ID} version: ${EXTENSION_VERSION}`)
   Logger.banner(`Currently open workspace: ${vscode.workspace.name}`)
+  Logger.banner(`Platform: ${process.platform} ${process.arch}`)
+  Logger.banner(`TestMyCode tools version: ${TMC_LANGS_VERSION}`)
+  Logger.banner(`Backends: ${TMC_BACKEND_URL}, ${MOOC_BACKEND_URL}`)
+  Logger.banner(`courses.mooc.fi courses: ${settings.isCoursesMoocFiEnabled() ? "on" : "off"}`)
 
   // Gates the developer-only palette entries (e.g. "Show Debug View").
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)

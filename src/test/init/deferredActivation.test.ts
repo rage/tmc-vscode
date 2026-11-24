@@ -6,9 +6,9 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import { workspaceFileName } from "../../config/constants"
+import { cliConfigFolder } from "../../init/cliConfigFolder"
 import {
   canDeferActivation,
-  cliConfigFolder,
   hasStoredLogin,
   workspaceFileFolderOf,
 } from "../../init/deferredActivation"

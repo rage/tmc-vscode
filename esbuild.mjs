@@ -102,7 +102,7 @@ function aggregateEntry(globPattern) {
 const builds = [
   {
     ...common,
-    entryPoints: { extension: "./src/extension.ts" },
+    entryPoints: { extension: "./src/extension.ts", uninstall: "./src/uninstall.ts" },
     outdir: "dist",
   },
   // Bundled for the mocha loader (bin/runIntegrationTests.js). Matches both
