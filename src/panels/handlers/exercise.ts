@@ -34,7 +34,7 @@ export const exerciseHandlers = {
       // Silent: the panel that asked shows the failure, remedies included.
       return withOperation(
         actionContext.dialog,
-        { failure: "Failed to send the exercise to the pastebin.", silent: true },
+        { failure: "Failed to get a link to the exercise.", silent: true },
         () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
     },

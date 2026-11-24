@@ -20,7 +20,7 @@
     oncopy: (text: string) => void
   }
 
-  /** The body of the Get Help section: sends the exercise to the backend's pastebin. */
+  /** The body of the Get Help section: gets a link others can open to the exercise's code. */
   let { sourcePanel, oncopy }: Props = $props()
 
   const request = createRequester()
@@ -60,8 +60,8 @@
 </script>
 
 <p>
-  Send your code to the pastebin and share the link on the course's discussion channel to ask for
-  help.
+  Get a link to your code that your teacher or classmates can open, and share it on the course's
+  discussion channel to ask for help.
 </p>
 {#if pasted.current !== null}
   {@const { link, isReused } = pasted.current}
@@ -88,15 +88,15 @@
 {:else}
   <div class="actions">
     <Button secondary disabled={isPasting} {@attach focusIf("send")} onclick={paste}>
-      Send to Pastebin
+      Get a Link
     </Button>
     {#if isPasting}
-      <Spinner label="Sending to the pastebin…" />
+      <Spinner label="Getting a link…" />
     {/if}
   </div>
 {/if}
 {#if pasteError !== undefined}
-  <ErrorNotice error={pasteError} title="Could not send to the pastebin" />
+  <ErrorNotice error={pasteError} title="Could not get a link" />
 {/if}
 
 <style>

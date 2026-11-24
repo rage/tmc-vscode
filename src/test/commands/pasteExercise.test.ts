@@ -82,7 +82,7 @@ suite("Paste exercise command", function () {
 
     expect(showExerciseResults).not.toHaveBeenCalled()
     expect(vi.mocked(trustGate.refusal).mock.lastCall?.[1]).toMatchObject({
-      action: "Send to Pastebin",
+      action: "Get a Link",
     })
   })
 })

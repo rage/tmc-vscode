@@ -1199,7 +1199,7 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
   test("still shows the paste link the host answered with", async () => {
     showPanel()
     await chooseMenuItem("Get Help")
-    ;(await screen.findByRole("button", { name: "Send to Pastebin" })).click()
+    ;(await screen.findByRole("button", { name: "Get a Link" })).click()
     replyToRequest("pasteExercise", {
       ok: true,
       value: { link: "https://tmc.mooc.fi/paste/abc", isReused: false },
