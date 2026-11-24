@@ -28,7 +28,11 @@ function setUp(
         listSettings: async () => Ok({}),
       } as never,
       resources: { projectsDirectory } as Resources,
-      userData: { getCourses: () => [] } as never,
+      userData: {
+        getCourses: () => [],
+        takeAllCourses: vi.fn(async () => Ok({ courses: [], mooc_courses: [] })),
+        restoreCourses: vi.fn(async () => Ok.EMPTY),
+      } as never,
       workspaceManager: {
         getExercises: () => [{}],
         setExercises: async () => Ok.EMPTY,
@@ -151,6 +155,7 @@ suite("handOverExercises", function () {
     expect(fs.readdirSync(projectsDirectory)).toEqual(["mooc"])
     expect(context.startup.accountHandover.movedAside).toEqual([])
     expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-a"])
+    expect(context.startup.userData.takeAllCourses).not.toHaveBeenCalled()
   })
 
   test("another account may keep the exercises, which stay the first one's too", async function () {
@@ -192,6 +197,11 @@ suite("handOverExercises", function () {
     expect(context.dialog.notification).toHaveBeenLastCalledWith(
       "Brought back your exercises that another login moved aside.",
     )
+    expect(context.startup.userData.takeAllCourses).toHaveBeenCalledOnce()
+    expect(context.startup.userData.restoreCourses).toHaveBeenCalledWith({
+      courses: [],
+      mooc_courses: [],
+    })
   })
 
   test("bringing exercises back keeps the exercises folder itself, which tmc-langs may recreate meanwhile", async function () {

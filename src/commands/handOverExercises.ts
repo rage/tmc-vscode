@@ -100,7 +100,16 @@ async function offerToMoveAside(
   if (moved.err) {
     return false
   }
-  await accountHandover.recordMovedAside({ folder: moved.val, accountIds: previousOwners })
+  // Their courses and progress are theirs too, and must not show to whoever logged in now.
+  const courses = await actionContext.startup.userData.takeAllCourses()
+  if (courses.err) {
+    Logger.warn("Could not set the other account's courses aside", courses.val)
+  }
+  await accountHandover.recordMovedAside({
+    folder: moved.val,
+    accountIds: previousOwners,
+    courses: courses.ok ? courses.val : undefined,
+  })
   await accountHandover.setExercisesAccountIds([accountId])
   void dialog.notification(
     `Moved the other account's exercises to ${moved.val}. They come back when that account ` +
@@ -146,6 +155,12 @@ async function bringBackOwnExercises(
       openFolderButton(newest.folder),
     )
     return
+  }
+  if (newest.courses) {
+    const restored = await actionContext.startup.userData.restoreCourses(newest.courses)
+    if (restored.err) {
+      Logger.warn("Could not bring back the courses set aside with the exercises", restored.val)
+    }
   }
   await accountHandover.forgetMovedAside(newest.folder)
   await accountHandover.setExercisesAccountIds(newest.accountIds)

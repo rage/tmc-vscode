@@ -103,6 +103,12 @@ function mergeCourses<Id, Course extends { id: Id }>(
   return isChanged
 }
 
+/** Every stored course, as {@link UserData.takeAllCourses} hands them over. */
+export interface StoredCourses {
+  courses: TmcLocalCourseData[]
+  mooc_courses: MoocLocalCourseData[]
+}
+
 /** A stored exercise and the stored course holding it. */
 export interface StoredExercise {
   course: LocalCourseData
@@ -513,6 +519,42 @@ export class UserData {
     }
     course.val.data.offeredNewExercises = []
     return this.setNewExerciseNotifyAfter(courseId, dateInMillis)
+  }
+
+  /**
+   * Removes every course and returns them, for another account's login to start without them;
+   * {@link restoreCourses} puts them back.
+   */
+  public async takeAllCourses(): Promise<Result<StoredCourses, Error>> {
+    const taken = {
+      courses: Array.from(this._tmcCourses.values()),
+      mooc_courses: Array.from(this._moocCourses.values()),
+    }
+    this._tmcCourses.clear()
+    this._moocCourses.clear()
+    this._passedExercises.clear()
+    const written = await this._updatePersistentData()
+    return written.map(() => taken)
+  }
+
+  /** Adds back the courses {@link takeAllCourses} returned, except ones added since. */
+  public async restoreCourses(taken: StoredCourses): Promise<Result<void, Error>> {
+    for (const course of taken.courses) {
+      if (!this._tmcCourses.has(course.id)) {
+        this._tmcCourses.set(course.id, course)
+      }
+    }
+    for (const course of taken.mooc_courses) {
+      if (!this._moocCourses.has(course.id)) {
+        this._moocCourses.set(course.id, course)
+      }
+    }
+    for (const course of this.getCourses()) {
+      for (const exercise of LocalCourseData.getExercises(course)) {
+        this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
+      }
+    }
+    return this._updatePersistentData()
   }
 
   /**
