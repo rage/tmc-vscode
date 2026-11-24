@@ -401,8 +401,22 @@ const REPORT_ISSUE_ACTION: ErrorAction = {
   command: "workbench.action.openIssueReporter",
 }
 
+const UPDATE_EXTENSION_ACTION: ErrorAction = {
+  label: "Update Extension",
+  command: "workbench.extensions.action.checkForUpdates",
+}
+
+const TROUBLESHOOTING_ACTION: ErrorAction = {
+  label: "Troubleshooting",
+  command: TROUBLESHOOTING_COMMAND,
+}
+
+const SHOW_HELP_ACTION: ErrorAction = {
+  label: "Show Help",
+  command: "tmc.viewInitializationErrorHelp",
+}
+
 function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
-  const showHelp: ErrorAction = { label: "Show Help", command: "tmc.viewInitializationErrorHelp" }
   // A security policy refusing to run a file that is there can surface as UNKNOWN.
   const problem = error.code === "UNKNOWN" ? "denied" : fileProblemOf(error)
   switch (problem) {
@@ -412,7 +426,7 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
           "The TestMyCode tools are missing from this computer, perhaps removed by an antivirus program. Restart the extension to download them again.",
         actions: [
           { label: "Download Again", command: "workbench.action.restartExtensionHost" },
-          showHelp,
+          SHOW_HELP_ACTION,
         ],
       }
     case "inUse":
@@ -426,12 +440,12 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
         message:
           "This computer would not run the TestMyCode tools; a security policy may be blocking " +
           "them. Ask your IT support to allow them.",
-        actions: [showHelp],
+        actions: [SHOW_HELP_ACTION],
       }
     default:
       return {
         message: "The TestMyCode tools could not be started. Show Help says what to try.",
-        actions: [showHelp, REPORT_ISSUE_ACTION],
+        actions: [SHOW_HELP_ACTION, REPORT_ISSUE_ACTION],
       }
   }
 }
@@ -490,9 +504,7 @@ export function presentationFor(error: Error): ErrorPresentation {
   if (error instanceof LoginClientRejectedError) {
     return {
       message: reported,
-      actions: [
-        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
-      ],
+      actions: [UPDATE_EXTENSION_ACTION],
     }
   }
   if (error instanceof ProjectsDirUnreachableError) {
@@ -508,7 +520,7 @@ export function presentationFor(error: Error): ErrorPresentation {
   ) {
     return {
       message: reported,
-      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
+      actions: [TROUBLESHOOTING_ACTION],
     }
   }
   if (error instanceof NotEnrolledError) {
@@ -554,15 +566,13 @@ export function presentationFor(error: Error): ErrorPresentation {
   if (error instanceof InitializationError) {
     return {
       message: "TestMyCode could not start. Show Help says how to fix this.",
-      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
+      actions: [SHOW_HELP_ACTION],
     }
   }
   if (error instanceof ObsoleteClientError) {
     return {
       message: "This version of TestMyCode is out of date. Update the extension.",
-      actions: [
-        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
-      ],
+      actions: [UPDATE_EXTENSION_ACTION],
     }
   }
   if (error instanceof ConnectionTimeoutError && backend !== undefined) {
@@ -577,14 +587,14 @@ export function presentationFor(error: Error): ErrorPresentation {
       message:
         "The server's certificate was not trusted. Check that this computer's date and time " +
         "are right; a network security product that inspects connections can also cause this.",
-      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
+      actions: [TROUBLESHOOTING_ACTION],
     }
   }
   if (error instanceof ProxyError) {
     return {
       message:
         "A proxy refused the connection. Check the proxy settings of this computer or VS Code.",
-      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
+      actions: [TROUBLESHOOTING_ACTION],
     }
   }
   if (error instanceof ConnectionError && backend !== undefined) {
@@ -605,9 +615,7 @@ export function presentationFor(error: Error): ErrorPresentation {
     return {
       message:
         "The server refused the request. Update the extension; if it is up to date, report the problem.",
-      actions: [
-        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
-      ],
+      actions: [UPDATE_EXTENSION_ACTION],
     }
   }
   if (
