@@ -141,6 +141,7 @@ const opaqueRoundTrips: Record<
     build: (opaque) => ({
       assignment: opaque,
       checksum: null,
+      exercise_service_slug: "tmc",
       model_solution_spec: null,
       order_number: 0,
       public_spec: null,

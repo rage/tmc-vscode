@@ -28,15 +28,22 @@ if ! command -v cargo >/dev/null 2>&1 && [ -f "$HOME/.cargo/env" ]; then
   source "$HOME/.cargo/env"
 fi
 
-echo "Building tmc-langs-cli (release) from $LANGS_REPO ..."
-cargo build --release -p tmc-langs-cli --manifest-path "$LANGS_REPO/Cargo.toml"
+# `dev` reuses an existing debug build where a release build would not fit on disk.
+PROFILE="${TMC_LANGS_CARGO_PROFILE:-release}"
+PROFILE_DIR="$PROFILE"
+if [ "$PROFILE" = "dev" ]; then
+  PROFILE_DIR="debug"
+fi
 
-BINARY="$LANGS_REPO/target/release/tmc-langs-cli"
+echo "Building tmc-langs-cli ($PROFILE) from $LANGS_REPO ..."
+cargo build --profile "$PROFILE" -p tmc-langs-cli --manifest-path "$LANGS_REPO/Cargo.toml"
+
+BINARY="$LANGS_REPO/target/$PROFILE_DIR/tmc-langs-cli"
 if [ ! -f "$BINARY" ]; then
-  BINARY="$LANGS_REPO/target/release/tmc-langs-cli.exe"
+  BINARY="$LANGS_REPO/target/$PROFILE_DIR/tmc-langs-cli.exe"
 fi
 if [ ! -f "$BINARY" ]; then
-  echo "Built binary not found under $LANGS_REPO/target/release" >&2
+  echo "Built binary not found under $LANGS_REPO/target/$PROFILE_DIR" >&2
   exit 1
 fi
 

@@ -169,6 +169,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "check-exercise-updates",
     ])
   })
@@ -177,7 +179,14 @@ suite("Langs class arg building", function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
     await langs.getEnrolledMoocCourses()
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "courses",
+    ])
   })
 
   test("setSetting passes the value base64-encoded", async function () {
@@ -233,6 +242,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "get-exercise-submissions",
       "--exercise-id",
       "ex-uuid",
@@ -249,7 +260,16 @@ suite("Langs class arg building", function () {
     const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-combined-course-data", combined)))
     const result = await langs.getMoocCourseData(uuid(1))
     expect(calls.map((x) => x.args)).toEqual([
-      ["mooc", "--client-name", "test-client", "course-data", "--course-id", uuid(1)],
+      [
+        "mooc",
+        "--client-name",
+        "test-client",
+        "--client-version",
+        "1.0.0",
+        "course-data",
+        "--course-id",
+        uuid(1),
+      ],
     ])
     expect(result.unwrap()).toEqual(combined)
   })
@@ -262,6 +282,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "paste",
       "--exercise-id",
       "ex-uuid",
@@ -278,6 +300,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "submit",
       "--dont-block",
       "--exercise-id",
@@ -317,6 +341,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "wait-for-grading",
       "--submission-id",
       TASK_SUBMISSION_ID,
@@ -335,6 +361,7 @@ suite("Langs class arg building", function () {
         feedback_text: "All tests passed",
         exercise_progress: null,
         test_results: null,
+        submission_page_url: null,
       },
     }
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
@@ -424,6 +451,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-old-submission",
       "--submission-id",
       "sub-uuid",
@@ -480,6 +509,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-or-update-course-exercises",
       "--exercise-id",
       "exercise-uuid",
@@ -496,6 +527,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-or-update-course-exercises",
       "--course-id",
       "course-uuid",
@@ -532,6 +565,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "reset-exercise",
       "--exercise-id",
       "ex-uuid",
@@ -548,6 +583,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "reset-exercise",
       "--save-old-state",
       "--exercise-id",
@@ -615,7 +652,14 @@ suite("Langs class arg building", function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
     langs.authenticate(() => {})
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "login"])
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "login",
+    ])
   })
 
   // The device flow can take minutes; the CLI reports the code's expiry itself.
@@ -779,7 +823,7 @@ suite("Langs cross-backend independence", function () {
     expect(result.unwrap()).toEqual({
       downloaded: [{ id: idOfTmcExercise(1), path: "/p/e" }],
       skipped: [],
-      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"]]],
+      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"], undefined]],
     })
   })
 
@@ -1068,7 +1112,7 @@ suite("Langs error-kind mapping", function () {
     expect(result.ok).toBe(true)
     expect(calls.map((x) => x.args)).toEqual([
       ["tmc", "--client-name", "test-client", "--client-version", "1.0.0", "logout"],
-      ["mooc", "--client-name", "test-client", "logout"],
+      ["mooc", "--client-name", "test-client", "--client-version", "1.0.0", "logout"],
     ])
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
   })
@@ -1115,7 +1159,7 @@ suite("Langs error-kind mapping", function () {
 
     expect((await langs.isAuthenticated()).val).toBe(true)
     expect(calls.map((c) => c.args)).toEqual([
-      ["mooc", "--client-name", "test-client", "logged-in"],
+      ["mooc", "--client-name", "test-client", "--client-version", "1.0.0", "logged-in"],
     ])
   })
 
@@ -1123,7 +1167,10 @@ suite("Langs error-kind mapping", function () {
     const langs = newLangs()
     const withAccount = {
       ...nullOutput("currently logged in", "logged-in"),
-      data: { "output-data-kind": "mooc-current-user", "output-data": { id: uuid(7) } },
+      data: {
+        "output-data-kind": "mooc-current-user",
+        "output-data": { id: uuid(7), name: null, email: null },
+      },
     } satisfies OutputData
     stubSpawn(langs, (i) =>
       Ok(i === 0 ? withAccount : nullOutput("currently logged in", "logged-in")),

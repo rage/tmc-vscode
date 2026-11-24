@@ -231,6 +231,25 @@ export function moocGradingView(
   if (status.status === "no-grading-yet") {
     return { ...emptyView, ...stillGrading, headline: "Grading has not started yet" }
   }
+  if (status.status === "grading-hidden") {
+    return {
+      ...emptyView,
+      phase: "finished",
+      headline: "Submission received",
+      tone: "info",
+      explanation: "Its result is shown once the exam ends.",
+    }
+  }
+  if (status.status === "unrecognized") {
+    return {
+      ...emptyView,
+      phase: "finished",
+      headline: "Submission received",
+      tone: "info",
+      explanation:
+        "This version of TestMyCode cannot show its grading. See its result on the course page.",
+    }
+  }
   const { grading } = status
   const given =
     grading.score_given === null ? undefined : Math.round(grading.score_given * 100) / 100
@@ -303,6 +322,15 @@ export function moocGradingView(
     case "Pending":
     case "NotReady":
       return { ...graded, ...stillGrading, headline: "Grading still in progress" }
+    case "Unrecognized":
+      return {
+        ...graded,
+        phase: "finished",
+        headline: "Submission graded",
+        tone: "info",
+        explanation:
+          "This version of TestMyCode cannot show this grading. See its result on the course page.",
+      }
     default:
       return assertUnreachable(grading.grading_progress)
   }

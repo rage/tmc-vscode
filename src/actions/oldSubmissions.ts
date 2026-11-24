@@ -50,6 +50,8 @@ function moocStatus(submission: ExerciseSlideSubmissionListItem, maxPoints: numb
     case "NotReady":
     case "Pending":
       return "Pending"
+    case "Unrecognized":
+      return "Unknown status"
   }
   return assertUnreachable(submission.grading_progress)
 }

@@ -49,6 +49,8 @@ import {
     zMoocCourse,
     zMoocCurrentUser,
     zMoocDeviceLogin,
+    zMoocDownloadFailure,
+    zMoocExam,
     zMoocExerciseDownload,
     zMoocExerciseUpdates,
     zNewSubmission,
@@ -64,6 +66,7 @@ import {
     zRefreshData,
     zRefreshExercise,
     zReview,
+    zReviewingStage,
     zRunResult,
     zRunStatus,
     zStatus,
@@ -78,6 +81,8 @@ import {
     zSubmissionFinished,
     zSubmissionKind,
     zSubmissionStatus,
+    zTeacherDecision,
+    zTeacherReview,
     zTestCase,
     zTestDesc,
     zTestResult,
@@ -349,6 +354,18 @@ export type MoocCurrentUser = z.infer<typeof MoocCurrentUser>;
 export const MoocDeviceLogin = zMoocDeviceLogin;
 export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>;
 
+/**
+ * Why a mooc exercise could not be downloaded.
+ */
+export const MoocDownloadFailure = zMoocDownloadFailure;
+export type MoocDownloadFailure = z.infer<typeof MoocDownloadFailure>;
+
+/**
+ * An exam the user has started and can still answer.
+ */
+export const MoocExam = zMoocExam;
+export type MoocExam = z.infer<typeof MoocExam>;
+
 export const MoocExerciseDownload = zMoocExerciseDownload;
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>;
 
@@ -425,6 +442,12 @@ export const Review = zReview;
 export type Review = z.infer<typeof Review>;
 
 /**
+ * Where an answer is in an exercise's review process. No stage takes new answers.
+ */
+export const ReviewingStage = zReviewingStage;
+export type ReviewingStage = z.infer<typeof ReviewingStage>;
+
+/**
  * The result of running an exercise's test suite against a submission.
  */
 export const RunResult = zRunResult;
@@ -498,6 +521,15 @@ export type SubmissionKind = z.infer<typeof SubmissionKind>;
 
 export const SubmissionStatus = zSubmissionStatus;
 export type SubmissionStatus = z.infer<typeof SubmissionStatus>;
+
+export const TeacherDecision = zTeacherDecision;
+export type TeacherDecision = z.infer<typeof TeacherDecision>;
+
+/**
+ * A teacher's grading of the user's answer.
+ */
+export const TeacherReview = zTeacherReview;
+export type TeacherReview = z.infer<typeof TeacherReview>;
 
 export const TestCase = zTestCase;
 export type TestCase = z.infer<typeof TestCase>;

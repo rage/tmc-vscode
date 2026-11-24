@@ -52,6 +52,14 @@ const moocCourse: MoocCourse = {
   description: "A mooc course",
   organization_name: "University of Helsinki",
   ai_policy: "not_set",
+  closed_at: null,
+  is_enrolled: null,
+  is_staff: false,
+  language_code: null,
+  language_group_id: null,
+  moved_to_course_id: null,
+  successor_course_id: null,
+  url: null,
 }
 
 const moocExerciseSlides: TmcExerciseSlide[] = [
@@ -64,6 +72,7 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
     deadline: null,
     page_url: null,
     chapter: null,
+    exam_id: null,
     tasks: [
       {
         task_id: MOOC_TASK_UUID,
@@ -72,6 +81,7 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
         model_solution_spec: null,
         checksum: null,
         assignment: null,
+        exercise_service_slug: "tmc",
       },
     ],
   },
@@ -94,6 +104,8 @@ const moocCourseProgress: CourseProgress = {
       tries_left: null,
       pending_teacher_review: null,
       exercise_locked: false,
+      reviewing_stage: null,
+      teacher_review: null,
     },
   ],
   closed_chapters: [],

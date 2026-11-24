@@ -18,6 +18,8 @@ const mockTmcLocalMooc = {
   __TMC_LANGS_VERSION__: JSON.stringify(TMC_LANGS_RUST_VERSION),
   __EXTENSION_VERSION__: JSON.stringify(EXTENSION_VERSION),
   __MOOC_BACKEND_URL__: JSON.stringify("http://project-331.local"),
+  // The CLI sends the login only to courses.mooc.fi unless told to trust a dev host.
+  __TMC_LANGS_MOOC_TRUST_LOCALHOST__: JSON.stringify(true),
 }
 
 const mockBackend = {
@@ -26,8 +28,10 @@ const mockBackend = {
   __TMC_LANGS_DL_URL__: JSON.stringify("http://localhost:4001/langs/"),
   __TMC_LANGS_VERSION__: JSON.stringify(TMC_LANGS_RUST_VERSION),
   __EXTENSION_VERSION__: JSON.stringify(EXTENSION_VERSION),
-  // Same port as the TMC mock; test tiers override it via TMC_LANGS_MOOC_ROOT_URL.
-  __MOOC_BACKEND_URL__: JSON.stringify("https://courses.mooc.fi"),
+  // The mock serves both backends, so a tier that forgets TMC_LANGS_MOOC_ROOT_URL cannot reach
+  // production.
+  __MOOC_BACKEND_URL__: JSON.stringify("http://localhost:4001"),
+  __TMC_LANGS_MOOC_TRUST_LOCALHOST__: JSON.stringify(false),
 }
 
 const productionApi = {
@@ -37,6 +41,7 @@ const productionApi = {
   __TMC_LANGS_VERSION__: JSON.stringify(TMC_LANGS_RUST_VERSION),
   __EXTENSION_VERSION__: JSON.stringify(EXTENSION_VERSION),
   __MOOC_BACKEND_URL__: JSON.stringify("https://courses.mooc.fi"),
+  __TMC_LANGS_MOOC_TRUST_LOCALHOST__: JSON.stringify(false),
 }
 
 module.exports = {

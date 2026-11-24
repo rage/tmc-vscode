@@ -37,6 +37,14 @@ const MOOC_COURSE: MoocCourse = {
   organization_name: "University of Helsinki",
   description: "  Everything, briefly.  ",
   ai_policy: "not_set",
+  closed_at: null,
+  is_enrolled: null,
+  is_staff: false,
+  language_code: null,
+  language_group_id: null,
+  moved_to_course_id: null,
+  successor_course_id: null,
+  url: null,
 }
 
 function organization(slug: string, name: string, pinned = false): Organization {

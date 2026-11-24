@@ -15,6 +15,7 @@ import type {
   LocalExercise,
   MoocCourse,
   MoocDeviceLogin,
+  MoocDownloadFailure,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
   Notification,
@@ -49,6 +50,7 @@ import {
   SUBMIT_PROCESS_TIMEOUT,
   TEST_PROCESS_TIMEOUT,
   TMC_BACKEND_URL,
+  TRUST_DEV_MOOC_HOST,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
@@ -215,8 +217,8 @@ export interface ExerciseDownloads {
   downloaded: ExerciseDownload[]
   /** Already up to date. */
   skipped: ExerciseDownload[]
-  /** Each with the reasons the CLI gave. */
-  failed: [ExerciseDownload, string[]][]
+  /** Each with the reasons the CLI gave, and for mooc why it failed. */
+  failed: [ExerciseDownload, string[], MoocDownloadFailure | undefined][]
 }
 
 /** How a backend's copies of the locally downloaded exercises differ from the local ones. */
@@ -245,13 +247,21 @@ function toExerciseDownloads<T>(
     downloaded,
     skipped,
     failed,
-  }: { downloaded: T[]; skipped: T[]; failed?: [T, string[]][] | null | undefined },
+  }: {
+    downloaded: T[]
+    skipped: T[]
+    failed?: [T, string[], MoocDownloadFailure?][] | null | undefined
+  },
   toDownload: (exercise: T) => ExerciseDownload,
 ): ExerciseDownloads {
   return {
     downloaded: downloaded.map((exercise) => toDownload(exercise)),
     skipped: skipped.map((exercise) => toDownload(exercise)),
-    failed: (failed ?? []).map(([exercise, reasons]) => [toDownload(exercise), reasons]),
+    failed: (failed ?? []).map(([exercise, reasons, failure]) => [
+      toDownload(exercise),
+      reasons,
+      failure,
+    ]),
   }
 }
 
@@ -1237,7 +1247,13 @@ export default class Langs {
 
   /** The base arguments of a `mooc` subcommand, followed by `rest`. */
   private _moocCmd(...rest: string[]): string[] {
-    return ["mooc", "--client-name", this.clientName].concat(rest)
+    return [
+      "mooc",
+      "--client-name",
+      this.clientName,
+      "--client-version",
+      this.clientVersion,
+    ].concat(rest)
   }
 
   /** The base arguments of a `tmc` subcommand, followed by `rest`. */
@@ -1597,6 +1613,7 @@ export default class Langs {
           TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
           TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
           TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
+          ...(TRUST_DEV_MOOC_HOST ? { TMC_LANGS_MOOC_TRUST_LOCALHOST: "1" } : {}),
           ...(javaHome ? { JAVA_HOME: javaHome } : {}),
         },
       })

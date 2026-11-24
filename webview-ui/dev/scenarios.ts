@@ -937,6 +937,8 @@ export const SCENARIOS: Scenario[] = [
               tries_left: null,
               pending_teacher_review: null,
               exercise_locked: false,
+              reviewing_stage: null,
+              teacher_review: null,
             },
           }),
           3,

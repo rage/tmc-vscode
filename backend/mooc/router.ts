@@ -1002,8 +1002,10 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
     return "NoGradingYet"
   }
   const now = new Date().toISOString()
-  const outcome = state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"
+  const fixture = state.fixtures.exerciseById.get(record.exerciseId)
+  const outcome = fixture?.gradingOutcome ?? "passing"
   const grading = outcomeOf(state, record)
+  const pageUrl = fixture?.slide.page_url ?? null
   return {
     Grading: {
       grading_progress: grading.grading_progress,
@@ -1013,6 +1015,7 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
       feedback_json: grading.feedback_json,
       feedback_text: grading.feedback_text,
       exercise_progress: exerciseProgress(state, record.exerciseId),
+      submission_page_url: pageUrl === null ? null : `${pageUrl}#${record.exerciseId}`,
     },
   }
 }

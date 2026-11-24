@@ -261,6 +261,14 @@ const moocCourse = {
   description: "An example course.",
   organization_name: "University of Helsinki",
   ai_policy: "not_set",
+  closed_at: null,
+  is_enrolled: null,
+  is_staff: false,
+  language_code: null,
+  language_group_id: null,
+  moved_to_course_id: null,
+  successor_course_id: null,
+  url: null,
 }
 
 const moocExerciseSlide = {
@@ -277,6 +285,7 @@ const moocExerciseSlide = {
       task_id: UUID_C,
       order_number: 0,
       assignment: { type: "doc", content: [] },
+      exercise_service_slug: "tmc",
       public_spec: {
         type: "editor",
         archive_name: "part01.tar.zst",
@@ -297,6 +306,7 @@ const moocExerciseSlide = {
       task_id: UUID_B,
       order_number: 1,
       assignment: null,
+      exercise_service_slug: "tmc",
       public_spec: null,
       model_solution_spec: {
         type: "browser",
@@ -308,6 +318,21 @@ const moocExerciseSlide = {
 }
 
 const validCliOutputFixtures: CliOutputFixture[] = [
+  {
+    name: "mooc-exams",
+    value: outputData("mooc-exams", [
+      {
+        id: UUID_B,
+        name: "Final exam",
+        started_at: "2026-07-21T10:00:00Z",
+        answerable_until: "2026-07-21T13:00:00Z",
+      },
+    ]),
+  },
+  {
+    name: "mooc-submission-status: grading-hidden",
+    value: outputData("mooc-submission-status", { status: "grading-hidden" }),
+  },
   {
     name: "status-update: client-update-data / exercise-download",
     value: {
@@ -561,6 +586,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
         feedback_text: "All tests passed",
+        submission_page_url: null,
         exercise_progress: {
           exercise_id: UUID_B,
           score_given: 1,
@@ -589,6 +615,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         grading_started_at: null,
         grading_completed_at: null,
         feedback_text: null,
+        submission_page_url: null,
         exercise_progress: null,
         test_results: {
           status: "COMPILE_FAILED",

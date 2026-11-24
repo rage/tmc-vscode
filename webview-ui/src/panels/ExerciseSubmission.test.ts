@@ -523,6 +523,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -564,6 +566,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -588,6 +592,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -633,6 +639,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
             tries_left: null,
             pending_teacher_review: null,
             exercise_locked: false,
+            reviewing_stage: null,
+            teacher_review: null,
           },
         }),
         1,

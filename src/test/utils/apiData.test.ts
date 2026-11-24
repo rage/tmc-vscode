@@ -257,6 +257,8 @@ suite("combineMoocApiExerciseData", function () {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       ],
       closed_chapters: [],
@@ -302,6 +304,8 @@ function progressEntry(
     tries_left: null,
     pending_teacher_review: null,
     exercise_locked: false,
+    reviewing_stage: null,
+    teacher_review: null,
     ...overrides,
   }
 }

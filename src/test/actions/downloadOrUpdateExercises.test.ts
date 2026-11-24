@@ -4,6 +4,7 @@ import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { MoocDownloadFailure } from "../../../shared/langsSchema"
 import type { ExerciseStatus } from "../../../shared/lib"
 import { ExerciseIdentifier } from "../../../shared/lib"
 import { downloadOrUpdateExercises, downloadsSettled, findKeptCopy } from "../../actions"
@@ -55,8 +56,13 @@ const storedCourse = tmcLocalCourse({
 const createDownloadResult = (
   downloaded: ExerciseDownload[],
   skipped: ExerciseDownload[],
-  failed: [ExerciseDownload, string[]][] = [],
-): Result<ExerciseDownloads, Error> => Ok({ downloaded, failed, skipped })
+  failed: [ExerciseDownload, string[], MoocDownloadFailure?][] = [],
+): Result<ExerciseDownloads, Error> =>
+  Ok({
+    downloaded,
+    failed: failed.map(([download, reasons, failure]) => [download, reasons, failure]),
+    skipped,
+  })
 
 /** What a fake download is handed: every id it was asked for, whichever backend. */
 type FakeDownload = (

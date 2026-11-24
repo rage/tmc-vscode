@@ -48,6 +48,8 @@ function moocGrading(
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         }
       : null,
   })
