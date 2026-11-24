@@ -139,6 +139,8 @@ interface MoocMockState {
   endedExamIds: Set<string>
   /** Outcomes a test set over the fixtures'; see {@link MoocMockControls.setGradingOutcome}. */
   gradingOutcomeOverrides: Map<string, GradingOutcome>
+  /** Every request outside the control routes gets its connection destroyed. */
+  areConnectionsDropped: boolean
   /** Courses whose settings reveal model solutions to every student. */
   modelSolutionRevealedCourseIds: Set<string>
   uploadsById: Map<string, UploadRecord>
@@ -219,6 +221,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   reviewProgressByExerciseId: new Map(),
   endedExamIds: new Set(),
   gradingOutcomeOverrides: new Map(),
+  areConnectionsDropped: false,
   modelSolutionRevealedCourseIds: new Set(),
   chapterByExerciseId: new Map(),
   uploadsById: new Map(),
@@ -362,6 +365,11 @@ export interface MoocMockControls {
    * `undefined` restores that; false for an unknown exercise.
    */
   setGradingOutcome: (exerciseId: string, outcome: GradingOutcome | undefined) => boolean
+  /**
+   * Makes the whole mock, both backends included, drop every connection, as an unreachable
+   * server does; the control routes still answer so a test can end it.
+   */
+  setConnectionsDropped: (dropped: boolean) => void
   /** Ends an exam's answering time, or restores it; false for an unknown exam. */
   setExamEnded: (examId: string, ended: boolean) => boolean
   /** Makes the course's settings reveal model solutions to everyone; false for an unknown course. */
@@ -471,6 +479,7 @@ const createMoocMockControls = (
     state.reviewProgressByExerciseId.clear()
     state.endedExamIds.clear()
     state.gradingOutcomeOverrides.clear()
+    state.areConnectionsDropped = false
     state.modelSolutionRevealedCourseIds.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
@@ -641,6 +650,9 @@ const createMoocMockControls = (
       state.gradingOutcomeOverrides.delete(exerciseId)
     }
     return true
+  },
+  setConnectionsDropped: (dropped) => {
+    state.areConnectionsDropped = dropped
   },
   setExamEnded: (examId, ended) => {
     if (!state.fixtures.exams.some((exam) => exam.id === examId)) {
@@ -2134,6 +2146,16 @@ export const registerMoocRoutes = (
     res.send(bytes)
   })
 
+  // First on the app, so it precedes the tmc mock's routes mounted after this one.
+  app.use((req, _res, next) => {
+    const isControl = /^\/(mooc|tmc)-mock\//.test(req.path)
+    if (state.areConnectionsDropped && !isControl) {
+      req.socket.destroy()
+      return
+    }
+    next()
+  })
+
   // The /mooc-mock/* control routes sit on the app, outside the bearer middleware: a test
   // drives them before it holds a token. They parse their own JSON bodies, as the OAuth
   // routes parse form bodies.
@@ -2339,6 +2361,16 @@ export const registerMoocRoutes = (
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
     }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-connections-dropped", json, (req, res) => {
+    const { dropped } = (req.body ?? {}) as { dropped?: unknown }
+    if (typeof dropped !== "boolean") {
+      res.status(400).json({ error: "dropped must be a boolean" })
+      return
+    }
+    controls.setConnectionsDropped(dropped)
     res.status(204).end()
   })
 

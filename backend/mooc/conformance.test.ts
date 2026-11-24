@@ -2507,6 +2507,18 @@ describe("mooc mock exams, course facts and review progress", () => {
     )
   })
 
+  test("dropped connections fail every request but the control routes, until ended", async () => {
+    assert.equal((await post("set-connections-dropped", { dropped: true })).status, 204)
+    await assert.rejects(authFetch(api("/courses")))
+    assert.equal((await fetch(`${base}/mooc-mock/auth-state`)).status, 200)
+    assert.equal((await post("set-connections-dropped", { dropped: false })).status, 204)
+    assert.equal((await authFetch(api("/courses"))).status, 200)
+    mock.setConnectionsDropped(true)
+    mock.reset()
+    assert.equal((await authFetch(api("/courses"))).status, 200)
+    assert.equal((await post("set-connections-dropped", { dropped: "yes" })).status, 400)
+  })
+
   test("the control routes drive the same state", async () => {
     assert.equal((await post("set-exam-ended", { exam_id: EXAM_ID, ended: true })).status, 204)
     assert.deepEqual(await getJson("/exams"), [])
