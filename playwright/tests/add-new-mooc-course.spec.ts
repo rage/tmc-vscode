@@ -96,7 +96,9 @@ vsCodeTest(
       await expect(allPassed).toBeHidden()
       // Contributed under `test-my-code:ActiveEditorIsExercise` (package.json), so it renders
       // only once the extension has recognised the open exercise.
-      const runTests = page.getByLabel("Run Tests", { exact: true })
+      const runTests = page
+        .getByRole("toolbar", { name: "Editor actions" })
+        .getByLabel("Run Tests", { exact: true })
       await expect(runTests).toBeVisible()
       await runTests.click()
       await expect(allPassed).toBeVisible()

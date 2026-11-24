@@ -71,7 +71,9 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("see it reported in History as a normal outcome", async () => {
-      await expect(sidePanel.getByText("That submission has no files to download.")).toBeVisible()
+      await expect(
+        sidePanel.getByRole("main").getByText("That submission has no files to download."),
+      ).toBeVisible()
       await expect(
         coursesView.notificationToast("That submission has no files to download."),
       ).toBeHidden()
