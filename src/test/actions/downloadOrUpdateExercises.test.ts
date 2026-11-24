@@ -356,7 +356,8 @@ suite("downloadOrUpdateExercises action", function () {
   })
 
   test.each([
-    [["browser-only", "several-editor-tasks"], "This exercise cannot be done in VS Code"],
+    [["browser-only"], "This exercise cannot be done in VS Code"],
+    [["browser-only", "several-editor-tasks"], "These exercises are done on the course page"],
     [["server-error"], "The server ran into a problem"],
     [["connection-error"], "Could not reach the server"],
     [["not-found"], "This exercise is no longer in the course"],

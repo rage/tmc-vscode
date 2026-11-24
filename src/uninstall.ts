@@ -2,6 +2,7 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 
+import { proxyEnvironment } from "./api/proxyEnvironment"
 import {
   CLIENT_NAME,
   EXTENSION_VERSION,
@@ -12,10 +13,16 @@ import {
 import { CREDENTIALS_FILE, cliConfigFolder } from "./init/cliConfigFolder"
 
 /**
- * The file, beside the bundled scripts of the installed extension, holding the path of the CLI
- * the extension last ran: only the extension host can work it out.
+ * The file, beside the bundled scripts of the installed extension, holding a {@link CliRecord}:
+ * only the extension host can work it out.
  */
-const CLI_PATH_RECORD = "cli-path"
+const CLI_RECORD = "cli-record.json"
+
+/** How the extension last ran the CLI: its path and VS Code's proxy settings. */
+export interface CliRecord {
+  cliPath: string
+  httpProxy?: { proxy: string; noProxy: string[] } | undefined
+}
 
 /** Long enough to revoke a login over a slow network; an uninstall must not hang on it. */
 const LOGOUT_TIMEOUT_MS = 15_000
@@ -27,14 +34,15 @@ const LOGOUT_TIMEOUT_MS = 15_000
  * `vscode:uninstall` hook, outside the extension host, so it cannot use the `vscode` API.
  *
  * @param configuredDir What `Langs` passes as `TMC_LANGS_CONFIG_DIR`, if anything.
- * @param cliPath The CLI to log out with first; the logins it leaves are deleted either way.
+ * @param cli The CLI to log out with first; the logins it leaves are deleted either way.
  * @returns The credential files deleted after the logout.
  */
 export function removeStoredLogins(
   configuredDir: string | undefined,
-  cliPath?: string | undefined,
+  cli?: CliRecord | undefined,
 ): string[] {
   const folder = cliConfigFolder(configuredDir)
+  const cliPath = cli?.cliPath
   if (cliPath && fs.existsSync(cliPath)) {
     cp.spawnSync(
       cliPath,
@@ -43,6 +51,7 @@ export function removeStoredLogins(
         cwd: path.dirname(cliPath),
         env: {
           ...process.env,
+          ...proxyEnvironment(cli.httpProxy, process.env),
           TMC_LANGS_TMC_ROOT_URL: process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL,
           TMC_LANGS_MOOC_ROOT_URL: process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL,
           ...(configuredDir ? { TMC_LANGS_CONFIG_DIR: configuredDir } : {}),
@@ -74,26 +83,32 @@ export function removeStoredLogins(
   return removed
 }
 
-/** The CLI {@link recordCliPath} recorded, if it did. */
-function recordedCliPath(): string | undefined {
+/** The CLI {@link recordCli} recorded, if it did. */
+function recordedCli(): CliRecord | undefined {
   try {
-    return fs.readFileSync(path.join(__dirname, CLI_PATH_RECORD), "utf-8").trim() || undefined
+    const record: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, CLI_RECORD), "utf-8"))
+    return typeof record === "object" &&
+      record !== null &&
+      typeof (record as CliRecord).cliPath === "string"
+      ? (record as CliRecord)
+      : undefined
   } catch {
     return undefined
   }
 }
 
 /**
- * Records `cliPath` for {@link removeStoredLogins} to log out with on uninstall. Best effort: an
- * extension folder that cannot be written leaves the uninstall deleting the logins only.
+ * Records how to run the CLI for {@link removeStoredLogins} to log out with on uninstall. Best
+ * effort: an extension folder that cannot be written leaves the uninstall deleting the logins only.
  */
-export async function recordCliPath(cliPath: string): Promise<void> {
-  if (recordedCliPath() === cliPath) {
+export async function recordCli(record: CliRecord): Promise<void> {
+  const serialized = JSON.stringify(record)
+  if (JSON.stringify(recordedCli()) === serialized) {
     return
   }
-  await fs.promises.writeFile(path.join(__dirname, CLI_PATH_RECORD), cliPath).catch(() => undefined)
+  await fs.promises.writeFile(path.join(__dirname, CLI_RECORD), serialized).catch(() => undefined)
 }
 
 if (require.main === module) {
-  removeStoredLogins(process.env.TMC_LANGS_CONFIG_DIR ?? TMC_LANGS_CONFIG_DIR, recordedCliPath())
+  removeStoredLogins(process.env.TMC_LANGS_CONFIG_DIR ?? TMC_LANGS_CONFIG_DIR, recordedCli())
 }

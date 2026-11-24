@@ -241,6 +241,8 @@ vi.mock("../../api/workspaceTrustPrompt", () => ({
   requestWorkspaceTrust: async (): Promise<void> => {},
 }))
 
+// Its record lands beside the module, which under vitest is src/.
+vi.mock("../../uninstall", () => ({ recordCli: vi.fn(async () => undefined) }))
 vi.mock("../../init/ensureLangsUpdated", () => ({
   ensureLangsUpdated: async (): Promise<unknown> => {
     recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]

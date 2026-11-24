@@ -333,7 +333,7 @@ export class ProjectsSplitError extends BaseError {
 
 /**
  * Moving the exercises folder failed part way. `cause` is why; the message says where the
- * exercises are now, which can be either folder.
+ * exercises are now, which can be either folder, or is empty when that is not known.
  */
 export class ProjectsDirMoveError extends BaseError {
   public override readonly name = "Projects Dir Move Error"
@@ -680,7 +680,8 @@ export function presentationFor(error: Error): ErrorPresentation {
       error.cause instanceof FileAccessError
         ? ""
         : " Close terminals and programs that use the exercises, then try again."
-    return { message: `${why.message}${advice} ${reported}`, actions: why.actions }
+    const location = error.message ? ` ${error.message}` : ""
+    return { message: `${why.message}${advice}${location}`, actions: why.actions }
   }
   if (error instanceof SpawnError) {
     return spawnFailurePresentation(error)

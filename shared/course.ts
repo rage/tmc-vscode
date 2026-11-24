@@ -107,9 +107,14 @@ export const SharedMoocCourseExerciseSchema = z.object({
   instructions: z.array(z.string()).optional(),
   /** courses.mooc.fi reveals the model solution to the student; absent means no. */
   hasModelSolution: z.boolean().optional(),
-  /** Where the student's answer is in a peer, self or teacher review; absent outside one. */
-  reviewingStage: ReviewingStage.optional(),
+  /**
+   * Where the student's answer is in a peer, self or teacher review; absent outside one. An
+   * unknown stored stage is dropped rather than failing the exercise's whole record.
+   */
+  // oxlint-disable-next-line unicorn/prefer-top-level-await -- zod's catch, not a promise's
+  reviewingStage: ReviewingStage.optional().catch(undefined),
   /** A teacher's grading of the student's answer; absent when there is none. */
+  // oxlint-disable-next-line unicorn/prefer-top-level-await -- zod's catch, not a promise's
   teacherReview: z
     .object({
       decision: TeacherDecision,
@@ -117,7 +122,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
       scoreGiven: z.number(),
       createdAt: z.string(),
     })
-    .optional(),
+    .optional()
+    .catch(undefined),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>

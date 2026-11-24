@@ -25,6 +25,7 @@ import {
   ChapterNotOpenError,
   CourseAccessLostError,
   ExerciseUpdateError,
+  UnsupportedExerciseError,
   isSessionLost,
   presentationFor,
 } from "../errors"
@@ -542,6 +543,14 @@ function failureCause(
         return closedChapterError(actionContext, failures, details)
       case "broken-package":
         return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
+      case "unsupported-exercise":
+        if (failures.length > 1) {
+          return new UnsupportedExerciseError(
+            "These exercises are done on the course page, not in VS Code.",
+            details,
+          )
+        }
+        return langsError({ kind: cause }, details, details, "mooc")
       default: {
         const backend = failures[0]?.id.kind
         return Object.assign(langsError({ kind: cause }, details, details, backend), { backend })

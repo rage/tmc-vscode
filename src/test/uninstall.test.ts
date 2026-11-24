@@ -2,7 +2,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
-import { onTestFinished } from "vitest"
+import { onTestFinished, vi } from "vitest"
 
 import { CLIENT_NAME } from "../config/constants"
 import { removeStoredLogins } from "../uninstall"
@@ -38,16 +38,23 @@ suite("removeStoredLogins", function () {
       const cli = path.join(base, "fake-cli")
       fs.writeFileSync(
         cli,
-        '#!/bin/sh\necho "$TMC_LANGS_CONFIG_DIR $*" > "$TMC_LANGS_CONFIG_DIR/ran"\n' +
+        '#!/bin/sh\necho "$HTTPS_PROXY $TMC_LANGS_CONFIG_DIR $*" > "$TMC_LANGS_CONFIG_DIR/ran"\n' +
           'rm "$TMC_LANGS_CONFIG_DIR/tmc-' +
           CLIENT_NAME +
           '/credentials_mooc_host.json"\n',
         { mode: 0o755 },
       )
 
-      expect(removeStoredLogins(base, cli)).toEqual([])
+      vi.stubEnv("HTTPS_PROXY", "")
+      vi.stubEnv("https_proxy", "")
+      onTestFinished(() => {
+        vi.unstubAllEnvs()
+      })
+      const httpProxy = { proxy: "http://proxy:3128", noProxy: [] }
+
+      expect(removeStoredLogins(base, { cliPath: cli, httpProxy })).toEqual([])
       expect(fs.readFileSync(path.join(base, "ran"), "utf-8")).toMatch(
-        new RegExp(`^${base} mooc --client-name ${CLIENT_NAME} .* logout\\n$`),
+        new RegExp(`^http://proxy:3128 ${base} mooc --client-name ${CLIENT_NAME} .* logout\\n$`),
       )
     },
   )
@@ -56,7 +63,7 @@ suite("removeStoredLogins", function () {
     const { base, folder } = configDir()
     fs.writeFileSync(path.join(folder, "credentials_mooc_host.json"), "{}")
 
-    expect(removeStoredLogins(base, path.join(base, "no-such-cli"))).toEqual([
+    expect(removeStoredLogins(base, { cliPath: path.join(base, "no-such-cli") })).toEqual([
       "credentials_mooc_host.json",
     ])
   })

@@ -1,3 +1,6 @@
+import * as path from "path"
+
+import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
@@ -55,7 +58,19 @@ export async function bringBackMovedExercises(
   actionContext: ReadyActionContext,
   folder: string,
 ): Promise<Result<boolean, Error>> {
-  const restored = await actionContext.startup.langs.restoreProjects(folder)
+  const { langs, resources } = actionContext.startup
+  const projectsDirectory = resources.projectsDirectory
+  if (!projectsDirectory) {
+    return Err(new Error("The exercises folder is not known."))
+  }
+  // langs refuses an absent exercises folder as unreachable; one deleted by hand is just empty.
+  if (
+    !(await fs.pathExists(projectsDirectory)) &&
+    (await fs.pathExists(path.dirname(projectsDirectory)))
+  ) {
+    await fs.ensureDir(projectsDirectory)
+  }
+  const restored = await langs.restoreProjects(folder)
   if (restored.err) {
     return restored.val instanceof ProjectsRestoreConflictError ? Ok(false) : restored
   }

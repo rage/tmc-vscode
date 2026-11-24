@@ -87,9 +87,7 @@ export async function moveExtensionDataPath(
     await refreshLocalExercises(actionContext)
     const where = resources.projectsDirectory ?? current
     return Err(
-      where
-        ? new ProjectsDirMoveError(moveResult.val, `Your exercises are now in ${where}.`)
-        : moveResult.val,
+      new ProjectsDirMoveError(moveResult.val, where ? `Your exercises are now in ${where}.` : ""),
     )
   }
 
