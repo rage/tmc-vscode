@@ -13,11 +13,11 @@ export const NOT_LOGGED_IN_MESSAGE =
 
 const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
-/** A deadline as the course home prints it, formatted on the host in the display language. */
+/** A deadline as the course home prints it, formatted on the host in English. */
 const DeadlineTextSchema = z.object({
   /** ISO timestamp, for `<time datetime>`. */
   at: z.string(),
-  /** E.g. "Oct 2, 2026, 3:00 PM". */
+  /** E.g. "Oct 2, 2026, 3:00 PM GMT+3". */
   absolute: z.string(),
   /** E.g. "in 3 days" or "2 hours ago"; null further than a week off. */
   relative: z.string().nullable(),

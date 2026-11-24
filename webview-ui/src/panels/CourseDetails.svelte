@@ -487,7 +487,7 @@
 
 <div class="course-home">
   {#if view}
-    <PanelHeader title={view.title} subtitle={view.organization}>
+    <PanelHeader title={view.title} lang={view.languageCode} subtitle={view.organization}>
       {#snippet toolbar()}
         <ToolbarButton
           icon="refresh"
@@ -561,6 +561,7 @@
     {#each view.parts as part (part.key)}
       <CoursePart
         {part}
+        lang={view.languageCode}
         isWorkspaceOpen={view.isWorkspaceOpen}
         canDownload={canDownload && !view.isOffline}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}
