@@ -6,8 +6,9 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
-import { FileSystemError, ProjectsDirMoveError } from "../errors"
-import { isPathInside, Logger } from "../utilities"
+import { langsError } from "../api/langsErrors"
+import { FileSystemError, ProjectsDirMoveError, ProjectsDirMoveRefusedError } from "../errors"
+import { isPathInside, isSamePath, Logger } from "../utilities"
 import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -50,18 +51,18 @@ export async function moveExtensionDataPath(
   }
 
   const current = resources.projectsDirectory
-  // Real paths, so a junction, symlink or subst drive spelling the same folder is caught too.
-  const realNew = path.join(
-    await realPath(newPath.fsPath),
-    path.relative(newPath.fsPath, newFsPath),
-  )
-  if (
-    current !== undefined &&
-    (isPathInside(current, newFsPath) || isPathInside(await realPath(current), realNew))
-  ) {
+  // tmc-langs refuses this too, with links resolved, but only after the editors were closed.
+  if (current !== undefined && isPathInside(current, newFsPath)) {
     return Err(
-      new Error(
-        `The exercises folder cannot be moved into itself: ${newFsPath} is inside ${current}.`,
+      langsError(
+        {
+          kind: isSamePath(current, newFsPath)
+            ? "projects-dir-move-to-itself"
+            : "projects-dir-move-into-itself",
+        },
+        `${newFsPath} is inside ${current}`,
+        "",
+        undefined,
       ),
     )
   }
@@ -74,6 +75,9 @@ export async function moveExtensionDataPath(
   }
 
   const moveResult = await langs.moveProjectsDirectory(newFsPath, onUpdate)
+  if (moveResult.err && moveResult.val instanceof ProjectsDirMoveRefusedError) {
+    return moveResult
+  }
   if (moveResult.err) {
     // A move that stopped part way may have recorded either folder; show whichever it did.
     const settings = await langs.listSettings()
@@ -98,13 +102,4 @@ export async function moveExtensionDataPath(
     projectsDirectory: newFsPath,
     rescanError: refreshed.err ? refreshed.val : undefined,
   })
-}
-
-/** `folder` with its links resolved, or as given when it cannot be resolved. */
-async function realPath(folder: string): Promise<string> {
-  try {
-    return await fs.promises.realpath(folder)
-  } catch {
-    return folder
-  }
 }

@@ -6,10 +6,11 @@ import * as vscode from "vscode"
 import { moveExtensionDataPath } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
+import { langsError } from "../../api/langsErrors"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
-import { ProjectsDirMoveError } from "../../errors"
+import { presentationFor, ProjectsDirMoveError, ProjectsDirMoveRefusedError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -109,8 +110,23 @@ suite("moveExtensionDataPath action", function () {
 
     const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
 
-    expect(result.err).toBe(true)
+    expect(result.val).toBeInstanceOf(ProjectsDirMoveRefusedError)
+    expect(presentationFor(result.val as Error).message).toContain("into a folder inside it")
     expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
+  })
+
+  test("passes on tmc-langs' refusal of a folder only links put inside it, as nothing moved", async function () {
+    const refusal = langsError(
+      { kind: "projects-dir-move-into-itself" },
+      "into itself",
+      "",
+      undefined,
+    )
+    tmcMockValues.moveProjectsDirectory = Err(refusal)
+
+    const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
+
+    expect(result.val).toBe(refusal)
   })
 
   test("refuses to move the exercises folder into a folder inside it", async function () {
