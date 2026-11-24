@@ -407,10 +407,16 @@ jobs:
       - name: Package the extension as an update to 3.5.5
         run: bash bin/packageUpgradeVsix.sh
 
+      # The build users fall back to when a 4.x release is pulled; it must read what 4.x wrote.
+      - name: Package the rollback build
+        run: bash bin/packageRollbackVsix.sh
+
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: upgrade-e2e-vsix
-          path: ./.vscode-test/upgrade-e2e/next.vsix
+          path: |
+            ./.vscode-test/upgrade-e2e/next.vsix
+            ./.vscode-test/upgrade-e2e/rollback.vsix
           if-no-files-found: error
 
   upgrade_tests:

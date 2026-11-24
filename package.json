@@ -45,6 +45,7 @@
     "test:coverage": "vitest run --coverage --reporter=default --reporter=json --outputFile.json=coverage/vitest-results.json",
     "test:watch": "vitest",
     "test:integration": "node ./bin/runIntegrationTests.js",
+    "test:real": "cross-env TMC_E2E_REAL=1 xvfb-maybe -a -- playwright test -c playwright.real.config.ts",
     "test:upgrade": "playwright test -c playwright.upgrade.config.ts",
     "ci:test": "pnpm run test && pnpm run test:integration",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json && pnpm run check:svelte",
