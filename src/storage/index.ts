@@ -33,6 +33,8 @@ export default class Storage {
   private readonly _memento: vscode.Memento
   // Unset by a write that may have failed half-way, so the next one resyncs the mirror.
   private _isLegacyMirrorSynced = false
+  /** A read found courses this version cannot parse, which writes must keep. */
+  private _hasUnreadableCourses = false
 
   /** @param memento The extension's `globalState`, behind its `SerializedMemento`. */
   public constructor(memento: vscode.Memento) {
@@ -40,8 +42,50 @@ export default class Storage {
   }
 
   /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
+  /**
+   * The stored courses this version can read. A course it cannot, such as one a newer version
+   * wrote, is left out here and kept as stored by {@link updateUserData}.
+   *
+   * @throws {CorruptStoredDataError} if the value is not a course list at all.
+   */
   public getUserData(): storage.UserData | undefined {
-    return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
+    const stored = this._memento.get<unknown>(storage.USER_DATA_KEY)
+    if (stored === undefined) {
+      return undefined
+    }
+    const lists = storedCourseLists(stored)
+    if (!lists) {
+      return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
+    }
+    const readable = {
+      courses: lists.courses.filter((course) =>
+        isReadable(course, storage.tmcLocalCourseDataSchema),
+      ),
+      mooc_courses: lists.mooc_courses.filter((course) =>
+        isReadable(course, storage.moocLocalCourseDataSchema),
+      ),
+    }
+    const skipped =
+      lists.courses.length +
+      lists.mooc_courses.length -
+      readable.courses.length -
+      readable.mooc_courses.length
+    if (skipped > 0) {
+      this._hasUnreadableCourses = true
+      Logger.error(`${skipped} stored courses could not be read; they are kept as they are.`)
+    }
+    // The stored value's other keys too: a newer version may have added some.
+    return { ...(stored as object), ...readable } as storage.UserData
+  }
+
+  /** Whether any course may be stored, readable by this version or not. */
+  public hasStoredCourses(): boolean {
+    const stored = this._memento.get<unknown>(storage.USER_DATA_KEY)
+    if (stored === undefined) {
+      return false
+    }
+    const lists = storedCourseLists(stored)
+    return lists === undefined || lists.courses.length + lists.mooc_courses.length > 0
   }
 
   /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
@@ -56,10 +100,14 @@ export default class Storage {
    * mirror needs no work.
    */
   public async updateUserData(
-    userData: storage.UserData | undefined,
+    written: storage.UserData | undefined,
     { isMoocOnlyChange = false }: { isMoocOnlyChange?: boolean } = {},
   ): Promise<void> {
     const memento = this._memento
+    const userData =
+      written && this._hasUnreadableCourses
+        ? withUnreadableCourses(written, memento.get<unknown>(storage.USER_DATA_KEY))
+        : written
     if (isMoocOnlyChange && this._isLegacyMirrorSynced) {
       await memento.update(storage.USER_DATA_KEY, userData)
       return
@@ -258,4 +306,46 @@ function getActiveOldWorkspaceName(memento: vscode.Memento): string | undefined 
     path.join("..", "..")
     ? last(workspaceFile?.fsPath.split(path.sep))
     : undefined
+}
+
+/** The two course lists of a stored user data value, unchecked; `undefined` if it has none. */
+function storedCourseLists(
+  stored: unknown,
+): { courses: unknown[]; mooc_courses: unknown[] } | undefined {
+  if (typeof stored !== "object" || stored === null) {
+    return undefined
+  }
+  const { courses, mooc_courses } = stored as { courses?: unknown; mooc_courses?: unknown }
+  return Array.isArray(courses) && Array.isArray(mooc_courses)
+    ? { courses, mooc_courses }
+    : undefined
+}
+
+function isReadable(course: unknown, schema: z.ZodType): boolean {
+  return schema.safeParse(course).success
+}
+
+/** `written` with the stored courses this version could not read put back as they were. */
+function withUnreadableCourses(written: storage.UserData, stored: unknown): storage.UserData {
+  const lists = storedCourseLists(stored)
+  if (!lists) {
+    return written
+  }
+  const unreadable = <T>(list: unknown[], schema: z.ZodType, kept: { id: T }[]): unknown[] => {
+    const keptIds = new Set(kept.map((course) => course.id))
+    return list.filter(
+      (course) =>
+        !isReadable(course, schema) && !keptIds.has((course as { id?: T } | null)?.id as T),
+    )
+  }
+  return {
+    courses: [
+      ...written.courses,
+      ...unreadable(lists.courses, storage.tmcLocalCourseDataSchema, written.courses),
+    ],
+    mooc_courses: [
+      ...written.mooc_courses,
+      ...unreadable(lists.mooc_courses, storage.moocLocalCourseDataSchema, written.mooc_courses),
+    ],
+  } as storage.UserData
 }

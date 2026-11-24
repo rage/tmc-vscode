@@ -29,6 +29,22 @@ suite("Storage reads", function () {
     expect(storage.getUserData()).toEqual(stored)
   })
 
+  test("skips a course it cannot read and keeps it as stored on the next write", async function () {
+    const unreadable = { id: "from-a-newer-version", kind: "something new" }
+    await context.globalState.update(v3.USER_DATA_KEY, {
+      ...userData.v3_0_0,
+      mooc_courses: [...userData.v3_0_0.mooc_courses, unreadable],
+    })
+
+    const read = storage.getUserData()
+    expect(read?.mooc_courses).toEqual(userData.v3_0_0.mooc_courses)
+
+    await storage.updateUserData({ courses: [], mooc_courses: [] })
+    expect(context.globalState.get<v3.UserData>(v3.USER_DATA_KEY)?.mooc_courses).toEqual([
+      unreadable,
+    ])
+  })
+
   test("reads back what was written", async function () {
     await storage.updateUserData(userData.v3_0_0)
     await storage.updateSessionState(sessionState.v2_0_0)

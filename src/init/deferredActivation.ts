@@ -91,13 +91,7 @@ export async function canDeferActivation(
   if (LEGACY_DATA_KEYS.some((key) => storedKeys.has(key))) {
     return false
   }
-  try {
-    const userData = new Storage(globalState).getUserData()
-    if (userData && userData.courses.length + userData.mooc_courses.length > 0) {
-      return false
-    }
-  } catch {
-    // Only a full activation can report unreadable courses.
+  if (new Storage(globalState).hasStoredCourses()) {
     return false
   }
   return !(await hasStoredLogin(

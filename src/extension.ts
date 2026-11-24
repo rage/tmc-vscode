@@ -693,6 +693,11 @@ async function activateInner(
         return
       }
       void recheckLoginOnFocus().catch((e) => Logger.error("Login recheck failed", e))
+      if (readyContext) {
+        void readyContext.startup.userData
+          .reloadFromStorage()
+          .catch((e) => Logger.error("Rereading the stored courses failed", e))
+      }
       if (
         readyContext &&
         authState.loggedIn &&
