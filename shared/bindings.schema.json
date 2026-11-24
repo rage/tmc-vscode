@@ -2749,7 +2749,7 @@
           "const": "projects-dir-move-into-itself"
         },
         {
-          "description": "Something named like an entry being brought back by `settings restore-projects` is already\nin the exercises folder (`path`); nothing was moved.",
+          "description": "`settings restore-projects` found the exercises folder holding something other than OS\nmetadata files, such as `path`; nothing was moved.",
           "type": "string",
           "const": "projects-restore-conflict"
         }
