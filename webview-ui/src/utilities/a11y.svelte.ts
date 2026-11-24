@@ -1,3 +1,4 @@
+import { tick } from "svelte"
 import { prefersReducedMotion } from "svelte/motion"
 import { createSubscriber } from "svelte/reactivity"
 
@@ -45,6 +46,57 @@ export function announce(message: string): void {
 export function focusOnMount(element: HTMLElement): void {
   if (document.hasFocus()) {
     element.focus({ preventScroll: true })
+  }
+}
+
+/** Focuses a custom element, or the button in its shadow root when the host itself cannot hold focus. */
+function focusControl(element: HTMLElement): void {
+  element.focus({ preventScroll: true })
+  if (!element.matches(":focus-within")) {
+    element.shadowRoot?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true })
+  }
+}
+
+/**
+ * Attachment for the control that takes the place of one the user just activated: focuses its
+ * element while `shouldFocus()` holds, then calls `done`. Skipped when focus is already
+ * somewhere, so a slow action never pulls focus back from where the user went meanwhile.
+ */
+export function focusWhen(
+  shouldFocus: () => boolean,
+  done: () => void,
+): (element: HTMLElement) => void {
+  return (element) => {
+    if (!shouldFocus()) {
+      return
+    }
+    done()
+    // A custom element is not focusable until it has rendered.
+    const rendered = (element as { updateComplete?: Promise<unknown> }).updateComplete
+    void Promise.resolve(rendered).then(() => {
+      if (
+        element.isConnected &&
+        (!document.activeElement || document.activeElement === document.body)
+      ) {
+        focusControl(element)
+      }
+    })
+  }
+}
+
+/**
+ * Runs `dismiss` for the notice that contains `button`, then moves focus to the next dismiss
+ * button (marked `data-dismiss`), else to the panel's heading, so the removed button does not drop
+ * focus to `<body>`.
+ */
+export async function dismissKeepingFocus(button: Element, dismiss: () => void): Promise<void> {
+  const buttons = [...document.querySelectorAll<HTMLElement>("[data-dismiss]")]
+  const next = buttons[buttons.indexOf(button as HTMLElement) + 1]
+  dismiss()
+  await tick()
+  const target = next?.isConnected ? next : document.querySelector<HTMLElement>("h1")
+  if (target) {
+    focusControl(target)
   }
 }
 

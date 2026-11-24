@@ -2,7 +2,14 @@ import { screen } from "@testing-library/svelte"
 import { flushSync } from "svelte"
 import { vi } from "vitest"
 
-import { announce, focusOnMount, mountAnnouncer, reducedMotion } from "./a11y.svelte"
+import {
+  announce,
+  dismissKeepingFocus,
+  focusOnMount,
+  focusWhen,
+  mountAnnouncer,
+  reducedMotion,
+} from "./a11y.svelte"
 
 suite("announce", () => {
   beforeEach(() => {
@@ -86,5 +93,48 @@ suite("reducedMotion", () => {
     document.body.classList.add("vscode-reduce-motion")
     await vi.waitFor(() => expect(observed).toEqual([false, true]))
     cleanup()
+  })
+})
+
+suite("dismissKeepingFocus", () => {
+  test("moves focus to the next dismiss button, then to the heading", async () => {
+    document.body.innerHTML = `<h1 tabindex="-1">Panel</h1>
+      <div id="one"><button data-dismiss>a</button></div>
+      <div id="two"><button data-dismiss>b</button></div>`
+    const first = document.querySelector("#one button") as HTMLElement
+    const second = document.querySelector("#two button") as HTMLElement
+    first.focus()
+    await dismissKeepingFocus(first, () => document.querySelector("#one")?.remove())
+    expect(second).toHaveFocus()
+
+    await dismissKeepingFocus(second, () => document.querySelector("#two")?.remove())
+    expect(screen.getByRole("heading")).toHaveFocus()
+  })
+})
+
+suite("focusWhen", () => {
+  test("focuses once, unless focus is already somewhere", async () => {
+    document.body.innerHTML = "<button id='x'>x</button><button id='y'>y</button>"
+    const x = document.querySelector("#x") as HTMLElement
+    const y = document.querySelector("#y") as HTMLElement
+    const done = vi.fn()
+    focusWhen(() => true, done)(x)
+    await Promise.resolve()
+    expect(x).toHaveFocus()
+    expect(done).toHaveBeenCalledOnce()
+
+    focusWhen(() => true, done)(y)
+    await Promise.resolve()
+    expect(x).toHaveFocus()
+    expect(done).toHaveBeenCalledTimes(2)
+  })
+
+  test("leaves focus alone while it should not move", () => {
+    document.body.innerHTML = "<button>x</button>"
+    const button = document.querySelector("button") as HTMLElement
+    const done = vi.fn()
+    focusWhen(() => false, done)(button)
+    expect(button).not.toHaveFocus()
+    expect(done).not.toHaveBeenCalled()
   })
 })

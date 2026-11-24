@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte"
 
+  import { dismissKeepingFocus } from "../utilities/a11y.svelte"
   import ToolbarButton from "./ToolbarButton.svelte"
 
   interface Props {
@@ -32,7 +33,12 @@
     {#if actions}<div class="actions">{@render actions()}</div>{/if}
   </div>
   {#if ondismiss}
-    <ToolbarButton icon="close" label={dismissLabel} onclick={ondismiss} />
+    <ToolbarButton
+      icon="close"
+      label={dismissLabel}
+      data-dismiss=""
+      onclick={(event) => void dismissKeepingFocus(event.currentTarget, ondismiss)}
+    />
   {/if}
 </div>
 

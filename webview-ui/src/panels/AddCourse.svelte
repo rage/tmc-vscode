@@ -18,7 +18,7 @@
   import Section from "../components/Section.svelte"
   import Spinner from "../components/Spinner.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import { announce } from "../utilities/a11y.svelte"
+  import { announce, focusWhen } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
@@ -46,6 +46,13 @@
   // The slug of the organization whose courses the tmc section shows; empty for none.
   const browsed = uiState("organization", "")
   let addingKey = $state<string | undefined>(undefined)
+  // The course whose Add or Open button takes focus once the action settles.
+  let focusKey = $state<string | undefined>(undefined)
+  const focusCourseButton = (course: CatalogCourse) =>
+    focusWhen(
+      () => focusKey === course.key && addingKey === undefined,
+      () => (focusKey = undefined),
+    )
   let addFailure = $state<{ key: string; error: WebviewError } | undefined>(undefined)
   let organizationHeading = $state<HTMLElement | undefined>(undefined)
 
@@ -120,6 +127,7 @@
     addFailure = undefined
     const outcome = await request("addCourse", { sourcePanel, key: course.key })
     addingKey = undefined
+    focusKey = course.key
     if (!outcome.ok) {
       addFailure = { key: course.key, error: outcome.error }
     }
@@ -210,7 +218,12 @@
               <vscode-icon name="check" aria-hidden="true"></vscode-icon>
               Added
             </span>
-            <Button secondary aria-label="Open {course.name}" onclick={() => void add(course)}>
+            <Button
+              secondary
+              aria-label="Open {course.name}"
+              {@attach focusCourseButton(course)}
+              onclick={() => void add(course)}
+            >
               Open
             </Button>
           {:else if addingKey === course.key}
@@ -220,6 +233,7 @@
               secondary
               disabled={addingKey !== undefined}
               aria-label="Add {course.name}"
+              {@attach focusCourseButton(course)}
               onclick={() => void add(course)}
             >
               Add
