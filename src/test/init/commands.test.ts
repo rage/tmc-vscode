@@ -127,7 +127,7 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
     ids.push(id)
     handlers.set(id, handler)
     return { dispose: vi.fn() }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
   }) as any)
   const context = {
     subscriptions: [],

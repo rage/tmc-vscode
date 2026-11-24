@@ -88,8 +88,6 @@ suite("Extension data migration", function () {
     expect(result.kind).toBe("done")
   })
 
-  test.todo("should be compatible with extended future data")
-
   suite("from version 0.1.0", function () {
     test("should succeed with valid data", async function () {
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))

@@ -56,7 +56,7 @@ import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/i
 // Records each invocation's argv and short-circuits before spawning.
 function spyOnSpawn(langs: Langs): { args: string[] }[] {
   const calls: { args: string[] }[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
     calls.push(commandArgs as { args: string[] })
     return Err(new Error("stopped before spawning a real process"))
@@ -71,7 +71,7 @@ function stubSpawn(
   stderr = "",
 ): { args: string[] }[] {
   const calls: { args: string[] }[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
     const args = (commandArgs as { args: string[] }).args
     const index = calls.length
@@ -393,7 +393,7 @@ suite("Langs class arg building", function () {
 
   test("waitForMoocGrading forwards progress updates", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as {
         onStdout?: (data: unknown) => void
@@ -611,7 +611,7 @@ suite("Langs class arg building", function () {
 
   test("downloadMoocExercises forwards per-exercise progress updates", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -644,7 +644,7 @@ suite("Langs class arg building", function () {
 
   test("moveProjectsDirectory forwards the CLI's completion fraction unscaled", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -681,7 +681,7 @@ suite("Langs class arg building", function () {
   test("authenticate outlasts the device code", async function () {
     const langs = newLangs()
     let captured: { processTimeout?: number } | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       captured = commandArgs as { processTimeout?: number }
       return Err(new Error("stopped before spawning a real process"))
@@ -699,7 +699,7 @@ suite("Langs class arg building", function () {
       expires_in: 900,
       interval: 5,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -1216,7 +1216,7 @@ suite("Langs error-kind mapping", function () {
     const langs = newLangs()
     let isTmcLogoutDone = false
     let wasTmcLogoutDoneAtMoocLogout: boolean | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const isTmc = (commandArgs as { args: string[] }).args[0] === "tmc"
       if (!isTmc) {
@@ -1544,7 +1544,7 @@ function stubSpawnWithStderr(
   result: Result<OutputData, BaseError>,
   stderr: string,
 ): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation(() =>
     Ok({
       interrupt: (): void => {},
