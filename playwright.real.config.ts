@@ -22,7 +22,7 @@ try {
     }
   }
 } catch {
-  // Without it the specs that need exercise ids fail with a message saying so.
+  // No ids file: only the specs that need exercise ids fail.
 }
 
 export default defineConfig({

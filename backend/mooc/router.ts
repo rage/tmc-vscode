@@ -1050,8 +1050,9 @@ const foreignSubmissionError = (
 
 /**
  * The host's reveal rule (`model_solution_should_be_revealed`): full points, or the slide's
- * try limit used up; staff and courses whose settings reveal solutions get them regardless. The try half counts submissions, not gradings, so it fires on the last
- * allowed try however it scores.
+ * try limit used up; staff and courses whose settings reveal solutions get them regardless.
+ * The try half counts submissions, not gradings, so it fires on the last allowed try however it
+ * scores.
  */
 const modelSolutionRevealed = (state: MoocMockState, exercise: MoocExerciseFixture): boolean => {
   const exerciseId = exercise.slide.exercise_id
