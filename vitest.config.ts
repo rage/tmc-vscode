@@ -15,9 +15,9 @@ export default defineConfig({
       // A few points under what the suite reaches. Raise when coverage rises; never lower
       // to make a run pass.
       thresholds: {
-        lines: 80,
-        branches: 70,
-        functions: 78,
+        lines: 92,
+        branches: 87,
+        functions: 91,
       },
     },
   },

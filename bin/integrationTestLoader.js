@@ -7,7 +7,7 @@ const path = require("path")
 
 // Zero tests are zero failures, so a suite that stopped reaching the bundle or skipped every
 // case would pass. Raise this with the suite.
-const MINIMUM_PASSING = 62
+const MINIMUM_PASSING = 92
 
 function run() {
   const mocha = new Mocha({

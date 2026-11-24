@@ -8,7 +8,8 @@
 //
 // Transcribed, not validated: the vendored spec's `ApiErrorResponse` has no
 // `required` members and nullable fields, so response validation accepts `{}`
-// for every 4xx. Keep in step with `error.rs`; nothing detects drift.
+// for every 4xx. Keep in step with `error.rs`; apiErrors.test.ts checks only the keys the spec
+// documents.
 //
 // `ControllerErrorType::OAuthError` is absent: it uses the RFC 6749
 // `{error, error_description}` body, see ./oauth.ts.

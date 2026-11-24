@@ -116,6 +116,17 @@ expectGateFailure "integration suite floor / a bundle declaring no tests" \
   node -e 'require("./bin/integrationTestLoader.js").run().catch((e) => { console.error(e.message); process.exitCode = 1 })'
 restoreAll
 
+# A report with no tests, as an empty glob or a skipped suite produces.
+printf '{"numPassedTests": 0}\n' > "$scratch/vitest-empty.json"
+expectGateFailure "vitest count floor / a run that reached no tests" \
+  "expected at least" \
+  node bin/assertMinimumTests.js vitest 1 "$scratch/vitest-empty.json"
+
+printf '{"suites": [{"specs": [], "suites": []}]}\n' > "$scratch/playwright-empty.json"
+expectGateFailure "playwright count floor / a listing with no specs" \
+  "expected at least" \
+  node bin/assertMinimumTests.js playwright 1 "$scratch/playwright-empty.json"
+
 # git honours GIT_INDEX_FILE, so the gate runs unmodified against a scratch index.
 export GIT_INDEX_FILE="$scratch/gates.index"
 git read-tree HEAD

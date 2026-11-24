@@ -1,3 +1,6 @@
+import fs from "fs"
+import path from "path"
+
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -110,5 +113,25 @@ suite("Settings", function () {
     settings.dispose()
 
     expect(dispose).toHaveBeenCalled()
+  })
+})
+
+suite("Settings defaults", function () {
+  // Flipping the default is two independent edits; one alone changes what a fresh profile gets.
+  test("the courses.mooc.fi setting's package.json default is the fallback Settings reads with", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as {
+      contributes: { configuration: { properties: Record<string, { default: unknown }> } }
+    }
+    const declared =
+      manifest.contributes.configuration.properties["testMyCode.experimental.coursesMoocFi"]
+    // A configuration that has no value of its own answers with the fallback.
+    vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+      get: (_section: string, fallback?: unknown) => fallback,
+    } as unknown as vscode.WorkspaceConfiguration)
+
+    // Reads no instance state.
+    expect(declared?.default).toBe(Settings.prototype.isCoursesMoocFiEnabled.call(undefined))
   })
 })

@@ -42,7 +42,7 @@
     "release": "./bin/publishRelease.sh",
     "setup-ultimate": "git clean -X -d -f && git submodule update --init && pnpm install && pnpm --dir backend run setup",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --reporter=default --reporter=json --outputFile.json=coverage/vitest-results.json",
     "test:watch": "vitest",
     "test:integration": "node ./bin/runIntegrationTests.js",
     "test:upgrade": "playwright test -c playwright.upgrade.config.ts",

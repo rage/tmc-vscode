@@ -101,6 +101,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: pnpm run test:coverage
 
+      # Zero tests are zero failures, so the run must also have reached a minimum count.
+      - name: Unit test count floor
+        if: matrix.os == 'ubuntu-latest'
+        run: node bin/assertMinimumTests.js vitest 2780 coverage/vitest-results.json
+
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: ${{ always() && matrix.os == 'ubuntu-latest' }}
         with:
@@ -247,11 +252,18 @@ jobs:
           if-no-files-found: ignore
 
   playwright_tests:
-    name: Playwright tests
+    name: Playwright tests (VS Code ${{ matrix.vscode }})
     permissions:
       contents: read
     env:
       CI: true
+      VSCODE_TEST_VERSION: ${{ matrix.vscode != 'minimum' && matrix.vscode || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode: [minimum, stable]
+    # The stable leg only reports until it has proved reliable; the minimum leg gates.
+    continue-on-error: ${{ matrix.vscode == 'stable' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -272,22 +284,110 @@ jobs:
           chmod -R +x cli
           cd ..
 
+      # A glob that stopped matching specs would pass with zero tests.
+      - name: Playwright test count floor
+        run: |
+          PLAYWRIGHT_JSON_OUTPUT_NAME=playwright-list.json pnpm exec playwright test --list --reporter=json > /dev/null
+          node bin/assertMinimumTests.js playwright 70 playwright-list.json
+
       - name: Playwright tests
         run: pnpm run playwright-test
 
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: failure()
         with:
-          name: test-results
+          name: test-results-${{ matrix.vscode }}
           path: ./test-results/
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: failure()
         with:
-          name: playwright-html-report
+          name: playwright-html-report-${{ matrix.vscode }}
           path: ./playwright-report/
           if-no-files-found: ignore
+
+  # Not run by the author: Windows and macOS were never available while writing it, so it
+  # reports only (continue-on-error) until a first green run shows the subset is sound there.
+  playwright_smoke:
+    name: Playwright smoke (${{ matrix.os }})
+    permissions:
+      contents: read
+    env:
+      CI: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          submodules: "true"
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
+
+      # xvfb-maybe, which the script wraps Playwright in, does nothing off Linux.
+      - name: Playwright smoke subset
+        shell: bash
+        run: pnpm run playwright-test mooc-login add-new-mooc-course mooc-results workspace-trust
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: smoke-results-${{ matrix.os }}
+          path: ./test-results/
+          if-no-files-found: ignore
+
+  # The langs release ships targets no other job executes; this runs each on a matching runner.
+  # Unverified for the same reason as the smoke legs.
+  cli_smoke:
+    name: CLI smoke (${{ matrix.os }})
+    permissions:
+      contents: read
+    env:
+      CI: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-15-intel, windows-11-arm]
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          submodules: "true"
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Download the pinned CLI
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+
+      - name: Run the CLI
+        shell: bash
+        run: |
+          cli=$(ls backend/cli/tmc-langs-cli-* | grep -v '\.sha256$' | head -n 1)
+          "$cli" --version
+          "$cli" schema > /dev/null
 
   upgrade_vsix:
     name: Upgrade E2E VSIX
