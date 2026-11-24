@@ -2,14 +2,8 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 
-import { proxyEnvironment } from "./api/proxyEnvironment"
-import {
-  CLIENT_NAME,
-  EXTENSION_VERSION,
-  MOOC_BACKEND_URL,
-  TMC_BACKEND_URL,
-  TMC_LANGS_CONFIG_DIR,
-} from "./config/constants"
+import { cliEnvironment } from "./api/cliEnvironment"
+import { CLIENT_NAME, EXTENSION_VERSION, TMC_LANGS_CONFIG_DIR } from "./config/constants"
 import { CREDENTIALS_FILE, cliConfigFolder } from "./init/cliConfigFolder"
 
 /**
@@ -49,13 +43,7 @@ export function removeStoredLogins(
       ["mooc", "--client-name", CLIENT_NAME, "--client-version", EXTENSION_VERSION, "logout"],
       {
         cwd: path.dirname(cliPath),
-        env: {
-          ...process.env,
-          ...proxyEnvironment(cli.httpProxy, process.env),
-          TMC_LANGS_TMC_ROOT_URL: process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL,
-          TMC_LANGS_MOOC_ROOT_URL: process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL,
-          ...(configuredDir ? { TMC_LANGS_CONFIG_DIR: configuredDir } : {}),
-        },
+        env: cliEnvironment(configuredDir, cli.httpProxy),
         stdio: "ignore",
         timeout: LOGOUT_TIMEOUT_MS,
         windowsHide: true,
@@ -102,11 +90,12 @@ function recordedCli(): CliRecord | undefined {
  * effort: an extension folder that cannot be written leaves the uninstall deleting the logins only.
  */
 export async function recordCli(record: CliRecord): Promise<void> {
+  const file = path.join(__dirname, CLI_RECORD)
   const serialized = JSON.stringify(record)
-  if (JSON.stringify(recordedCli()) === serialized) {
+  if ((await fs.promises.readFile(file, "utf-8").catch(() => undefined)) === serialized) {
     return
   }
-  await fs.promises.writeFile(path.join(__dirname, CLI_RECORD), serialized).catch(() => undefined)
+  await fs.promises.writeFile(file, serialized).catch(() => undefined)
 }
 
 if (require.main === module) {

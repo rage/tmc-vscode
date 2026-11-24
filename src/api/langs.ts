@@ -49,11 +49,8 @@ import {
   DOWNLOAD_PROCESS_TIMEOUT,
   LOGIN_PROCESS_TIMEOUT,
   MINIMUM_SUBMISSION_INTERVAL,
-  MOOC_BACKEND_URL,
   SUBMIT_PROCESS_TIMEOUT,
   TEST_PROCESS_TIMEOUT,
-  TMC_BACKEND_URL,
-  TRUST_DEV_MOOC_HOST,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
@@ -72,9 +69,9 @@ import {
 } from "../errors"
 import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
 import { sleep } from "../utilities/utils"
+import { cliEnvironment } from "./cliEnvironment"
 import type { FractionProgress } from "./dialog"
 import { langsError } from "./langsErrors"
-import { proxyEnvironment } from "./proxyEnvironment"
 
 interface Options {
   cliConfigDir?: string | undefined
@@ -1604,17 +1601,16 @@ export default class Langs {
       .map((x) => JSON.stringify(x))
       .join(" ")
 
-    // override settings with environment variables, mainly for testing
-    const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL
-    const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL
-    const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir
+    const baseEnv = cliEnvironment(
+      process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir,
+      this._options.httpProxy?.(),
+    )
     const javaHome = this._options.javaHome?.() ?? ""
-    const proxyEnv = proxyEnvironment(this._options.httpProxy?.(), process.env)
 
     Logger.info(`Running ${loggableCommand}`)
-    Logger.debug(`TMC backend at ${tmcBackendUrl}`)
-    Logger.debug(`MOOC backend at ${moocBackendUrl}`)
-    Logger.debug(`Config dir at ${tmcLangsConfigDir}`)
+    Logger.debug(`TMC backend at ${baseEnv.TMC_LANGS_TMC_ROOT_URL}`)
+    Logger.debug(`MOOC backend at ${baseEnv.TMC_LANGS_MOOC_ROOT_URL}`)
+    Logger.debug(`Config dir at ${baseEnv.TMC_LANGS_CONFIG_DIR}`)
 
     // debug pulls in j4rs/JNI spam, so only ask for it when the user opted into verbose
     const cliLogLevel = Logger.level === LogLevel.Verbose ? "debug" : "info"
@@ -1635,14 +1631,9 @@ export default class Langs {
         // the inherited one can be a course folder.
         cwd: dirname(this.cliPath),
         env: {
-          ...proxyEnv,
-          ...process.env,
+          ...baseEnv,
           ...env,
           RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
-          TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
-          TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
-          TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
-          ...(TRUST_DEV_MOOC_HOST ? { TMC_LANGS_MOOC_TRUST_LOCALHOST: "1" } : {}),
           ...(javaHome ? { JAVA_HOME: javaHome } : {}),
         },
       })

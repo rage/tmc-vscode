@@ -45,8 +45,8 @@ suite("removeStoredLogins", function () {
         { mode: 0o755 },
       )
 
-      vi.stubEnv("HTTPS_PROXY", "")
-      vi.stubEnv("https_proxy", "")
+      vi.stubEnv("HTTPS_PROXY", undefined)
+      vi.stubEnv("https_proxy", undefined)
       onTestFinished(() => {
         vi.unstubAllEnvs()
       })

@@ -538,6 +538,7 @@ function failureCause(
   const causes = new Set(failures.map(({ kind }) => CAUSE_OF_FAILURE[kind]))
   const [cause] = causes
   if (causes.size === 1 && cause !== undefined && cause !== "other") {
+    const backend = failures[0]?.id.kind
     switch (cause) {
       case "closed-chapter":
         return closedChapterError(actionContext, failures, details)
@@ -550,11 +551,9 @@ function failureCause(
             details,
           )
         }
-        return langsError({ kind: cause }, details, details, "mooc")
-      default: {
-        const backend = failures[0]?.id.kind
+        return langsError({ kind: cause }, details, details, backend)
+      default:
         return Object.assign(langsError({ kind: cause }, details, details, backend), { backend })
-      }
     }
   }
   return new ExerciseUpdateError("The download did not complete.", details)
