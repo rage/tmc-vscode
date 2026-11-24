@@ -433,36 +433,32 @@ suite("what a mooc slide and its progress add to the stored exercise", function 
   const [slide] = moocExerciseSlides
   const task = slide!.tasks[0]!
 
-  test("a slide whose every task is answered in the browser is browser-only", function () {
-    const browserTask = {
-      ...task,
-      public_spec: {
-        type: "browser" as const,
-        archive_name: "a.tar.zst",
-        stub_download_url: "https://example.com/stub",
-        student_file_paths: [],
-        checksum: "c",
-        browser_test: null,
-      },
-    }
-    const [browser] = combineMoocApiExerciseData([{ ...slide!, tasks: [browserTask] }], NO_PROGRESS)
-    const [editor] = combineMoocApiExerciseData([slide!], NO_PROGRESS)
+  test.each(["browser-only", "several-editor-tasks"] as const)(
+    "a slide tmc-langs will not download, as %s, is done on the course page",
+    function (unsupported) {
+      const [unsupportedExercise] = combineMoocApiExerciseData(
+        [{ ...slide!, unsupported }],
+        NO_PROGRESS,
+      )
+      const [editor] = combineMoocApiExerciseData([slide!], NO_PROGRESS)
 
-    expect(browser).toMatchObject({ browserOnly: true })
-    expect(editor).not.toHaveProperty("browserOnly")
-  })
+      expect(unsupportedExercise).toMatchObject({ browserOnly: true })
+      expect(editor).not.toHaveProperty("browserOnly")
+    },
+  )
 
-  test("instructions are the text of the assignment's blocks, nested ones included", function () {
-    const assignment = [
-      { name: "core/paragraph", attributes: { content: "Write a <b>loop</b> &amp; print." } },
-      {
-        name: "core/list",
-        attributes: {},
-        innerBlocks: [{ name: "core/list-item", attributes: { content: "First<br>Second" } }],
-      },
-    ]
+  test("instructions are tmc-langs' plain text of every task, in order", function () {
     const [stored] = combineMoocApiExerciseData(
-      [{ ...slide!, tasks: [{ ...task, assignment }] }],
+      [
+        {
+          ...slide!,
+          tasks: [
+            { ...task, instructions_text: ["Write a loop & print."] },
+            { ...task, instructions_text: ["First\nSecond"] },
+            task,
+          ],
+        },
+      ],
       NO_PROGRESS,
     )
 

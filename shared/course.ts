@@ -98,7 +98,10 @@ export const SharedMoocCourseExerciseSchema = z.object({
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
   pageUrl: z.string().optional(),
-  /** Answered on the course page only, so never downloaded; absent means no. */
+  /**
+   * Answered on the course page only, as tmc-langs will not download it (a browser exercise, or
+   * one with several editor tasks); absent means no.
+   */
   browserOnly: z.boolean().optional(),
   /** The exercise's instructions as plain text paragraphs; absent when it has none. */
   instructions: z.array(z.string()).optional(),

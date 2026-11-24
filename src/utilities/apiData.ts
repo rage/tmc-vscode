@@ -85,7 +85,7 @@ export function combineMoocApiExerciseData(
           }
         : {}),
       ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
-      ...(isBrowserOnly(slide) ? { browserOnly: true } : {}),
+      ...(slide.unsupported ? { browserOnly: true } : {}),
       ...instructionsOf(slide),
       ...(slide.tasks.some((task) => task.model_solution_spec !== null)
         ? { hasModelSolution: true }
@@ -95,54 +95,10 @@ export function combineMoocApiExerciseData(
   })
 }
 
-/** Whether every task of `slide` is answered in the browser, so there is nothing to download. */
-function isBrowserOnly(slide: TmcExerciseSlide): boolean {
-  return slide.tasks.length > 0 && slide.tasks.every((task) => task.public_spec?.type === "browser")
-}
-
 /** The plain text of the slide's task instructions, one paragraph per block. */
 function instructionsOf(slide: TmcExerciseSlide): Pick<MoocLocalCourseExercise, "instructions"> {
-  const paragraphs = slide.tasks.flatMap((task) => blockTexts(task.assignment))
+  const paragraphs = slide.tasks.flatMap((task) => task.instructions_text ?? [])
   return paragraphs.length > 0 ? { instructions: paragraphs } : {}
-}
-
-/**
- * The text of Gutenberg blocks, as the exercise service stores an assignment: each block's
- * `attributes.content` HTML, then its inner blocks'.
- */
-function blockTexts(blocks: unknown): string[] {
-  if (!Array.isArray(blocks)) {
-    return []
-  }
-  return blocks.flatMap((block: unknown) => {
-    if (typeof block !== "object" || block === null) {
-      return []
-    }
-    const { attributes, innerBlocks } = block as { attributes?: unknown; innerBlocks?: unknown }
-    const content =
-      typeof attributes === "object" && attributes !== null
-        ? (attributes as { content?: unknown }).content
-        : undefined
-    const text = typeof content === "string" ? htmlToText(content) : ""
-    return [...(text ? [text] : []), ...blockTexts(innerBlocks)]
-  })
-}
-
-const HTML_ENTITIES: Record<string, string> = {
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&#39;": "'",
-  "&nbsp;": " ",
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replaceAll(/<br\s*\/?>/gi, "\n")
-    .replaceAll(/<[^>]*>/g, "")
-    .replaceAll(/&(amp|lt|gt|quot|#39|nbsp);/g, (entity) => HTML_ENTITIES[entity] ?? entity)
-    .trim()
 }
 
 function reviewOf(
