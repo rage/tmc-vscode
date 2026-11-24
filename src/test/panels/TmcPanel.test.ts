@@ -1776,7 +1776,7 @@ suite("TmcPanel login screens", () => {
   test("closing the screen or showing another one there tells its login", async () => {
     showLogins()
     const left: number[] = []
-    const subscription = loginScreens.onDidLeave((id) => left.push(id))
+    const subscription = loginScreens.onDidLeave(({ panelId }) => left.push(panelId))
     onTestFinished(() => subscription.dispose())
 
     const first = loginScreens.open({}, { phase: "requestingCode" })

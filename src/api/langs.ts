@@ -108,7 +108,9 @@ interface Options {
 }
 
 interface ExecutionOptions {
-  timeout: number
+  timeout?: number
+  /** An auth failure in the answer ends no session; see `LangsProcessArgs.suppressAuthEvents`. */
+  suppressAuthEvents?: boolean
 }
 
 interface LangsProcessArgs {
@@ -138,6 +140,16 @@ interface LangsProcessArgs {
    */
   interruptOnDeactivate?: boolean | undefined
 }
+
+/** A courses.mooc.fi account as `mooc logged-in` names it. */
+export interface MoocAccount {
+  id: string
+  name: string | null
+  email: string | null
+}
+
+/** Which stored login answers for the user; see {@link Langs.getSession}. */
+export type Session = { kind: "mooc"; account?: MoocAccount } | { kind: "tmc" }
 
 /** How an auth failure in a CLI response is attributed. */
 interface AuthAttribution {
@@ -444,33 +456,53 @@ export default class Langs {
    * stored before courses.mooc.fi logins replaced tmc ones.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
-    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
-    // trusted with its token, so any other tmc root would read as logged out.
-    const mooc = await this._isLoggedIn("mooc", options)
-    if (mooc.err || mooc.val) {
-      return mooc
-    }
-    return this._isLoggedIn("tmc", options)
+    return (await this.getSession(options)).map((session) => session !== undefined)
   }
 
-  private async _isLoggedIn(
+  /**
+   * The stored login and, for a courses.mooc.fi one, its account when courses.mooc.fi could
+   * name it; `undefined` when there is none. A `tmc` session is a tmc.mooc.fi login stored by
+   * an earlier version, which courses.mooc.fi logins have replaced.
+   */
+  public async getSession(options?: ExecutionOptions): Promise<Result<Session | undefined, Error>> {
+    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
+    // trusted with its token, so any other tmc root would read as logged out.
+    const mooc = await this._loggedIn("mooc", options)
+    if (mooc.err) {
+      return mooc
+    }
+    if (mooc.val.isLoggedIn) {
+      return Ok({ kind: "mooc", ...(mooc.val.account ? { account: mooc.val.account } : {}) })
+    }
+    const tmc = await this._loggedIn("tmc", options)
+    return tmc.map((state) => (state.isLoggedIn ? { kind: "tmc" } : undefined))
+  }
+
+  private async _loggedIn(
     backend: BackendKind,
     options?: ExecutionOptions,
-  ): Promise<Result<boolean, Error>> {
+  ): Promise<Result<{ isLoggedIn: boolean; account?: MoocAccount }, Error>> {
     const res = await this._executeLangsCommand(
       {
         backend,
         args: this._backendCmd(backend, "logged-in"),
         processTimeout: options?.timeout,
+        suppressAuthEvents: options?.suppressAuthEvents,
       },
       null,
     )
-    return res.andThen<boolean, Error>((x) => {
+    return res.andThen<{ isLoggedIn: boolean; account?: MoocAccount }, Error>((x) => {
       switch (x.result) {
-        case "logged-in":
-          return Ok(true)
+        case "logged-in": {
+          const data = (x as OutputData).data
+          return Ok(
+            data?.["output-data-kind"] === "mooc-current-user"
+              ? { isLoggedIn: true, account: data["output-data"] }
+              : { isLoggedIn: true },
+          )
+        }
         case "not-logged-in":
-          return Ok(false)
+          return Ok({ isLoggedIn: false })
         default:
           return Err(new Error(`Unexpected langs result: ${x.result}`))
       }
@@ -547,7 +579,8 @@ export default class Langs {
     }
     this._responseCache.clear()
     const failed = results.find((res) => res.err)
-    if (failed) {
+    // A revocation that could not reach the server still removed the login here.
+    if (failed && (await this.isAuthenticated({ suppressAuthEvents: true })).unwrapOr(true)) {
       return failed
     }
     this._onLogout?.(true)

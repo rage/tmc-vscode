@@ -567,7 +567,7 @@ export class TmcPanel {
     this._stopAwaitingReady()
     this._panel.dispose()
     if (isLeavingScreen) {
-      this._leaveLoginScreen()
+      this._leaveLoginScreen(true)
     }
 
     if (this._isMain) {
@@ -664,16 +664,16 @@ export class TmcPanel {
   }
 
   /** Tells the login this panel shows, if any, that its screen is gone. */
-  private _leaveLoginScreen(): void {
+  private _leaveLoginScreen(isClosed: boolean): void {
     if (this._route?.type === "Login") {
-      loginScreens.leave(this._route.id)
+      loginScreens.leave(this._route.id, isClosed)
     }
   }
 
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
     if (this._route?.id !== route.id) {
-      this._leaveLoginScreen()
+      this._leaveLoginScreen(false)
     }
     this._route = route
     this._recordShown()

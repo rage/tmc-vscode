@@ -65,6 +65,15 @@ export const NEW_EXERCISES_REMINDER_DELAY = 30 * 60 * 1000
 /** How long after an unprompted refresh the window regaining focus refreshes again. */
 export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
 
+/** Above the CLI's 30 s connect timeout, so a slow network is not taken for a failure. */
+export const STARTUP_AUTH_CHECK_TIMEOUT = 45 * 1000
+
+/** How long after a startup login check that could not answer to ask again. */
+export const DEFERRED_AUTH_CHECK_DELAY = 60 * 1000
+
+/** How often focusing the window may recheck the login another window may have changed. */
+export const FOCUS_AUTH_CHECK_INTERVAL = 30 * 1000
+
 /**
  * How long after the open course was last checked the window regaining focus checks it again.
  * Short, since a student back from the course material may be looking for what was just

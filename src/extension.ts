@@ -35,13 +35,17 @@ import WorkspaceManager, {
 import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
 import { promptForCourseWorkspaceTrust } from "./api/workspaceTrustPrompt"
 import { createCourseWorkspaceOffer, login, logout, refreshEverything } from "./commands"
+import { handOverExercisesOnAccountChange } from "./commands/handOverExercises"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
+  DEFERRED_AUTH_CHECK_DELAY,
+  FOCUS_AUTH_CHECK_INTERVAL,
   FOCUS_REFRESH_INTERVAL,
+  STARTUP_AUTH_CHECK_TIMEOUT,
   EXTENSION_VERSION,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
@@ -49,7 +53,7 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import { FileSystemError, InitializationError } from "./errors"
+import { ConnectionError, FileSystemError, InitializationError, TimeoutError } from "./errors"
 import * as init from "./init"
 import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
@@ -69,7 +73,7 @@ import { failedUpdates } from "./ui/failedUpdates"
 import { JobProgressNotifications } from "./ui/jobProgressNotifications"
 import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
 import { shownCourseHome } from "./ui/shownCourseHome"
-import { AccountStatusBarItem } from "./ui/statusBarAccount"
+import { AccountStatusBarItem, accountLabel } from "./ui/statusBarAccount"
 import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
@@ -280,7 +284,7 @@ async function activateInner(
   restoreWalkthroughMilestones(globalState)
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
-  const initialAuthCheck = authState.refresh({ timeout: 15000 })
+  const initialAuthCheck = authState.refresh({ timeout: STARTUP_AUTH_CHECK_TIMEOUT })
 
   const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
@@ -312,8 +316,15 @@ async function activateInner(
     initialAuthCheck,
     langs.ok ? scanLocalExercises(langs.val) : undefined,
   ])
-  if (authChecked.err) {
+  // A slow network or a first-run antivirus scan is no startup failure: the stored login stands
+  // until a later check can answer.
+  const isAuthCheckDeferred =
+    authChecked.err &&
+    (authChecked.val instanceof TimeoutError || authChecked.val instanceof ConnectionError)
+  if (authChecked.err && !isAuthCheckDeferred) {
     reportInitializationError("Checking your login", authChecked.val)
+  } else if (authChecked.err) {
+    Logger.warn("Could not check the login at startup; checking again later", authChecked.val)
   }
 
   let tmcDataPath: string | undefined
@@ -375,6 +386,8 @@ async function activateInner(
       await authState.set(true)
       sessionExpiry.onLogin()
       expiryNotifier.onLogin()
+      // Names the account, for the status bar and the exercise hand-over.
+      void authState.refresh()
     })
     langs.val.on("logout", async (expected, rejection) => {
       if (expected) {
@@ -543,6 +556,7 @@ async function activateInner(
     authState.subscribe(() => account.update(authState))
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
+      accountLabel: () => accountLabel(authState.session),
       login: async () => (await login(readyContext)) === "loggedIn",
       logout: () => logout(readyContext),
     })
@@ -648,12 +662,38 @@ async function activateInner(
 
   setMaintenancePollArmed(authState.loggedIn)
 
+  if (isAuthCheckDeferred) {
+    const retry = setTimeout(() => void runMaintenancePoll(), DEFERRED_AUTH_CHECK_DELAY)
+    context.subscriptions.push({ dispose: () => clearTimeout(retry) })
+  }
+
+  // Another window may have logged in, out or as someone else since this one last looked.
+  let lastFocusAuthCheckAt = Date.now()
+  async function recheckLoginOnFocus(): Promise<void> {
+    if (Date.now() - lastFocusAuthCheckAt < FOCUS_AUTH_CHECK_INTERVAL) {
+      return
+    }
+    lastFocusAuthCheckAt = Date.now()
+    const wasLoggedIn = authState.loggedIn
+    const checked = await authState.refresh()
+    if (checked.err) {
+      Logger.warn("Failed to recheck the login", checked.val)
+      return
+    }
+    if (!wasLoggedIn && authState.loggedIn && readyContext) {
+      refreshInBackground(readyContext, openCourseRefresh)
+    }
+  }
+
   // The poll alone would leave exercises published mid-session unnoticed for up to its whole
   // interval; coming back to the window is when the student would want to hear of them.
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((state) => {
+      if (!state.focused) {
+        return
+      }
+      void recheckLoginOnFocus().catch((e) => Logger.error("Login recheck failed", e))
       if (
-        state.focused &&
         readyContext &&
         authState.loggedIn &&
         Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
@@ -662,6 +702,26 @@ async function activateInner(
       }
     }),
   )
+
+  if (readyContext) {
+    const handoverContext = readyContext
+    authState.subscribe(() => {
+      const session = authState.session
+      if (session?.kind === "mooc" && session.account) {
+        void handOverExercisesOnAccountChange(handoverContext, session.account.id).catch((e) =>
+          Logger.error("Checking whose the exercises are failed", e),
+        )
+      }
+    })
+    // Stored courses with no login is a session that ended while VS Code was closed.
+    if (
+      authChecked.ok &&
+      !authState.loggedIn &&
+      handoverContext.startup.userData.getCourses().length > 0
+    ) {
+      authState.markSessionExpired()
+    }
+  }
 
   // Created after the listener above, so that a full refresh due on the same focus runs first and
   // stands in for this one.

@@ -298,7 +298,9 @@ export function registerCommands(
     commands.resetExercise(readyContext, resourceOf(target)),
   )
 
-  register("tmc.showAccountMenu", async () => showAccountMenu(readyContext.dialog))
+  register("tmc.showAccountMenu", async () =>
+    showAccountMenu(readyContext.dialog, readyContext.authState.session),
+  )
 
   register("tmc.showExerciseActions", async (resource: vscode.Uri | undefined) =>
     showExerciseActions(

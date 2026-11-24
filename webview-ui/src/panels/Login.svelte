@@ -152,6 +152,10 @@
       Check that the page shows the same code before you approve. In another browser, go to
       <span class="url">{view.verificationUrl}</span> and enter the code there.
     </p>
+    <p class="muted">
+      Used tmc.mooc.fi before? Log in with the same email and password. If they are not accepted,
+      use Forgot password on the MOOC.fi page.
+    </p>
   {:else if view.phase === "failed"}
     {@const hint = FAILURE_HINTS[view.failure]}
     <StatusBanner tone="failed" title={FAILURE_TITLES[view.failure]}>

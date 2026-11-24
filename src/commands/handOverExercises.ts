@@ -32,10 +32,29 @@ export async function handOverExercises(actionContext: ReadyActionContext): Prom
     return
   }
   const { accountId, isSwitch } = accountSwitch.val
+  checkedAccountId = accountId
   if (isSwitch && !(await offerToMoveAside(actionContext, accountId))) {
     return
   }
   await bringBackOwnExercises(actionContext, accountId)
+}
+
+/** The account {@link handOverExercises} last checked the exercises against in this window. */
+let checkedAccountId: string | undefined
+
+/**
+ * Runs {@link handOverExercises} when `accountId` is not the account last checked, as when
+ * another window logged in as someone else or courses.mooc.fi named the account only later.
+ */
+export async function handOverExercisesOnAccountChange(
+  actionContext: ReadyActionContext,
+  accountId: string,
+): Promise<void> {
+  if (accountId === checkedAccountId) {
+    return
+  }
+  checkedAccountId = accountId
+  await handOverExercises(actionContext)
 }
 
 /**

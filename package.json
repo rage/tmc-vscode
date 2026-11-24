@@ -245,7 +245,8 @@
       {
         "command": "tmc.showMoocLogin",
         "title": "Log In",
-        "category": "TestMyCode"
+        "category": "TestMyCode",
+        "icon": "$(sign-in)"
       },
       {
         "command": "tmc.showExerciseActions",
@@ -651,6 +652,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "tmc.showMoocLogin",
+          "group": "navigation@0",
+          "when": "view == tmcView && test-my-code:Initialized && !test-my-code:LoggedIn"
+        },
         {
           "command": "tmc.trustCourseWorkspace",
           "group": "navigation@0",

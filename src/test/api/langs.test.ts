@@ -1248,6 +1248,26 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
+  test("a logout whose revocation failed is done once no login remains", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, (i) =>
+      Ok(
+        i === 0
+          ? nullOutput()
+          : i === 1
+            ? errorOutput("connection-error")
+            : nullOutput("not logged in", "not-logged-in"),
+      ),
+    )
+
+    const result = await langs.deauthenticate()
+
+    expect(result.ok).toBe(true)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
   test("isAuthenticated is true on stored courses.mooc.fi credentials without asking tmc", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () => Ok(nullOutput("currently logged in", "logged-in")))

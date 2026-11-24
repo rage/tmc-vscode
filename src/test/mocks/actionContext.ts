@@ -31,6 +31,7 @@ export interface MockActionContextOptions {
 export function createMockAuthState(loggedIn = true): AuthState {
   return {
     loggedIn,
+    session: loggedIn ? { kind: "mooc" } : undefined,
     refresh: vi.fn(async () => Ok(loggedIn)),
     set: vi.fn(async () => {}),
     isSessionExpired: false,

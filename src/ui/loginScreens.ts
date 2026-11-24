@@ -29,6 +29,12 @@ export interface LoginScreenUpdate {
   view: LoginView
 }
 
+/** A login screen no longer shown, and whether its panel was closed rather than reused. */
+export interface LoginScreenLeave {
+  panelId: number
+  isClosed: boolean
+}
+
 /** A button pressed on a login screen. */
 export interface LoginScreenAction {
   panelId: number
@@ -44,7 +50,7 @@ class LoginScreens {
   private readonly _opened = new vscode.EventEmitter<LoginPanel>()
   private readonly _updated = new vscode.EventEmitter<LoginScreenUpdate>()
   private readonly _closeRequested = new vscode.EventEmitter<LoginPanel>()
-  private readonly _left = new vscode.EventEmitter<number>()
+  private readonly _left = new vscode.EventEmitter<LoginScreenLeave>()
   private readonly _actionRequested = new vscode.EventEmitter<LoginScreenAction>()
   private _latest: LoginScreenUpdate | undefined
 
@@ -56,7 +62,7 @@ class LoginScreens {
   /** Fires when a login is done with its screen; the main panel closes it if still shown. */
   public readonly onDidRequestClose = this._closeRequested.event
 
-  /** Fires with a panel id once the main panel no longer shows that login screen. */
+  /** Fires once the main panel no longer shows a login screen. */
   public readonly onDidLeave = this._left.event
 
   public readonly onDidRequestAction = this._actionRequested.event
@@ -78,9 +84,13 @@ class LoginScreens {
     this._closeRequested.fire(panel)
   }
 
-  /** For the panel that stopped showing login screen `panelId`, by closing or showing another. */
-  public leave(panelId: number): void {
-    this._left.fire(panelId)
+  /**
+   * For the panel that stopped showing login screen `panelId`.
+   *
+   * @param isClosed The panel was closed, rather than showing another screen.
+   */
+  public leave(panelId: number, isClosed = true): void {
+    this._left.fire({ panelId, isClosed })
   }
 
   public requestAction(panelId: number, action: LoginAction): void {
