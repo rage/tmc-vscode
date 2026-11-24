@@ -23,7 +23,16 @@ function openFolderButton(folder: string): NotificationButton {
  * exercises aside; otherwise records the account as theirs. Then brings back the account's own
  * exercises that an earlier login moved aside.
  */
-export async function handOverExercises(actionContext: ReadyActionContext): Promise<void> {
+export function handOverExercises(actionContext: ReadyActionContext): Promise<void> {
+  // A login and the account check it triggers must not both offer to move the exercises.
+  const next = handOverQueue.then(() => handOverOnce(actionContext))
+  handOverQueue = next.catch(() => undefined)
+  return next
+}
+
+let handOverQueue: Promise<void> = Promise.resolve()
+
+async function handOverOnce(actionContext: ReadyActionContext): Promise<void> {
   const accountSwitch = await findAccountSwitch(actionContext)
   if (accountSwitch.err) {
     Logger.warn("Could not tell which account logged in", accountSwitch.val)

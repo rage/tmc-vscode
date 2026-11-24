@@ -19,8 +19,6 @@ const SESSION: vscode.AuthenticationSession = {
 /** What the provider drives: the extension's own login state, login and logout. */
 export interface MoocAccountActions {
   isLoggedIn: () => boolean
-  /** The account as the student would recognise it, when courses.mooc.fi named it. */
-  accountLabel?: () => string | undefined
   /** Runs the device-flow login, reporting its own failures; resolves whether it succeeded. */
   login: () => Promise<boolean>
   /** Logs out without asking: VS Code has already confirmed the sign-out. */
@@ -44,13 +42,7 @@ export class MoocAuthenticationProvider
   public constructor(private readonly _account: MoocAccountActions) {}
 
   public async getSessions(scopes?: readonly string[]): Promise<vscode.AuthenticationSession[]> {
-    return this._account.isLoggedIn() && !scopes?.length ? [this._session()] : []
-  }
-
-  /** {@link SESSION} with the account's own name in its label, keeping its id. */
-  private _session(): vscode.AuthenticationSession {
-    const label = this._account.accountLabel?.()
-    return label ? { ...SESSION, account: { id: SITE, label: `${SITE}: ${label}` } } : SESSION
+    return this._account.isLoggedIn() && !scopes?.length ? [SESSION] : []
   }
 
   public async createSession(scopes: readonly string[]): Promise<vscode.AuthenticationSession> {
@@ -60,7 +52,7 @@ export class MoocAuthenticationProvider
     if (!(await this._account.login())) {
       throw new Error("You did not log in.")
     }
-    return this._session()
+    return SESSION
   }
 
   public async removeSession(): Promise<void> {
@@ -69,11 +61,10 @@ export class MoocAuthenticationProvider
 
   /** Call whenever the courses.mooc.fi login state changes, so the Accounts menu follows it. */
   public setLoggedIn(isLoggedIn: boolean): void {
-    const session = this._session()
     this._onDidChangeSessions.fire(
       isLoggedIn
-        ? { added: [session], removed: [], changed: [] }
-        : { added: [], removed: [session], changed: [] },
+        ? { added: [SESSION], removed: [], changed: [] }
+        : { added: [], removed: [SESSION], changed: [] },
     )
   }
 

@@ -120,7 +120,7 @@ export class AccountStatusBarItem implements vscode.Disposable {
     this._item.tooltip = tooltip
     this._item.accessibilityInformation = {
       label: isNamed
-        ? `TestMyCode: logged in as ${this._label}. Show account actions`
+        ? `TestMyCode: logged in with your MOOC.fi account, ${this._label}. Show account actions`
         : presentation.accessibilityLabel,
     }
     this._item.command = presentation.command

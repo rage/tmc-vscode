@@ -93,7 +93,9 @@ suite("AccountStatusBarItem", function () {
     })
 
     expect(tooltipText(item)).toContain("Ada (ada@example.com)")
-    expect(item.accessibilityInformation?.label).toContain("logged in as Ada (ada@example.com)")
+    expect(item.accessibilityInformation?.label).toContain(
+      "logged in with your MOOC.fi account, Ada (ada@example.com)",
+    )
   })
 
   test("an old tmc.mooc.fi login is shown as one, offering the MOOC.fi login", function () {

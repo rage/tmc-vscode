@@ -5,9 +5,9 @@ import { expect } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
+import { AddCoursePage } from "../pages/add-course"
 import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
-import { QuickPickPage } from "../pages/quick-pick"
 
 // Adding a course from the add-course screen, from the tmc.mooc.fi side; the Command Palette
 // keeps a quick pick as its fast path. The session comes from the tmc credentials the
@@ -94,37 +94,20 @@ async function waitForActivation(page: Page): Promise<void> {
 }
 
 vsCodeTest(
-  "the Command Palette adds a course through its quick pick",
+  "the Command Palette's Add Course opens the Add Course screen",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     await coursesView.goto()
     await waitForActivation(page)
 
     await coursesView.runPaletteCommand("TestMyCode: Add Course")
-    const quickPick = new QuickPickPage(page)
-    await quickPick.waitForTitle("Add Course")
-    await quickPick.selectByLabel("Test Organization")
-    await quickPick.selectByLabel("Python Course")
-    await quickPick.expectClosed()
+    const addCourse = new AddCoursePage(page, webview)
+    await addCourse.expectShown()
+    await addCourse.addTmcCourse("Test Organization", "Python Course")
 
     await new CourseHomePage(page, webview).expectShown("Python Course")
   },
 )
-
-vsCodeTest("dismissing the palette's add-course pick adds nothing", async ({ page, webview }) => {
-  const coursesView = new CoursesViewPage(page, webview)
-  await coursesView.goto()
-  await waitForActivation(page)
-
-  await coursesView.runPaletteCommand("TestMyCode: Add Course")
-  const quickPick = new QuickPickPage(page)
-  await quickPick.waitForTitle("Add Course")
-  await quickPick.expectItem("Test Organization")
-  await page.keyboard.press("Escape")
-
-  await quickPick.expectClosed()
-  await expect(coursesView.row("Python Course")).toBeHidden()
-})
 
 vsCodeTest(
   "courses.mooc.fi courses are offered only once its experimental setting is on",
