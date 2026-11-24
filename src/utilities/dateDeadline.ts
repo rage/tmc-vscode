@@ -28,7 +28,8 @@ const dateTimeFormats = new Map<string | undefined, Intl.DateTimeFormat>()
 const relativeTimeFormats = new Map<string | undefined, Intl.RelativeTimeFormat>()
 
 /**
- * Renders a date and time with its time zone, e.g. "Oct 2, 2026, 3:00 PM GMT+3".
+ * Renders a date and time with its time zone, e.g. "Oct 2, 2026, 3:00 PM GMT+3", for a time a
+ * student acts by: one abroad could misread it without the zone.
  *
  * @param locale a BCP 47 tag, normally {@link PROSE_LOCALE}; `undefined` uses the runtime's.
  * @returns the empty string for a date that cannot be rendered.
@@ -56,10 +57,17 @@ export function formatDateTime(date: Date, locale: string | undefined): string {
 /**
  * A backend timestamp as the tail of an English sentence, "on Oct 2, 2026, 3:00 PM GMT+3", or
  * `undefined` when it cannot be parsed, for the caller to word ("later") or leave out.
+ * {@link proseDate} is for what already happened.
  */
 export function proseDateTime(timestamp: string): string | undefined {
   const date = parseDate(timestamp)
   return date ? `on ${formatDateTime(date, PROSE_LOCALE)}` : undefined
+}
+
+/** A past backend timestamp as {@link proseDateTime} words it, but the day alone: "on Oct 2, 2026". */
+export function proseDate(timestamp: string): string | undefined {
+  const date = parseDate(timestamp)
+  return date ? `on ${formatDate(date, PROSE_LOCALE)}` : undefined
 }
 
 const timestampFormats = new Map<string, Intl.DateTimeFormat>()

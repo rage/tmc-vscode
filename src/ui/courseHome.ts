@@ -31,6 +31,7 @@ import {
   formatNearRelativeTime,
   parseDate,
   PROSE_LOCALE,
+  proseDate,
   proseDateTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
@@ -284,7 +285,7 @@ function courseRunFields(
   const { languageCode, closedAt, successorCourseId, isStaff } = course.data
   const endedAt = closedAt ? parseDate(closedAt) : null
   const endedOn =
-    closedAt && endedAt && endedAt.getTime() <= Date.now() ? proseDateTime(closedAt) : undefined
+    closedAt && endedAt && endedAt.getTime() <= Date.now() ? proseDate(closedAt) : undefined
   return {
     ...(languageCode ? { languageCode } : {}),
     ...(endedOn ? { endedNote: `This course ended ${endedOn}.` } : {}),
@@ -325,7 +326,7 @@ function reviewFields(
       ? REVIEWING_STAGE_NOTES[exercise.reviewingStage]
       : undefined
   const review = exercise?.teacherReview
-  const reviewedOn = review ? proseDateTime(review.createdAt) : undefined
+  const reviewedOn = review ? proseDate(review.createdAt) : undefined
   const decision = review ? TEACHER_DECISIONS[review.decision] : undefined
   return {
     ...(note ? { reviewNote: note } : {}),

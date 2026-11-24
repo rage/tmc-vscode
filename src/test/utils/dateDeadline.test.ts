@@ -6,6 +6,8 @@ import {
   formatNearRelativeTime,
   formatTimestamp,
   parseDate,
+  proseDate,
+  proseDateTime,
 } from "../../utilities/dateDeadline"
 
 const absolute = (date: Date, locale: string): string =>
@@ -94,6 +96,15 @@ suite("Date utils", () => {
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
       expect(formatDateTime(date, "en-US")).toBe(absolute(date, "en-US"))
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
+    })
+  })
+
+  suite("prose dates", () => {
+    test("give a time to act by its zone, and a past event its day alone", () => {
+      const timestamp = "2026-09-01T12:00:00Z"
+      expect(proseDateTime(timestamp)).toBe(`on ${absolute(new Date(timestamp), "en")}`)
+      expect(proseDate(timestamp)).toBe("on Sep 1, 2026")
+      expect(proseDate("whenever")).toBeUndefined()
     })
   })
 
