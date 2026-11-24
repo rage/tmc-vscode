@@ -3,12 +3,13 @@ import { join } from "node:path"
 
 import { defineConfig } from "@playwright/test"
 
-// Opt-in: drives the real extension against a real courses.mooc.fi stack (project-331.local), never
-// the mock. Nothing in the default or CI runs includes it. See playwright/real/README.md.
+// Opt-in: drives the real extension against a real courses.mooc.fi stack, never the mock or
+// production. Build with BACKEND=mockTmcLocalMooc, add the course additively with
+// playwright/real/scripts/setup-course.sh (never reseed a shared stack), then run
+// `E2E_STUDENT=<unused student> pnpm run test:real <spec>`: sp331 revokes a whole refresh-token
+// family when one student's token is reused across runs.
 if (process.env.TMC_E2E_REAL !== "1") {
-  throw new Error(
-    "The real-backend specs run only on request: set TMC_E2E_REAL=1 (see playwright/real/README.md).",
-  )
+  throw new Error("The real-backend specs run only on request: set TMC_E2E_REAL=1.")
 }
 
 // Exercise ids the stack's setup script recorded.

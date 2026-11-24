@@ -262,30 +262,21 @@ against localhost 401s.
 
 ## What green CI proves
 
-`.github/workflows/test.yml` runs these jobs on every push and pull request:
+`.github/workflows/test.yml` runs six jobs on every push and pull request:
 
-| job                                        | proves                                                                                                                                                                                                                 |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code style                                 | lint, format, typecheck (including `.svelte` via svelte-check), the generated zod schemas match the vendored contract, neither vendored artifact was hand-edited, release tag validation                               |
-| Unit tests                                 | the vitest unit and webview-component tiers on Linux, macOS and Windows                                                                                                                                                |
-| Mock backend tests                         | `backend/mooc` still matches the vendored OpenAPI spec, above a pass-count floor                                                                                                                                       |
-| Webview accessibility and screenshot tests | the webviews pass axe checks and match the screenshot baselines, in a Chromium harness on Linux only                                                                                                                   |
-| Gates can fail                             | each of the gates above still fails when its input is broken (`bin/verifyGatesCanFail.sh`)                                                                                                                             |
-| Integration tests                          | the extension drives the real `tmc-langs-cli` against the mock backend inside a VS Code extension host, on all three platforms at the minimum `engines.vscode`, plus Linux on stable VS Code, above a test-count floor |
-| Playwright tests                           | the webview flows end to end in a real VS Code, on Linux only, against that same mock                                                                                                                                  |
-| Upgrade E2E VSIX, Upgrade E2E              | a production-profile VSIX built from the branch installs over 3.5.5 on all three platforms (the packaging is checked on every push)                                                                                    |
+| job                     | proves                                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code style              | lint, format, typecheck (including `.svelte` via svelte-check), the generated zod schemas match the vendored contract, and neither vendored artifact was hand-edited |
+| Unit tests              | the vitest unit + webview-component tiers on Linux, macOS and Windows                                                                                                |
+| Mooc mock backend tests | `backend/mooc` still matches the vendored OpenAPI spec, above a pass-count floor                                                                                     |
+| Gates can fail          | each of the gates above still fails when its input is broken (`bin/verifyGatesCanFail.sh`)                                                                           |
+| Integration tests       | the extension drives the real `tmc-langs-cli` against the mock backend inside a VS Code extension host, on all three platforms, above a test-count floor             |
+| Playwright tests        | the webview flows end to end against that same mock                                                                                                                  |
 
-What it does **not** show:
+What it does **not** prove:
 
-- **A real backend.** Every tier talks to the mock; a change in courses.mooc.fi or tmc.mooc.fi that the vendored spec does not describe passes.
-- **UI on Windows or macOS, or on stable VS Code.** Playwright and the screenshot tests run on Linux with one VS Code version; Windows and macOS are covered by unit, integration and upgrade tests only.
-- **The released artifact.** The marketplace `.vsix` is built only by the tag-triggered `build-and-upload.yml`; the upgrade job builds its own.
-- **The expected-failure upgrade case,** which does not turn the run red.
-- **Other editors and remotes** (VSCodium, Cursor, WSL, Remote-SSH), antivirus or proxy behaviour, and the CLI download from download.mooc.fi.
-
-## Native or screen
-
-Confirmations and one-of-N pickers of a known list (choosing among your courses, a two-button confirm) stay native: quick picks and modal dialogs. A multi-step or consequential choice, such as the account hand-over and Add Course, gets a screen in a webview.
+- **A production-mode build.** The `.vsix` is packaged only by the
+  master-triggered `build-and-upload.yml`.
 
 ## Using a locally-built tmc-langs CLI
 
