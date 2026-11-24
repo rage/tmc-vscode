@@ -932,7 +932,10 @@ function restoredRoute(
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
     case "AddCourse":
-      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
+      // Picking a course belongs to the window it was opened from, not a course's workspace.
+      return isReady(actionContext) && !actionContext.startup.workspaceManager.activeCourse
+        ? { id: nextPanelId(), type: route.type }
+        : undefined
     case undefined:
       return undefined
     default:
