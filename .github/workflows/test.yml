@@ -288,7 +288,7 @@ jobs:
       - name: Playwright test count floor
         run: |
           PLAYWRIGHT_JSON_OUTPUT_NAME=playwright-list.json pnpm exec playwright test --list --reporter=json > /dev/null
-          node bin/assertMinimumTests.js playwright 70 playwright-list.json
+          node bin/assertMinimumTests.js playwright 74 playwright-list.json
 
       - name: Playwright tests
         run: pnpm run playwright-test
