@@ -57,12 +57,8 @@ export default class Storage {
       return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
     }
     const readable = {
-      courses: lists.courses.filter((course) =>
-        isReadable(course, storage.tmcLocalCourseDataSchema),
-      ),
-      mooc_courses: lists.mooc_courses.filter((course) =>
-        isReadable(course, storage.moocLocalCourseDataSchema),
-      ),
+      courses: parseReadable(lists.courses, storage.tmcLocalCourseDataSchema),
+      mooc_courses: parseReadable(lists.mooc_courses, storage.moocLocalCourseDataSchema),
     }
     const skipped =
       lists.courses.length +
@@ -322,6 +318,14 @@ function storedCourseLists(
 
 function isReadable(course: unknown, schema: z.ZodType): boolean {
   return schema.safeParse(course).success
+}
+
+/** The parsed courses of `list` that `schema` accepts, with its defaults and fallbacks applied. */
+function parseReadable<T>(list: unknown[], schema: z.ZodType<T>): T[] {
+  return list.flatMap((course) => {
+    const parsed = schema.safeParse(course)
+    return parsed.success ? [parsed.data] : []
+  })
 }
 
 /** `written` with the stored courses this version could not read put back as they were. */

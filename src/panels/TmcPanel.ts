@@ -591,6 +591,7 @@ export class TmcPanel {
     const isVisible = (): boolean => !this._isDisposed && this._panel.visible
     return {
       name: this._webviewName,
+      cliFolder: cliFolder(extensionContext),
       get route() {
         return currentRoute()
       },

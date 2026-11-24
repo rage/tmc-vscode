@@ -281,7 +281,7 @@ async function activateInner(
     builtInChecksums: TMC_LANGS_CHECKSUMS,
   })
   if (cliFolder(context) !== legacyCliFolder(context)) {
-    void init.removeStaleCliFiles(legacyCliFolder(context), [])
+    void init.removeStaleCliFiles(legacyCliFolder(context), [], { keepPrevious: false })
   }
 
   // download langs if necessary
@@ -342,8 +342,8 @@ async function activateInner(
     initialAuthCheck,
     langs.ok ? scanLocalExercises(langs.val) : undefined,
   ])
-  // A slow network or a first-run antivirus scan is no startup failure: the stored login stands
-  // until a later check can answer.
+  // A slow network or a first-run antivirus scan is no startup failure: the check is retried
+  // until it answers.
   const isAuthCheckDeferred =
     authChecked.err &&
     (authChecked.val instanceof TimeoutError || authChecked.val instanceof ConnectionError)
@@ -673,7 +673,8 @@ async function activateInner(
     refreshInBackground(readyContext, openCourseRefresh, isOpenedBySwitch)
   }
 
-  async function runMaintenancePoll(): Promise<void> {
+  /** @returns Whether the login check answered. */
+  async function runMaintenancePoll(): Promise<boolean> {
     try {
       const checked = await authState.refresh()
       if (checked.err) {
@@ -684,16 +685,35 @@ async function activateInner(
       if (readyContext && authState.loggedIn) {
         refreshInBackground(readyContext, openCourseRefresh)
       }
+      return checked.ok
     } catch (e) {
       Logger.error("Maintenance check failed", e)
+      return false
     }
   }
 
   setMaintenancePollArmed(authState.loggedIn)
 
   if (isAuthCheckDeferred) {
-    const retry = setTimeout(() => void runMaintenancePoll(), DEFERRED_AUTH_CHECK_DELAY)
-    context.subscriptions.push({ dispose: () => clearTimeout(retry) })
+    // Until a check answers, the poll is not armed and the student is shown as logged out.
+    let retry: NodeJS.Timeout | undefined
+    let isDisposed = false
+    const scheduleAuthRetry = (): void => {
+      retry = setTimeout(() => {
+        void runMaintenancePoll().then((isAnswered) => {
+          if (!isAnswered && !isDisposed && !authState.loggedIn) {
+            scheduleAuthRetry()
+          }
+        })
+      }, DEFERRED_AUTH_CHECK_DELAY)
+    }
+    scheduleAuthRetry()
+    context.subscriptions.push({
+      dispose: () => {
+        isDisposed = true
+        clearTimeout(retry)
+      },
+    })
   }
 
   // Another window may have logged in, out or as someone else since this one last looked.

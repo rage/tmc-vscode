@@ -11,7 +11,7 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import { ConnectionError, isSessionLost } from "../errors"
+import { CertificateError, ConnectionError, isSessionLost, ProxyError } from "../errors"
 import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
@@ -97,7 +97,13 @@ export async function updateExercises(
     }
   }
   // Offline is what the Courses view and the course home already say; a toast would repeat it.
-  const [firstFailure] = failures.filter(({ error }) => !(error instanceof ConnectionError))
+  // A certificate or proxy failure needs its own advice, which they do not give.
+  const [firstFailure] = failures.filter(
+    ({ error }) =>
+      !(error instanceof ConnectionError) ||
+      error instanceof CertificateError ||
+      error instanceof ProxyError,
+  )
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.
     for (const { backend, error } of failures.slice(1)) {

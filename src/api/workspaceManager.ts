@@ -490,6 +490,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: BackendKind,
     isAiOff: boolean,
   ): Promise<string[]> {
+    return this._workspaceFileWrites.run(() =>
+      this._prepareWorkspaceFile(courseSlug, backend, isAiOff),
+    )
+  }
+
+  private async _prepareWorkspaceFile(
+    courseSlug: string,
+    backend: BackendKind,
+    isAiOff: boolean,
+  ): Promise<string[]> {
     const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
     await ensureCourseWorkspaceFile(workspaceFile)
     const text = await readRepairedWorkspaceFile(workspaceFile)

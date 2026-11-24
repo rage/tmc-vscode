@@ -32,7 +32,7 @@ export const miscHandlers = {
   showErrorDetails: {
     requiresReady: false,
     handle(message, { host }): void {
-      host.showBeside(errorDetailsPanel(message.detailsId))
+      host.showBeside(errorDetailsPanel(message.detailsId, host.cliFolder))
     },
   },
   revealCliFolder: {

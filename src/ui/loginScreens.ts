@@ -8,10 +8,12 @@ import type {
   WebviewError,
 } from "../../shared/lib"
 import {
+  CertificateError,
   ConnectionError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
   presentationFor,
+  ProxyError,
   ServerError,
 } from "../errors"
 import { nextPanelId } from "../panels/routes"
@@ -124,7 +126,10 @@ function describeFailure(error: Error): [LoginFailure, WebviewError] {
   const { detailsId } = toWebviewError(error)
   const withDetails = (message: string): WebviewError =>
     detailsId === undefined ? { message } : { message, detailsId }
-  if (error instanceof ConnectionError) {
+  if (
+    error instanceof ConnectionError &&
+    !(error instanceof CertificateError || error instanceof ProxyError)
+  ) {
     return [
       "unreachable",
       withDetails("Could not reach the server. Check your internet connection."),

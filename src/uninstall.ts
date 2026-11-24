@@ -18,6 +18,9 @@ export interface CliRecord {
   httpProxy?: { proxy: string; noProxy: string[] } | undefined
 }
 
+/** A per-host courses.mooc.fi login, which the CLI's logout removes for this computer only. */
+const PER_HOST_LOGIN = /^credentials_mooc_.+\.json$/
+
 /** Long enough to revoke a login over a slow network; an uninstall must not hang on it. */
 const LOGOUT_TIMEOUT_MS = 15_000
 
@@ -28,7 +31,8 @@ const LOGOUT_TIMEOUT_MS = 15_000
  * `vscode:uninstall` hook, outside the extension host, so it cannot use the `vscode` API.
  *
  * @param configuredDir What `Langs` passes as `TMC_LANGS_CONFIG_DIR`, if anything.
- * @param cli The CLI to log out with first; the logins it leaves are deleted either way.
+ * @param cli The CLI to log out with first. After its logout, other computers' logins in a
+ * shared home folder stay; without it, every stored login is deleted.
  * @returns The credential files deleted after the logout.
  */
 export function removeStoredLogins(
@@ -37,8 +41,9 @@ export function removeStoredLogins(
 ): string[] {
   const folder = cliConfigFolder(configuredDir)
   const cliPath = cli?.cliPath
+  let isLoggedOut = false
   if (cliPath && fs.existsSync(cliPath)) {
-    cp.spawnSync(
+    const logout = cp.spawnSync(
       cliPath,
       ["mooc", "--client-name", CLIENT_NAME, "--client-version", EXTENSION_VERSION, "logout"],
       {
@@ -49,6 +54,7 @@ export function removeStoredLogins(
         windowsHide: true,
       },
     )
+    isLoggedOut = logout.status === 0
   }
   if (!folder) {
     return []
@@ -60,7 +66,9 @@ export function removeStoredLogins(
     return []
   }
   const removed: string[] = []
-  for (const name of names.filter((file) => CREDENTIALS_FILE.test(file))) {
+  const isRemoved = (file: string): boolean =>
+    CREDENTIALS_FILE.test(file) && !(isLoggedOut && PER_HOST_LOGIN.test(file))
+  for (const name of names.filter((file) => isRemoved(file))) {
     try {
       fs.rmSync(path.join(folder, name), { force: true })
       removed.push(name)

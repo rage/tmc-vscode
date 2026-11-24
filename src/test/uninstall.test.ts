@@ -59,6 +59,21 @@ suite("removeStoredLogins", function () {
     },
   )
 
+  test.skipIf(process.platform === "win32")(
+    "keeps other computers' logins after the CLI logged out",
+    function () {
+      const { base, folder } = configDir()
+      for (const name of ["credentials.json", "credentials_mooc_other-host.json"]) {
+        fs.writeFileSync(path.join(folder, name), "{}")
+      }
+      const cli = path.join(base, "fake-cli")
+      fs.writeFileSync(cli, "#!/bin/sh\nexit 0\n", { mode: 0o755 })
+
+      expect(removeStoredLogins(base, { cliPath: cli })).toEqual(["credentials.json"])
+      expect(fs.readdirSync(folder)).toEqual(["credentials_mooc_other-host.json"])
+    },
+  )
+
   test("deletes the logins when the CLI is gone", function () {
     const { base, folder } = configDir()
     fs.writeFileSync(path.join(folder, "credentials_mooc_host.json"), "{}")

@@ -225,6 +225,17 @@ suite("removeStaleCliFiles", function () {
       "tmc-langs-cli-3.sha256",
     ])
   })
+
+  test("removes every version when told not to keep the previous one", async function () {
+    const folder = tmpDir.name
+    for (const name of ["tmc-langs-cli-2", "tmc-langs-cli-2.sha256", "tmc-langs-cli-2.verified"]) {
+      fs.outputFileSync(path.join(folder, name), "data")
+    }
+
+    await removeStaleCliFiles(folder, [], { keepPrevious: false })
+
+    expect(fs.readdirSync(folder)).toEqual([])
+  })
 })
 
 suite("ensureLangsUpdated end-to-end", function () {

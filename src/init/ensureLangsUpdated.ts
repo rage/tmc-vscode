@@ -151,13 +151,19 @@ async function removeAbandonedDownloads(cliFolder: string): Promise<void> {
  * another window is running, is logged and left.
  *
  * @param keep The entries to leave, by file name.
+ * @param keepPrevious `false` removes the most recently installed version too, for a folder no
+ * longer installed into.
  */
-export async function removeStaleCliFiles(cliFolder: string, keep: string[]): Promise<void> {
+export async function removeStaleCliFiles(
+  cliFolder: string,
+  keep: string[],
+  { keepPrevious = true }: { keepPrevious?: boolean } = {},
+): Promise<void> {
   await removeAbandonedDownloads(cliFolder)
   const entries = await fs.readdir(cliFolder).catch(() => [])
   const others = entries.filter((x) => !keep.includes(x) && !isDownloadTempFile(x))
   let previous: { executable: string; mtimeMs: number } | undefined
-  for (const entry of others) {
+  for (const entry of keepPrevious ? others : []) {
     const executable = executableOf(entry)
     if (executable !== entry) {
       continue
