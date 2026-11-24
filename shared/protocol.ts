@@ -384,6 +384,8 @@ export const SubmissionViewSchema = z.object({
   triesLeft: z.number().optional(),
   /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
   isLoggedOut: z.boolean().optional(),
+  /** A test run on the student's computer since this submission did not pass, as a sentence. */
+  newerLocalRun: z.string().optional(),
   /** ms timestamp of the run a `testedLocally` view shows, which tells one run from the next. */
   localPassAt: z.number().optional(),
 })

@@ -9,6 +9,7 @@ import * as vscode from "vscode"
 import type { RunResult, StyleValidationResult } from "../../../shared/langsSchema"
 import type { CourseAccessLoss, SubmissionView } from "../../../shared/lib"
 import { BaseError, LocalCourseData } from "../../../shared/lib"
+import { exerciseResultsPanel } from "../../actions/exerciseResults"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { AiUseGate } from "../../api/aiUseGate"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -327,6 +328,27 @@ suite("ExerciseTestController", function () {
 
     expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
     expect(submissionViews.latestFor(exerciseAt(s).id)?.view.phase).toBe("testedLocally")
+  })
+
+  test("a failing run notes on the shown submission result that it is older", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        testResults: [{ name: "t", successful: false, points: [], message: "no", exception: [] }],
+      }),
+    })
+    const exercise = exerciseAt(s)
+    const panel = exerciseResultsPanel(s.actionContext, exercise).unwrap()
+    submissionViews.update({
+      panel,
+      view: { ...localPass(), phase: "finished", headline: "Passed" },
+      shouldReopen: false,
+    })
+
+    await s.controller.runExercise(exercise)
+
+    expect(submissionViews.latestFor(exercise.id)?.view.newerLocalRun).toContain("failed")
   })
 
   test("a run langs stopped for taking too long says so, not as failed tests", async function () {

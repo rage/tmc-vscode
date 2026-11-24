@@ -394,7 +394,11 @@ export class ExerciseTestController implements vscode.Disposable {
     isAllPassed: boolean,
   ): void {
     // Test Results already says that exam mode runs no tests locally.
-    if (outcome.kind === "examMode" || !isAllPassed || outcome.isCourseDisabled) {
+    if (outcome.kind === "examMode" || outcome.isCourseDisabled) {
+      return
+    }
+    if (!isAllPassed) {
+      markResultsAsOlder(exercise)
       return
     }
     const message = `Tests pass on your computer for ${exercise.exerciseSlug}.`
@@ -430,6 +434,24 @@ export class ExerciseTestController implements vscode.Disposable {
         ),
     ])
   }
+}
+
+/** Notes on the exercise's shown submission result that a later local test run failed. */
+function markResultsAsOlder(exercise: WorkspaceExercise): void {
+  const latest = submissionViews.latestFor(exercise.id)
+  if (!latest || !["finished", "failed", "manualReview"].includes(latest.view.phase)) {
+    return
+  }
+  submissionViews.update({
+    panel: latest.panel,
+    view: {
+      ...latest.view,
+      newerLocalRun:
+        "This is your last submission's result. A later test run on your computer failed; " +
+        "Test Results shows it.",
+    },
+    shouldReopen: false,
+  })
 }
 
 /**

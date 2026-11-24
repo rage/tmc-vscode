@@ -393,6 +393,9 @@
   {#if view?.pendingReview}
     <p>{view.pendingReview}</p>
   {/if}
+  {#if view?.newerLocalRun}
+    <p class="muted">{view.newerLocalRun}</p>
+  {/if}
   {#if view?.feedbackText}
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}
