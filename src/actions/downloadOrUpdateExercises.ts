@@ -37,14 +37,7 @@ import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import {
-  countOf,
-  formatDateTime,
-  Logger,
-  mapConcurrently,
-  parseDate,
-  PROSE_LOCALE,
-} from "../utilities"
+import { countOf, Logger, mapConcurrently, proseDateTime } from "../utilities"
 import { describeExercises, exerciseName } from "./exerciseNames"
 import { recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
@@ -562,10 +555,9 @@ function failureCause(
   const closedChapter = reasons.map((reason) => CLOSED_CHAPTER_REASON.exec(reason)).find(Boolean)
   if (closedChapter && reasons.every((reason) => CLOSED_CHAPTER_REASON.test(reason))) {
     const [, name = "", opensAtText = ""] = closedChapter
-    const opensAt = parseDate(opensAtText)
-    const when = opensAt ? ` on ${formatDateTime(opensAt, PROSE_LOCALE)}` : " later"
+    const when = proseDateTime(opensAtText) ?? "later"
     return new ChapterNotOpenError(
-      `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens${when}.`,
+      `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens ${when}.`,
       details,
     )
   }

@@ -31,6 +31,7 @@ import {
   formatNearRelativeTime,
   parseDate,
   PROSE_LOCALE,
+  proseDateTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
 import { lastExerciseReached } from "./lastExerciseReached"
@@ -131,8 +132,8 @@ export function buildCourseHomeView(
     backend: course.kind,
     title: course.data.title,
     organization: course.data.organization,
-    ...courseRunFields(course, locale),
-    description: examNote(course, locale) ?? (course.data.description || null),
+    ...courseRunFields(course),
+    description: examNote(course) ?? (course.data.description || null),
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
@@ -265,7 +266,7 @@ export function buildCourseHomeView(
           isUpdateable: ex.isUpdateable,
           ...(materialUrl ? { materialUrl } : {}),
           ...(solutionUrl ? { solutionUrl } : {}),
-          ...reviewFields(ex.mooc, locale, isInReview),
+          ...reviewFields(ex.mooc, isInReview),
           ...(ex.mooc?.instructions ? { instructions: ex.mooc.instructions } : {}),
         }
       }),
@@ -276,17 +277,17 @@ export function buildCourseHomeView(
 /** What a mooc course's language, run and the student's role add to its course home. */
 function courseRunFields(
   course: LocalCourseData,
-  locale: string,
 ): Pick<CourseHomeView, "languageCode" | "endedNote" | "successor" | "isStaff"> {
   if (course.kind !== "mooc") {
     return {}
   }
   const { languageCode, closedAt, successorCourseId, isStaff } = course.data
   const endedAt = closedAt ? parseDate(closedAt) : null
-  const hasEnded = endedAt !== null && endedAt.getTime() <= Date.now()
+  const endedOn =
+    closedAt && endedAt && endedAt.getTime() <= Date.now() ? proseDateTime(closedAt) : undefined
   return {
     ...(languageCode ? { languageCode } : {}),
-    ...(hasEnded ? { endedNote: `This course ended on ${formatDateTime(endedAt, locale)}.` } : {}),
+    ...(endedOn ? { endedNote: `This course ended ${endedOn}.` } : {}),
     ...(successorCourseId ? { successor: { courseId: successorCourseId } } : {}),
     ...(isStaff ? { isStaff: true } : {}),
   }
@@ -317,7 +318,6 @@ const TEACHER_DECISIONS: Record<TeacherDecision, string> = {
 /** A mooc exercise's review stage and a teacher's review, as the course home words them. */
 function reviewFields(
   exercise: SharedMoocCourseExercise | undefined,
-  locale: string,
   isStageShownAsRefusal: boolean,
 ): Pick<CourseHomeExercise, "reviewNote" | "teacherReview"> {
   const note =
@@ -325,7 +325,7 @@ function reviewFields(
       ? REVIEWING_STAGE_NOTES[exercise.reviewingStage]
       : undefined
   const review = exercise?.teacherReview
-  const reviewedAt = review ? parseDate(review.createdAt) : null
+  const reviewedOn = review ? proseDateTime(review.createdAt) : undefined
   const decision = review ? TEACHER_DECISIONS[review.decision] : undefined
   return {
     ...(note ? { reviewNote: note } : {}),
@@ -333,7 +333,7 @@ function reviewFields(
       ? {
           teacherReview: {
             sentence:
-              `A teacher reviewed your answer${reviewedAt ? ` on ${formatDateTime(reviewedAt, locale)}` : ""}` +
+              `A teacher reviewed your answer${reviewedOn ? ` ${reviewedOn}` : ""}` +
               `: ${countOf(review.scoreGiven, "point")}` +
               `${decision ? `, ${decision}` : ""}.`,
             justification: review.justification,
@@ -344,14 +344,12 @@ function reviewFields(
 }
 
 /** When a stored exam's answers close, as its course home's description. */
-function examNote(course: LocalCourseData, locale: string): string | undefined {
-  const closesAt =
+function examNote(course: LocalCourseData): string | undefined {
+  const closesOn =
     course.kind === "mooc" && course.data.examAnswerableUntil
-      ? parseDate(course.data.examAnswerableUntil)
-      : null
-  return closesAt
-    ? `An exam. Its answers close on ${formatDateTime(closesAt, locale)}; results show after that.`
-    : undefined
+      ? proseDateTime(course.data.examAnswerableUntil)
+      : undefined
+  return closesOn ? `An exam. Its answers close ${closesOn}; results show after that.` : undefined
 }
 
 const STAGES_IN_REVIEW = new Set<ReviewingStage>([

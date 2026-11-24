@@ -5,7 +5,7 @@ import { LocalCourseData } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { StoredExercise } from "../config/userdata"
 import { ChapterNotOpenError, ExerciseRemovedError } from "../errors"
-import { formatDateTime, parseDate, PROSE_LOCALE } from "../utilities"
+import { proseDateTime } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -24,11 +24,10 @@ export function storedExerciseOf(
     ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
     : undefined
   if (stored.err && closedChapter) {
-    const opensAt = parseDate(closedChapter.opensAt)
-    const when = opensAt ? ` on ${formatDateTime(opensAt, PROSE_LOCALE)}` : " later"
+    const when = proseDateTime(closedChapter.opensAt) ?? "later"
     return Err(
       new ChapterNotOpenError(
-        `${exercise.exerciseSlug} is in the chapter "${closedChapter.name}", which opens${when}.` +
+        `${exercise.exerciseSlug} is in the chapter "${closedChapter.name}", which opens ${when}.` +
           " Until then it can't be submitted. Its files stay on this computer, and Run Tests" +
           " still works.",
       ),

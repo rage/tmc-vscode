@@ -53,6 +53,15 @@ export function formatDateTime(date: Date, locale: string | undefined): string {
   return format.format(date)
 }
 
+/**
+ * A backend timestamp as the tail of an English sentence, "on Oct 2, 2026, 3:00 PM GMT+3", or
+ * `undefined` when it cannot be parsed, for the caller to word ("later") or leave out.
+ */
+export function proseDateTime(timestamp: string): string | undefined {
+  const date = parseDate(timestamp)
+  return date ? `on ${formatDateTime(date, PROSE_LOCALE)}` : undefined
+}
+
 const timestampFormats = new Map<string, Intl.DateTimeFormat>()
 
 /**

@@ -17,7 +17,7 @@ import { withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL } from "../../config/constants"
 import { AuthorizationError } from "../../errors"
 import type { LoginOptions } from "../../ui/loginScreens"
-import { formatDateTime, Logger, openWebLink, parseDate, PROSE_LOCALE } from "../../utilities"
+import { Logger, openWebLink, proseDateTime } from "../../utilities"
 import { showNextWalkthroughStep, walkthroughProgressOf } from "../../window/walkthrough"
 import type { HandlerMap, PanelHost } from "../router"
 
@@ -261,6 +261,6 @@ function shownAddCourse(host: PanelHost, id: number): AddCoursePanel | undefined
 }
 
 function examClosingNote(exam: MoocExam): string {
-  const closesAt = parseDate(exam.answerable_until)
-  return closesAt ? `Answers close on ${formatDateTime(closesAt, PROSE_LOCALE)}.` : ""
+  const closesAt = proseDateTime(exam.answerable_until)
+  return closesAt ? `Answers close ${closesAt}.` : ""
 }
