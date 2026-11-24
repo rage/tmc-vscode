@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ReviewingStage, TeacherDecision } from "../../shared/generated/langs"
 import type {
   CourseHomeExercise,
   CourseHomeView,
@@ -240,7 +241,9 @@ export function buildCourseHomeView(
                 submitRefusal: {
                   label: isInReview ? "in review" : SUBMIT_REFUSAL_LABELS[submitRefusal],
                   sentence: isInReview
-                    ? (REVIEWING_STAGE_NOTES[ex.mooc?.reviewingStage ?? ""] ?? "")
+                    ? ex.mooc?.reviewingStage
+                      ? REVIEWING_STAGE_NOTES[ex.mooc.reviewingStage]
+                      : ""
                     : submitRefusalSentence(submitRefusal, ex.slug, part.name),
                   icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
                 },
@@ -289,7 +292,7 @@ function courseRunFields(
   }
 }
 
-const REVIEWING_STAGE_NOTES: Record<string, string> = {
+const REVIEWING_STAGE_NOTES: Record<ReviewingStage, string> = {
   peer_review: "Give peer reviews on the course page to finish this exercise.",
   self_review: "Review your own answer on the course page to finish this exercise.",
   waiting_for_peer_reviews: "Your answer is waiting for other students to review it.",
@@ -297,9 +300,10 @@ const REVIEWING_STAGE_NOTES: Record<string, string> = {
   reviewed_and_locked: "Your answer has been reviewed. The exercise takes no more answers.",
   locked: "The exercise takes no more answers.",
   not_answered_and_locked: "The exercise closed without an answer from you.",
+  unrecognized: "",
 }
 
-const TEACHER_DECISIONS: Record<string, string> = {
+const TEACHER_DECISIONS: Record<TeacherDecision, string> = {
   zero_points: "no points",
   custom_points: "points given by the teacher",
   suspected_plagiarism: "suspected plagiarism",
@@ -307,6 +311,7 @@ const TEACHER_DECISIONS: Record<string, string> = {
   bad_answer: "the answer was not accepted",
   other: "other",
   reject_and_reset: "rejected; answer again",
+  unrecognized: "",
 }
 
 /** A mooc exercise's review stage and a teacher's review, as the course home words them. */
@@ -349,7 +354,7 @@ function examNote(course: LocalCourseData, locale: string): string | undefined {
     : undefined
 }
 
-const STAGES_IN_REVIEW = new Set([
+const STAGES_IN_REVIEW = new Set<ReviewingStage>([
   "peer_review",
   "self_review",
   "waiting_for_peer_reviews",

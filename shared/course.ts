@@ -2,7 +2,12 @@ import { z } from "zod"
 
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
 import { makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
-import { ChapterLockingStatus, CourseAiPolicy } from "./generated/langs"
+import {
+  ChapterLockingStatus,
+  CourseAiPolicy,
+  ReviewingStage,
+  TeacherDecision,
+} from "./generated/langs"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -100,11 +105,11 @@ export const SharedMoocCourseExerciseSchema = z.object({
   /** courses.mooc.fi reveals the model solution to the student; absent means no. */
   hasModelSolution: z.boolean().optional(),
   /** Where the student's answer is in a peer, self or teacher review; absent outside one. */
-  reviewingStage: z.string().optional(),
+  reviewingStage: ReviewingStage.optional(),
   /** A teacher's grading of the student's answer; absent when there is none. */
   teacherReview: z
     .object({
-      decision: z.string(),
+      decision: TeacherDecision,
       justification: z.string().nullable(),
       scoreGiven: z.number(),
       createdAt: z.string(),
