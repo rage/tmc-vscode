@@ -539,7 +539,14 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   {
     name: "repository-exercises",
     value: outputData("repository-exercises", [
-      { name: "ex1", part: "part01", path: "/repo/part01/ex1" },
+      {
+        name: "ex1",
+        part: "part01",
+        path: "/repo/part01/ex1",
+        plugin: "python3",
+        tests_timeout_ms: 60000,
+        written_files: [".tmcproject.yml"],
+      },
     ]),
   },
   {

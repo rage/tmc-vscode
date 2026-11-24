@@ -3516,12 +3516,32 @@
         "path": {
           "description": "The exercise directory.",
           "type": "string"
+        },
+        "plugin": {
+          "description": "The language plugin that recognised the exercise, as `get-exercise-packaging-configuration`\nnames it.",
+          "type": "string"
+        },
+        "tests_timeout_ms": {
+          "description": "How long the exercise's tests may run, with the repository's root config merged in.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "written_files": {
+          "description": "The files this command wrote into the exercise directory, relative to it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
         "path",
         "part",
-        "name"
+        "name",
+        "plugin",
+        "tests_timeout_ms",
+        "written_files"
       ]
     },
     "Review": {

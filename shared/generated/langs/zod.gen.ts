@@ -571,7 +571,10 @@ export const zPythonVer = z.object({
 export const zRepositoryExercise = z.object({
     name: z.string(),
     part: z.string(),
-    path: z.string()
+    path: z.string(),
+    plugin: z.string(),
+    tests_timeout_ms: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }),
+    written_files: z.array(z.string())
 });
 
 /**
