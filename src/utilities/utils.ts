@@ -216,9 +216,7 @@ export async function mapConcurrently<T, R>(
   return results
 }
 
-export function countOf(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`
-}
+export { countOf } from "../../shared/lib"
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
   const feedbackQuestions: FeedbackQuestion[] = []

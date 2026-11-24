@@ -13,6 +13,7 @@
   import {
     aiAssistanceSentence,
     aiPolicyRule,
+    countOf,
     LOGGED_OUT_MESSAGE,
     NOT_LOGGED_IN_MESSAGE,
     offersLogIn,
@@ -190,15 +191,11 @@
     return rest > 0 ? `${shown.join(", ")} and ${rest} more` : shown.join(", ")
   }
 
-  function plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? "" : "s"}`
-  }
-
   const downloadAll: BarAction = $derived({
     label:
       downloadingCount > 0
-        ? `Downloading ${plural(downloadingCount, "Exercise")}…`
-        : `Download ${plural(downloadableCount, "Exercise")}`,
+        ? `Downloading ${countOf(downloadingCount, "Exercise")}…`
+        : `Download ${countOf(downloadableCount, "Exercise")}`,
     icon: "cloud-download",
     disabled: downloadingCount > 0 || !canDownload,
     onclick: () => runCourseAction("downloadAllExercises"),
@@ -220,7 +217,7 @@
       : undefined,
   )
   const closeCompleted: BarAction = $derived({
-    label: `Close ${plural(completedOpenCount, "Completed Exercise")}`,
+    label: `Close ${countOf(completedOpenCount, "Completed Exercise")}`,
     icon: "close-all",
     onclick: () => runCourseAction("closeCompletedExercises"),
   })
@@ -337,7 +334,7 @@
       view.newExercises.length > 0 && {
         key: "new",
         tone: "info",
-        title: plural(view.newExercises.length, "new exercise"),
+        title: countOf(view.newExercises.length, "new exercise"),
         detail: listNames(view.newExercises.map((ex) => ex.name)),
         actions:
           canDownload && !view.isOffline
@@ -360,7 +357,7 @@
       view.failedUpdates.length > 0 && {
         key: "updates",
         tone: "warning",
-        title: `Couldn't update ${plural(view.failedUpdates.length, "exercise")}`,
+        title: `Couldn't update ${countOf(view.failedUpdates.length, "exercise")}`,
         detail: [
           `${listNames(view.failedUpdates.map((ex) => ex.name))}.`,
           ...new Set(view.failedUpdates.map((ex) => ex.reason).filter((reason) => reason !== "")),
@@ -555,7 +552,7 @@
       {#if downloadingCount > 0}
         <vscode-progress-bar indeterminate class="downloading" aria-hidden="true"
         ></vscode-progress-bar>
-        <span class="visually-hidden">Downloading {plural(downloadingCount, "exercise")}</span>
+        <span class="visually-hidden">Downloading {countOf(downloadingCount, "exercise")}</span>
       {/if}
     </div>
 

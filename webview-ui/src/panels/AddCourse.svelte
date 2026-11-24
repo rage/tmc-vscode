@@ -9,7 +9,7 @@
     TmcOrganizations,
     WebviewError,
   } from "../../../shared/lib"
-  import { backendName } from "../../../shared/lib"
+  import { backendName, countOf } from "../../../shared/lib"
   import ActionMenu from "../components/ActionMenu.svelte"
   import Button from "../components/Button.svelte"
   import ErrorNotice from "../components/ErrorNotice.svelte"
@@ -207,8 +207,8 @@
     }
     const courses = shownMoocCourses.length + shownOrganizationCourses.length
     const summary = browsedOrganization
-      ? `${plural(courses, "course")} found`
-      : `${plural(courses, "course")} and ${plural(shownOrganizations.length, "organization")} found`
+      ? `${countOf(courses, "course")} found`
+      : `${countOf(courses, "course")} and ${countOf(shownOrganizations.length, "organization")} found`
     const timer = setTimeout(() => announce(summary), 600)
     return () => clearTimeout(timer)
   })
@@ -222,10 +222,6 @@
     } catch {
       return code
     }
-  }
-
-  function plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? "" : "s"}`
   }
 </script>
 
