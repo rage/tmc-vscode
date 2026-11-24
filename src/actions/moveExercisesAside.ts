@@ -48,8 +48,8 @@ export async function moveExercisesAside(
 /**
  * Moves exercises moved aside by {@link moveExercisesAside} back into the exercises folder.
  *
- * @returns `false`, moving nothing, when the exercises folder has an entry of the same name as
- *   one to bring back, such as a course downloaded since.
+ * @returns `false`, moving nothing, when the exercises folder is not empty: merging two sets of
+ *   exercises would credit one account with the other's.
  */
 export async function bringBackMovedExercises(
   actionContext: ReadyActionContext,

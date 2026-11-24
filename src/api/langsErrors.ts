@@ -29,6 +29,7 @@ import {
   ProjectsDirMoveRefusedError,
   ProjectsDirUnreachableError,
   ProjectsRestoreConflictError,
+  ProjectsSplitError,
   ProxyError,
   RateLimitedError,
   RuntimeError,
@@ -88,6 +89,7 @@ const ERROR_CLASS_OF_KIND: Record<Kind, LangsErrorClass> = {
   "projects-dir-move-to-itself": ProjectsDirMoveRefusedError,
   "projects-dir-move-into-itself": ProjectsDirMoveRefusedError,
   "projects-restore-conflict": ProjectsRestoreConflictError,
+  "projects-split": ProjectsSplitError,
 }
 
 /** What the CLI reported about a failure, beside its message. */

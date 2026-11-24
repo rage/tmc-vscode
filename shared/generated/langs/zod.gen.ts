@@ -333,7 +333,8 @@ export const zKind = z.union([
     z.literal('projects-dir-unreachable'),
     z.literal('projects-dir-move-to-itself'),
     z.literal('projects-dir-move-into-itself'),
-    z.literal('projects-restore-conflict')
+    z.literal('projects-restore-conflict'),
+    z.literal('projects-split')
 ]);
 
 /**

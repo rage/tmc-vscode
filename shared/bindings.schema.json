@@ -2744,7 +2744,7 @@
           "const": "projects-dir-move-to-itself"
         },
         {
-          "description": "The folder given to move the exercises folder, or its contents, to or from is inside the\nexercises folder.",
+          "description": "The folder given to move the exercises folder, or its contents, to or from is inside the\nexercises folder, or contains it.",
           "type": "string",
           "const": "projects-dir-move-into-itself"
         },
@@ -2752,6 +2752,11 @@
           "description": "`settings restore-projects` found the exercises folder holding something other than OS\nmetadata files, such as `path`; nothing was moved.",
           "type": "string",
           "const": "projects-restore-conflict"
+        },
+        {
+          "description": "Setting the projects aside or restoring them failed part way and could not be undone:\nsome entries are still in the folder they were being moved to (`path`), the rest where\nthey were.",
+          "type": "string",
+          "const": "projects-split"
         }
       ]
     },

@@ -715,8 +715,8 @@ export default class Langs {
 
   /**
    * Moves the entries {@link setProjectsAside} put in `folder` back into the projects directory
-   * and deletes `folder`. Errs with `ProjectsRestoreConflictError`, moving nothing, when the
-   * projects directory already has an entry of the same name.
+   * and deletes `folder`. Errs with `ProjectsRestoreConflictError`, moving nothing, unless the
+   * projects directory holds nothing but OS metadata files.
    */
   public async restoreProjects(folder: string): Promise<Result<void, Error>> {
     return this._run({ args: this._settingsCmd("restore-projects", folder) })

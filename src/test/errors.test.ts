@@ -26,6 +26,7 @@ import {
   ObsoleteClientError,
   presentationFor,
   ProjectsDirMoveError,
+  ProjectsSplitError,
   RateLimitedError,
   RuntimeError,
   ServerError,
@@ -325,6 +326,13 @@ suite("presentationFor", function () {
     expect(message).toMatch(/^The exercises folder \(\/mnt\) cannot be reached\./)
     expect(message).toContain("then try again. Your exercises are now in /old.")
     expect(actions).toEqual(presentationFor(cause).actions)
+  })
+
+  test("an interrupted set-aside names the folder the other half of the exercises is in", function () {
+    const error = langsError({ kind: "projects-split", path: "/aside" }, "split", "", undefined)
+
+    expect(error).toBeInstanceOf(ProjectsSplitError)
+    expect(presentationFor(error).message).toContain("exercises folder and /aside.")
   })
 
   test("the sentence holds none of a CLI failure's diagnostics", function () {
