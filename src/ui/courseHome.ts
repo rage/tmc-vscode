@@ -28,6 +28,7 @@ import {
   formatDeadlineBriefly,
   formatNearRelativeTime,
   parseDate,
+  PROSE_LOCALE,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
 import { lastExerciseReached } from "./lastExerciseReached"
@@ -105,7 +106,7 @@ export function buildCourseHomeView(
     return stored
   }
   const course = stored.val
-  const locale = vscode.env.language
+  const locale = PROSE_LOCALE
   const parts = courseView(actionContext, course, now)
   const exercises = parts.flatMap((part) => part.exercises)
   const deadlineText = (date: Date | null): DeadlineText | undefined =>

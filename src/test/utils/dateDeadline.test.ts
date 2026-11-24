@@ -9,7 +9,14 @@ import {
 } from "../../utilities/dateDeadline"
 
 const absolute = (date: Date, locale: string): string =>
-  new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date)
+  new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date)
 
 suite("Date utils", () => {
   const CURRENT_TIME = new Date(2020, 3, 1)
@@ -55,7 +62,7 @@ suite("Date utils", () => {
     test("renders a distant deadline in the given language, without a hint", () => {
       const date = new Date("2026-09-01T12:00:00Z")
       expect(formatDeadline(date, NOW, "fi")).toBe(absolute(date, "fi"))
-      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/GMT|\(/)
+      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/\(/)
     })
 
     test("adds a relative hint within a week, either side of now", () => {

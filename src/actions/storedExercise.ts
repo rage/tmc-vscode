@@ -1,12 +1,11 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
-import * as vscode from "vscode"
 
 import { LocalCourseData } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { StoredExercise } from "../config/userdata"
 import { ChapterNotOpenError, ExerciseRemovedError } from "../errors"
-import { formatDateTime, parseDate } from "../utilities"
+import { formatDateTime, parseDate, PROSE_LOCALE } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -26,7 +25,7 @@ export function storedExerciseOf(
     : undefined
   if (stored.err && closedChapter) {
     const opensAt = parseDate(closedChapter.opensAt)
-    const when = opensAt ? ` on ${formatDateTime(opensAt, vscode.env.language)}` : " later"
+    const when = opensAt ? ` on ${formatDateTime(opensAt, PROSE_LOCALE)}` : " later"
     return Err(
       new ChapterNotOpenError(
         `${exercise.exerciseSlug} is in the chapter "${closedChapter.name}", which opens${when}.` +

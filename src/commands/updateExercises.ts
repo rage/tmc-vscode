@@ -16,7 +16,7 @@ import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
-import { Logger } from "../utilities"
+import { Logger, PROSE_LOCALE } from "../utilities"
 import { showCourseHomeButton } from "./showCourseHome"
 
 /**
@@ -250,7 +250,7 @@ function allClear(uncheckedCourses: readonly LocalCourseData[]): string {
   if (uncheckedCourses.length === 0) {
     return "All exercises are up to date."
   }
-  const titles = new Intl.ListFormat("en").format(
+  const titles = new Intl.ListFormat(PROSE_LOCALE).format(
     uncheckedCourses.map((course) => LocalCourseData.getCourseTitle(course)),
   )
   const verb = uncheckedCourses.length === 1 ? "is" : "are"

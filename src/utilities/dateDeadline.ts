@@ -14,6 +14,9 @@ function isRealDate(date: Date | null): date is Date {
   return date !== null && Number.isFinite(date.getTime())
 }
 
+/** Dates and lists sit inside English sentences, so they are formatted in English, not the display language. */
+export const PROSE_LOCALE = "en"
+
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
@@ -25,9 +28,9 @@ const dateTimeFormats = new Map<string | undefined, Intl.DateTimeFormat>()
 const relativeTimeFormats = new Map<string | undefined, Intl.RelativeTimeFormat>()
 
 /**
- * Renders a date and time for a student in their display language, e.g. "Oct 2, 2026, 3:00 PM".
+ * Renders a date and time with its time zone, e.g. "Oct 2, 2026, 3:00 PM GMT+3".
  *
- * @param locale a BCP 47 tag such as `vscode.env.language`; `undefined` uses the runtime's.
+ * @param locale a BCP 47 tag, normally {@link PROSE_LOCALE}; `undefined` uses the runtime's.
  * @returns the empty string for a date that cannot be rendered.
  */
 export function formatDateTime(date: Date, locale: string | undefined): string {
@@ -36,7 +39,15 @@ export function formatDateTime(date: Date, locale: string | undefined): string {
   }
   let format = dateTimeFormats.get(locale)
   if (!format) {
-    format = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" })
+    format = new Intl.DateTimeFormat(locale, {
+      // dateStyle and timeStyle cannot be combined with timeZoneName.
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    })
     dateTimeFormats.set(locale, format)
   }
   return format.format(date)
