@@ -1185,8 +1185,20 @@ suite("the first start of a new version", function () {
   })
 
   // Opening a panel, or even a toast, unasked on every update covers whatever the user was doing.
+  test("a major update tells once what moved, with the changelog a click away", async function () {
+    sessionState.previousVersion = "0.1.0"
+
+    await activate(createContext())
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining("looks different"),
+      expect.objectContaining({ title: "What's New" }),
+      expect.objectContaining({ title: "Show Courses" }),
+    )
+  })
+
   test("an update says so in the status bar alone", async function () {
-    sessionState.previousVersion = "1.0.0"
+    sessionState.previousVersion = `${EXTENSION_VERSION.split(".")[0]}.0.0`
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const setStatusBarMessage = vi.spyOn(vscode.window, "setStatusBarMessage")
 

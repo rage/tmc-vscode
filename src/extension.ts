@@ -429,8 +429,9 @@ async function activateInner(
   }
 
   let versionChange: VersionChange | undefined
+  let previousVersion: string | undefined
   try {
-    const previousVersion = storage.getSessionState()?.extensionVersion
+    previousVersion = storage.getSessionState()?.extensionVersion
     if (EXTENSION_VERSION !== previousVersion) {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
     }
@@ -804,7 +805,27 @@ async function activateInner(
       isUnasked: true,
     }).catch((e) => Logger.warn("Could not open the walkthrough", e))
   } else if (readyContext && versionChange === "updated") {
-    dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
+    if (isMajorUpdate(previousVersion, EXTENSION_VERSION)) {
+      void dialog.notification(
+        `TestMyCode ${EXTENSION_VERSION} looks different: your courses are in the TestMyCode view, ` +
+          "Run Tests and Submit are buttons in the editor title, and the old Ctrl+Shift+T, C and A " +
+          "shortcuts are gone.",
+        [
+          "What's New",
+          (): void =>
+            void vscode.commands.executeCommand(
+              "markdown.showPreview",
+              vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+            ),
+        ],
+        [
+          "Show Courses",
+          (): void => void vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`),
+        ],
+      )
+    } else {
+      dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
+    }
   }
 
   initializationErrors.notify(!readyContext)
@@ -813,3 +834,12 @@ async function activateInner(
 // Everything activation starts is registered in `context.subscriptions`, which VS Code
 // disposes for us; this exists because the extension API requires the export.
 export function deactivate(): void {}
+
+/** Whether `current` is a new major version over `previous`, which a student must be told about. */
+function isMajorUpdate(previous: string | undefined, current: string): boolean {
+  return Number.isFinite(majorOf(previous)) && majorOf(current) > majorOf(previous)
+}
+
+function majorOf(version: string | undefined): number {
+  return Number(version?.split(".")[0])
+}

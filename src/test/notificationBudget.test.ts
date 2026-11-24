@@ -72,7 +72,7 @@ const BUDGET: Budget = {
   "src/commands/wipe.ts": { errorNotification: 1, warningNotification: 1, withOperation: 1 },
   "src/extension.ts": {
     errorNotification: 2,
-    notification: 1,
+    notification: 2,
     offer: 1,
     statusMessage: 1,
     warningNotification: 2,
