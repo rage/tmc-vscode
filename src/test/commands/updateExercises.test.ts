@@ -9,7 +9,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import { downloadUpdates, updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import { BottleneckError } from "../../errors"
+import { BottleneckError, ConnectionError } from "../../errors"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
@@ -423,6 +423,21 @@ suite("updateExercises command", function () {
     expect(loudDialog.notification).not.toHaveBeenCalled()
     expect(loudDialog.statusMessage).not.toHaveBeenCalled()
     expect(silentDialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("leaves a backend it could not reach to the offline notices", async function () {
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      removed: [],
+      failures: [{ backend: "mooc", error: new ConnectionError("unreachable") }],
+      unchecked: [],
+    })
+    const [context, dialog] = contextWith(false)
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.reportError).not.toHaveBeenCalled()
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
   })
 
   test("reports both backends failing in one notification", async function () {
