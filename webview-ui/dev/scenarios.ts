@@ -390,6 +390,15 @@ function answerResultsRequests(
             outcome: { ok: true, value: history },
           },
         ]
+      case "restoreSubmission":
+        return [
+          {
+            type: "reply",
+            target,
+            requestId: message.requestId,
+            outcome: { ok: true, value: "restored" },
+          },
+        ]
       case "pasteExercise":
         return [
           {
@@ -553,6 +562,16 @@ function answerCatalog(
   >,
 ) {
   return (message: WebviewToExtension): ExtensionToWebview[] => {
+    if (message.type === "addCourse") {
+      return [
+        {
+          type: "reply",
+          target: { type: "AddCourse", id: addCoursePanel.id },
+          requestId: message.requestId,
+          outcome: { ok: false, error: { message: "Could not add the course." } },
+        },
+      ]
+    }
     if (!("requestId" in message) || !(message.type in answers)) {
       return []
     }
