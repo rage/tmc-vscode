@@ -33,7 +33,6 @@ type Budget = Record<string, Record<string, number>>
 const BUDGET: Budget = {
   "src/actions/downloadOrUpdateExercises.ts": { progressNotification: 1 },
   "src/api/aiUseGate.ts": { warningNotification: 1 },
-  "src/commands/addNewCourse.ts": { reportError: 1, withOperation: 1 },
   "src/commands/changeTmcDataPath.ts": {
     errorNotification: 1,
     notification: 1,

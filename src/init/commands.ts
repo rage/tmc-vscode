@@ -166,11 +166,11 @@ export function registerCommands(
 
   register("tmcTreeView.refreshCourses", async () => commands.refreshCourses(readyContext))
 
-  register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
-
-  register("tmc.showAddCourse", () =>
-    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" }),
-  )
+  // The palette's Add Course and the screen's are one flow.
+  const showAddCourse = (): void =>
+    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" })
+  register("tmc.addNewCourse", showAddCourse)
+  register("tmc.showAddCourse", showAddCourse)
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))
 

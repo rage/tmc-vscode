@@ -577,40 +577,6 @@ suite("reported once: course administration", function () {
     expect(shown).toEqual(["error: Failed to log out."])
   })
 
-  test("a course that fails to add is one notification", async function () {
-    const { run, shown, actionContext } = await harness({
-      langs: {
-        getTmcOrganizations: async () => Err(offline()),
-        getEnrolledMoocCourses: async () =>
-          Ok([{ id: "instance-2", name: "other", organization_name: "mooc" }]),
-        getMoocCourseData: async () => Err(offline()),
-      },
-    })
-
-    // A quick pick that accepts the first course row as soon as one is listed.
-    const accept = new vscode.EventEmitter<void>()
-    const quickPick = {
-      items: [] as { choice?: unknown }[],
-      selectedItems: [] as unknown[],
-      buttons: [],
-      onDidAccept: accept.event,
-      onDidHide: () => ({ dispose() {} }),
-      onDidTriggerButton: () => ({ dispose() {} }),
-      show() {},
-      hide() {},
-      dispose() {},
-    }
-    vi.spyOn(vscode.window, "createQuickPick").mockReturnValue(quickPick as never)
-    vi.mocked(actionContext.settings.isCoursesMoocFiEnabled).mockReturnValue(true)
-    const running = run("tmc.addNewCourse")
-    await vi.waitFor(() => expect(quickPick.items.some((x) => x.choice)).toBe(true))
-    quickPick.selectedItems = [quickPick.items.find((x) => x.choice)]
-    accept.fire()
-    await running
-
-    expect(shown).toEqual(["error: Failed to add course."])
-  })
-
   test("a data path that fails to move is one notification", async function () {
     const target = fs.mkdtempSync(`${os.tmpdir()}/tmc-reporting-`)
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValue([vscode.Uri.file(target)])

@@ -314,20 +314,22 @@ suite("registerCommands", function () {
     ])
   })
 
-  test("tmc.showAddCourse opens the add-course screen in the main panel", async function () {
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+  test.each(["tmc.showAddCourse", "tmc.addNewCourse"])(
+    "%s opens the add-course screen in the main panel",
+    async function (commandId) {
+      const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
+      const { handlers, context, actionContext } = registerAndCollect()
 
-    await handlers.get("tmc.showAddCourse")?.()
+      await handlers.get(commandId)?.()
 
-    expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
-      id: expect.any(Number),
-      type: "AddCourse",
-    })
-  })
+      expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
+        id: expect.any(Number),
+        type: "AddCourse",
+      })
+    },
+  )
 
-  // The palette keeps the quick pick as the keyboard fast path; every button opens the screen.
-  test("only the palette adds a course through the quick pick", function () {
+  test("the palette names its Add Course, and every button opens the screen", function () {
     const { menus, viewsWelcome = [], walkthroughs = [] } = packageJson().contributes
     const menuCommands = Object.entries(menus).flatMap(([menu, entries]) =>
       entries.flatMap((entry) => (entry.command ? [{ menu, entry }] : [])),
@@ -766,7 +768,6 @@ suite("registered command handlers", function () {
   // `test/commands/refreshEverything.test.ts`; the command-set test above pins the id.
 
   test.each([
-    ["tmc.addNewCourse", "addNewCourse"],
     ["tmc.changeTmcDataPath", "changeTmcDataPath"],
     ["tmc.logout", "logout"],
     ["tmc.switchWorkspace", "switchWorkspace"],
