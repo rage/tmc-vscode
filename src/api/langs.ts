@@ -35,7 +35,6 @@ import type {
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import {
-  asSentence,
   BaseError,
   ExerciseIdentifier,
   makeMoocKind,
@@ -57,52 +56,23 @@ import {
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
-  ArchiveTooLargeError,
-  AuthorizationError,
-  CertificateError,
-  ConnectionTimeoutError,
-  ExecutableBlockedError,
-  FileAccessError,
-  InvalidRequestError,
   LegacyTmcLoginEndedError,
-  LocalConfigCorruptError,
-  LoginClientRejectedError,
-  ProjectsDirUnreachableError,
-  ProxyError,
-  TmcLoginUnconfirmedError,
-  ToolchainMissingError,
-  UnexpectedResponseError,
-  UnsupportedExerciseError,
-  ChapterLockedError,
-  ExerciseLockedError,
-  ChapterNotOpenError,
   ConnectionError,
-  DeadlinePassedError,
-  DeviceLoginDeniedError,
-  DeviceLoginExpiredError,
   CliCrashedError,
   EmptyLangsResponseError,
-  ExerciseNotFoundError,
   ForbiddenError,
   InsufficientScopeError,
-  InvalidTokenError,
   LangsResponseSchemaError,
-  NotEnrolledError,
   NotFoundError,
-  ObsoleteClientError,
-  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
-  ServerError,
   SpawnError,
   TimeoutError,
-  TmcLoginNotAcceptedError,
-  UnknownUploadError,
-  UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
-import { countOf, sleep } from "../utilities/utils"
+import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
+import { langsError } from "./langsErrors"
 import { proxyEnvironment } from "./proxyEnvironment"
 
 interface Options {
@@ -209,16 +179,6 @@ const MAX_CACHED_RESPONSES = 128
 
 /** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
 const MAX_LOGGED_ARG_LENGTH = 120
-
-/** When to try again after a server's Retry-After, rounded up to whole minutes from two on. */
-function retryWait(seconds: number | undefined): string {
-  if (seconds === undefined) {
-    return "in a few minutes"
-  }
-  return seconds < 120
-    ? `in ${countOf(Math.max(1, Math.ceil(seconds)), "second")}`
-    : `in ${Math.ceil(seconds / 60)} minutes`
-}
 
 /**
  * Replaces an oversized argument with its length, so the output channel users paste into
@@ -1264,11 +1224,7 @@ export default class Langs {
     return res
       .map((pasted) => pasted.paste_url)
       .mapErr((error) =>
-        error instanceof RateLimitedError
-          ? Object.assign(error, {
-              message: `You have used Get Help on this exercise too often. Try again ${retryWait(error.retryAfterSeconds)}.`,
-            })
-          : error,
+        error instanceof RateLimitedError ? Object.assign(error, { isPasteLimit: true }) : error,
       )
   }
 
@@ -1561,10 +1517,7 @@ export default class Langs {
       return Err(new BaseError("Unexpected data in error response", stderr))
     }
 
-    const data = langsResponse.data
-    const message = langsResponse.message
-    const output = data["output-data"]
-    const errorKind = output.kind
+    const output = langsResponse.data["output-data"]
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone suffices to diagnose a failure, so every error carries both.
     // The CLI lists a boxed error twice in a row, once as the box and once as itself.
@@ -1572,232 +1525,28 @@ export default class Langs {
     // Staff find the server's log line by this id.
     const requestLine = output.request_id ? `courses.mooc.fi request id: ${output.request_id}` : ""
     const details = [trace.join("\n"), stderr, requestLine].filter(Boolean).join("\n\n")
-    const httpStatus = output.http_status ?? undefined
-    const filePath = output.path ?? undefined
-    const retryAfterSeconds =
-      output.retry_after_secs === null || output.retry_after_secs === undefined
-        ? undefined
-        : Number(output.retry_after_secs)
-    const fileError = (sentence: string): Err<FileAccessError> =>
-      Err(Object.assign(new FileAccessError(sentence, details), { path: filePath }))
-    const inPath = filePath ? ` (${filePath})` : ""
-    switch (errorKind) {
-      case "connection-error":
-        return Err(new ConnectionError(message, details))
-      case "connection-timeout":
-        return Err(new ConnectionTimeoutError(message, details))
-      case "certificate-error":
-        return Err(new CertificateError(message, details))
-      case "proxy-error":
-        return Err(new ProxyError(message, details))
-      case "forbidden":
-        return Err(new ForbiddenError(message, details))
-      case "insufficient-scope":
-        return Err(new InsufficientScopeError(message, details))
-      case "not-enrolled":
-        return Err(new NotEnrolledError(message, details))
-      case "deadline-passed":
-        return Err(
-          new DeadlinePassedError(
-            "The deadline of this exercise has passed, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "out-of-tries":
-        return Err(
-          new OutOfTriesError(
-            "You have no tries left on this exercise, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "chapter-not-open-yet":
-        return Err(
-          new ChapterNotOpenError(
-            "This exercise's chapter has not opened yet. Try again once it opens.",
-            details,
-          ),
-        )
-      case "chapter-not-unlocked-yet":
-        return Err(
-          new ChapterLockedError(
-            "Complete the chapters before this exercise's chapter to submit it.",
-            details,
-          ),
-        )
-      case "chapter-completed-and-locked":
-        return Err(
-          new ChapterLockedError(
-            "This exercise's chapter is locked, so the exercise can no longer be submitted.",
-            details,
-          ),
-        )
-      case "exercise-locked":
-        return Err(
-          new ExerciseLockedError(
-            "The teacher has locked this exercise, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "upload-expired":
-        return Err(new UploadExpiredError(message, details))
-      case "rate-limited":
-        return Err(
-          Object.assign(
-            new RateLimitedError(
-              `The server is receiving too many requests from your network. Try again ${retryWait(retryAfterSeconds)}.`,
-              details,
-            ),
-            { retryAfterSeconds },
-          ),
-        )
-      case "unknown-upload":
-        // Never a race: the backend has no record of a file the CLI named for this
-        // exercise, so a retry cannot help.
-        return Err(new UnknownUploadError(message, details))
-      case "invalid-token": {
-        this._clearBackendCache(auth.backend)
-        if (auth.backend === "tmc") {
-          // Only the old tmc.mooc.fi login was refused; a courses.mooc.fi one may remain.
-          return Err(
-            new LegacyTmcLoginEndedError(
-              "Your old tmc.mooc.fi login has ended. TestMyCode now uses your MOOC.fi login; try again.",
-              details,
-            ),
-          )
-        }
-        const rejection = new InvalidTokenError(message)
-        if (!auth.expected) {
-          this._onLogout?.(false, rejection)
-        }
-        return Err(rejection)
+    const error = langsError(
+      {
+        kind: output.kind,
+        path: output.path ?? undefined,
+        httpStatus: output.http_status ?? undefined,
+        retryAfterSeconds:
+          output.retry_after_secs === null || output.retry_after_secs === undefined
+            ? undefined
+            : Number(output.retry_after_secs),
+      },
+      langsResponse.message,
+      details,
+      auth.backend,
+    )
+    if (output.kind === "invalid-token" || output.kind === "not-logged-in") {
+      this._clearBackendCache(auth.backend)
+      // Only the old tmc.mooc.fi login was refused; a courses.mooc.fi one may remain.
+      if (!auth.expected && !(error instanceof LegacyTmcLoginEndedError)) {
+        this._onLogout?.(false, error)
       }
-      case "tmc-login-not-accepted":
-        return Err(
-          new TmcLoginNotAcceptedError(
-            "tmc.mooc.fi did not accept your MOOC.fi login. Ask the course staff to check that " +
-              "your MOOC.fi account is linked to tmc.mooc.fi.",
-            details,
-          ),
-        )
-      case "tmc-login-unconfirmed":
-        return Err(
-          new TmcLoginUnconfirmedError(
-            "courses.mooc.fi could not confirm your login to tmc.mooc.fi just now. Try again in a few minutes.",
-            details,
-          ),
-        )
-      case "login-client-rejected":
-        return Err(
-          new LoginClientRejectedError(
-            "courses.mooc.fi did not accept this version of TestMyCode for logging in. Update the " +
-              "extension; if it is up to date, report the problem.",
-            details,
-          ),
-        )
-      case "not-logged-in": {
-        this._clearBackendCache(auth.backend)
-        const rejection = new AuthorizationError(message, details)
-        if (!auth.expected) {
-          this._onLogout?.(false, rejection)
-        }
-        return Err(rejection)
-      }
-      case "device-login-denied":
-        return Err(new DeviceLoginDeniedError(message, details))
-      case "device-login-expired":
-        return Err(new DeviceLoginExpiredError(message, details))
-      case "not-found":
-        return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
-      case "exercise-not-found":
-        return Err(
-          new ExerciseNotFoundError(
-            auth.backend ? "This exercise is no longer in the course." : message,
-            details,
-          ),
-        )
-      case "server-error":
-        return Err(Object.assign(new ServerError(message, details), { httpStatus }))
-      case "obsolete-client":
-        return Err(new ObsoleteClientError(message, details))
-      case "invalid-request":
-        return Err(Object.assign(new InvalidRequestError(message, details), { httpStatus }))
-      case "unexpected-response":
-        return Err(new UnexpectedResponseError(message, details))
-      case "local-config-corrupt":
-        return Err(
-          Object.assign(
-            new LocalConfigCorruptError(
-              `A file TestMyCode keeps on this computer could not be read${inPath}.`,
-              details,
-            ),
-            { path: filePath },
-          ),
-        )
-      case "archive-too-large":
-        return Err(
-          new ArchiveTooLargeError(
-            "The exercise is larger than allowed. Remove large files, such as data sets or " +
-              "build output, from the exercise folder and try again.",
-            details,
-          ),
-        )
-      case "unsupported-exercise":
-        return Err(
-          new UnsupportedExerciseError(
-            "This exercise cannot be done in VS Code. Do it on the course page.",
-            details,
-          ),
-        )
-      case "file-in-use":
-        return fileError(
-          `Another program is using a file TestMyCode needs${inPath}. Close terminals, running ` +
-            "programs and other editors using the exercise folder, then try again. Antivirus " +
-            "or a sync app such as OneDrive can also hold files for a moment.",
-        )
-      case "permission-denied":
-        return fileError(
-          `TestMyCode was not allowed to use a file${inPath}. Check that the exercise folder ` +
-            "is not read-only or protected, then try again.",
-        )
-      case "path-too-long":
-        return fileError(
-          `A file path is too long for this computer${inPath}. Move the exercises folder ` +
-            "closer to the root of the drive, such as C:\\TMC.",
-        )
-      case "disk-full":
-        return fileError(
-          `The disk or your home folder quota is full${inPath}. Free some space and try again.`,
-        )
-      case "toolchain-missing":
-        return Err(
-          new ToolchainMissingError(
-            `${asSentence(message)} If you installed it after starting VS Code, close every VS ` +
-              "Code window and start VS Code again.",
-            details,
-          ),
-        )
-      case "executable-blocked":
-        return Err(
-          new ExecutableBlockedError(
-            "A program built from the exercise was blocked or removed, probably by antivirus " +
-              "software. Allow the exercises folder in the antivirus program and try again.",
-            details,
-          ),
-        )
-      case "projects-dir-unreachable":
-        return Err(
-          Object.assign(
-            new ProjectsDirUnreachableError(
-              `The exercises folder${inPath} cannot be reached. Connect the drive or network ` +
-                "folder it is on, or move the exercises folder.",
-              details,
-            ),
-            { path: filePath },
-          ),
-        )
     }
-
-    return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))
+    return Err(error)
   }
 
   /**

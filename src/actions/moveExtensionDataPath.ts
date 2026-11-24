@@ -6,7 +6,7 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
-import { FileAccessError, FileSystemError } from "../errors"
+import { FileSystemError, ProjectsDirMoveError } from "../errors"
 import { isPathInside, Logger } from "../utilities"
 import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
@@ -82,17 +82,10 @@ export async function moveExtensionDataPath(
     }
     await refreshLocalExercises(actionContext)
     const where = resources.projectsDirectory ?? current
-    // A FileAccessError already names its own remedy.
-    const advice =
-      moveResult.val instanceof FileAccessError
-        ? ""
-        : " Close terminals and programs that use the exercises, then try again."
     return Err(
-      Object.assign(moveResult.val, {
-        message:
-          `${moveResult.val.message.replace(/\.?$/, ".")}${advice}` +
-          `${where ? ` Your exercises are now in ${where}.` : ""}`,
-      }),
+      where
+        ? new ProjectsDirMoveError(moveResult.val, `Your exercises are now in ${where}.`)
+        : moveResult.val,
     )
   }
 

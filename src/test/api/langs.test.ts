@@ -39,6 +39,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   isSessionLost,
+  presentationFor,
   ObsoleteClientError,
   OutOfTriesError,
   RateLimitedError,
@@ -344,7 +345,10 @@ suite("Langs class arg building", function () {
     stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
-    expect((result.val as Error).message).toBe("This exercise is no longer in the course.")
+    expect((result.val as Error).message).toBe(line)
+    expect(presentationFor(result.val as Error).message).toBe(
+      "This exercise is no longer in the course. Refresh the courses to see its exercises.",
+    )
     expect((result.val as ExerciseNotFoundError).details).toContain(line)
   })
 
@@ -973,7 +977,7 @@ suite("Langs error-kind mapping", function () {
     langs.on("logout", onLogout)
     stubSpawn(langs, () => Ok(errorOutput(kind, "422 from https://courses.mooc.fi/…")))
     const result = await langs.getEnrolledMoocCourses()
-    expect((result.val as Error).message).toContain(message)
+    expect(presentationFor(result.val as Error).message).toContain(message)
     expect(isSessionLost(result.val as Error)).toBe(false)
     expect(onLogout).not.toHaveBeenCalled()
   })
@@ -1018,7 +1022,16 @@ suite("Langs error-kind mapping", function () {
 
   test("an error kind carries the CLI's message and no remediation of its own", async function () {
     // `presentationFor` owns the user-facing sentences.
-    for (const kind of ["forbidden", "not-enrolled", "upload-expired", "obsolete-client"]) {
+    for (const kind of [
+      "forbidden",
+      "not-enrolled",
+      "upload-expired",
+      "obsolete-client",
+      "deadline-passed",
+      "rate-limited",
+      "file-in-use",
+      "toolchain-missing",
+    ]) {
       const langs = newLangs()
       stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get course")))
       const result = await langs.getEnrolledMoocCourses()
@@ -1144,13 +1157,14 @@ suite("Langs error-kind mapping", function () {
 
     const courses = await langs.getEnrolledMoocCourses()
     expect(courses.val).toBeInstanceOf(RateLimitedError)
-    expect((courses.val as Error).message).toBe(
+    expect((courses.val as Error).message).toBe("boom")
+    expect(presentationFor(courses.val as Error).message).toBe(
       "The server is receiving too many requests from your network. Try again in 90 seconds.",
     )
     expect((courses.val as RateLimitedError).details).toContain("request id: req-1")
 
     const paste = await langs.paste(idOfMoocExercise("ex"), "/ex")
-    expect((paste.val as Error).message).toBe(
+    expect(presentationFor(paste.val as Error).message).toBe(
       "You have used Get Help on this exercise too often. Try again in 90 seconds.",
     )
   })

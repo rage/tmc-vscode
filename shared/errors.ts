@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import type { BackendKind } from "./enum"
+import type { Kind } from "./generated/langs"
 
 /**
  * An `Error` carrying the fields Node attaches to a failed system call.
@@ -47,6 +48,8 @@ export class BaseError extends Error {
   public details?: string | undefined
   /** The backend the CLI command that raised this talked to, if it talked to one. */
   public backend?: BackendKind | undefined
+  /** The tmc-langs error kind this was raised for; the student is shown a sentence chosen by it. */
+  public langsKind?: Kind | undefined
   public override cause?: ErrnoException | string
   public override stack?: string
 

@@ -1,6 +1,6 @@
 import * as path from "path"
 
-import { Err } from "ts-results"
+import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../../actions"
@@ -9,6 +9,7 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
+import { ProjectsDirMoveError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -132,9 +133,15 @@ suite("moveExtensionDataPath action", function () {
     })
   })
 
-  test("should result in error if TMC operation fails", async function () {
-    tmcMockValues.moveProjectsDirectory = Err(new Error())
+  test("a failed move wraps its cause with where the exercises are now", async function () {
+    const cause = new Error("held")
+    tmcMockValues.moveProjectsDirectory = Err(cause)
+    tmcMockValues.listSettings = Ok({ projects_dir: OLD_PATH })
+
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(result.val).toBeInstanceOf(Error)
+
+    expect(result.val).toBeInstanceOf(ProjectsDirMoveError)
+    expect((result.val as ProjectsDirMoveError).cause).toBe(cause)
+    expect((result.val as Error).message).toBe(`Your exercises are now in ${OLD_PATH}.`)
   })
 })

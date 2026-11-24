@@ -1,5 +1,6 @@
+import type { Kind } from "../shared/langsSchema"
 import type { RunnableCommand } from "../shared/lib"
-import { asSentence, BaseError, LOGGED_OUT_MESSAGE } from "../shared/lib"
+import { asSentence, BaseError, countOf, LOGGED_OUT_MESSAGE } from "../shared/lib"
 import { fileProblemOf } from "./utilities/fileProblem"
 
 export class AuthorizationError extends BaseError {
@@ -202,6 +203,8 @@ export class RateLimitedError extends BaseError {
   public override readonly name = "Rate Limited Error"
   /** How long the server asked to wait, when it said. */
   public retryAfterSeconds?: number | undefined
+  /** The limit is on pasting the exercise, not on the network's requests. */
+  public isPasteLimit?: boolean | undefined
 }
 
 /** A submission named an uploaded file whose retention window had elapsed. */
@@ -311,6 +314,21 @@ export class ExecutableBlockedError extends BaseError {
 /** The exercises folder is missing, such as one on a drive that is not connected. */
 export class ProjectsDirUnreachableError extends BaseError {
   public override readonly name = "Projects Dir Unreachable Error"
+}
+
+/**
+ * Moving the exercises folder failed part way. `cause` is why; the message says where the
+ * exercises are now, which can be either folder.
+ */
+export class ProjectsDirMoveError extends BaseError {
+  public override readonly name = "Projects Dir Move Error"
+
+  public constructor(
+    public override readonly cause: Error,
+    location: string,
+  ) {
+    super(location)
+  }
 }
 
 /** The CLI could not be started; `code` is the errno name, such as ENOENT or EACCES. */
@@ -450,6 +468,83 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
   }
 }
 
+/** When to try again after a server's Retry-After, rounded up to whole minutes from two on. */
+function retryWait(seconds: number | undefined): string {
+  if (seconds === undefined) {
+    return "in a few minutes"
+  }
+  return seconds < 120
+    ? `in ${countOf(Math.max(1, Math.ceil(seconds)), "second")}`
+    : `in ${Math.ceil(seconds / 60)} minutes`
+}
+
+/** " (<path>)" naming the file an error is about, or nothing. */
+function inPath(error: BaseError): string {
+  return error.path ? ` (${error.path})` : ""
+}
+
+/**
+ * The sentences for tmc-langs error kinds whose CLI message is not written for the student.
+ * Kinds missing here are worded by their error class in {@link presentationFor}.
+ */
+const LANGS_KIND_SENTENCES: Partial<Record<Kind, (error: BaseError) => string>> = {
+  "deadline-passed": () =>
+    "The deadline of this exercise has passed, so it can no longer be submitted.",
+  "out-of-tries": () =>
+    "You have no tries left on this exercise, so it can no longer be submitted.",
+  "chapter-not-open-yet": () =>
+    "This exercise's chapter has not opened yet. Try again once it opens.",
+  "chapter-not-unlocked-yet": () =>
+    "Complete the chapters before this exercise's chapter to submit it.",
+  "chapter-completed-and-locked": () =>
+    "This exercise's chapter is locked, so the exercise can no longer be submitted.",
+  "exercise-locked": () =>
+    "The teacher has locked this exercise, so it can no longer be submitted.",
+  "rate-limited": (error) => {
+    const wait = retryWait(error instanceof RateLimitedError ? error.retryAfterSeconds : undefined)
+    return error instanceof RateLimitedError && error.isPasteLimit
+      ? `You have used Get Help on this exercise too often. Try again ${wait}.`
+      : `The server is receiving too many requests from your network. Try again ${wait}.`
+  },
+  "tmc-login-not-accepted": () =>
+    "tmc.mooc.fi did not accept your MOOC.fi login. Ask the course staff to check that " +
+    "your MOOC.fi account is linked to tmc.mooc.fi.",
+  "tmc-login-unconfirmed": () =>
+    "courses.mooc.fi could not confirm your login to tmc.mooc.fi just now. Try again in a few minutes.",
+  "login-client-rejected": () =>
+    "courses.mooc.fi did not accept this version of TestMyCode for logging in. Update the " +
+    "extension; if it is up to date, report the problem.",
+  "local-config-corrupt": (error) =>
+    `A file TestMyCode keeps on this computer could not be read${inPath(error)}.`,
+  "archive-too-large": () =>
+    "The exercise is larger than allowed. Remove large files, such as data sets or " +
+    "build output, from the exercise folder and try again.",
+  "unsupported-exercise": () =>
+    "This exercise cannot be done in VS Code. Do it on the course page.",
+  "file-in-use": (error) =>
+    `Another program is using a file TestMyCode needs${inPath(error)}. Close terminals, running ` +
+    "programs and other editors using the exercise folder, then try again. Antivirus " +
+    "or a sync app such as OneDrive can also hold files for a moment.",
+  "permission-denied": (error) =>
+    `TestMyCode was not allowed to use a file${inPath(error)}. Check that the exercise folder ` +
+    "is not read-only or protected, then try again.",
+  "path-too-long": (error) =>
+    `A file path is too long for this computer${inPath(error)}. Move the exercises folder ` +
+    "closer to the root of the drive, such as C:\\TMC.",
+  "disk-full": (error) =>
+    `The disk or your home folder quota is full${inPath(error)}. Free some space and try again.`,
+  // The CLI's message names the missing program.
+  "toolchain-missing": (error) =>
+    `${userSentence(error)} If you installed it after starting VS Code, close every VS ` +
+    "Code window and start VS Code again.",
+  "executable-blocked": () =>
+    "A program built from the exercise was blocked or removed, probably by antivirus " +
+    "software. Allow the exercises folder in the antivirus program and try again.",
+  "projects-dir-unreachable": (error) =>
+    `The exercises folder${inPath(error)} cannot be reached. Connect the drive or network ` +
+    "folder it is on, or move the exercises folder.",
+}
+
 /**
  * How to show `error` to the user.
  *
@@ -459,7 +554,11 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
  */
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined
-  const reported = userSentence(error)
+  const kindSentence =
+    error instanceof BaseError && error.langsKind
+      ? LANGS_KIND_SENTENCES[error.langsKind]?.(error)
+      : undefined
+  const reported = kindSentence ?? userSentence(error)
   if (error instanceof AiUseRefusedError) {
     return {
       message: reported,
@@ -480,6 +579,13 @@ export function presentationFor(error: Error): ErrorPresentation {
   }
   if (error instanceof TmcLoginNotAcceptedError) {
     return { message: reported, actions: [] }
+  }
+  if (error instanceof LegacyTmcLoginEndedError) {
+    return {
+      message:
+        "Your old tmc.mooc.fi login has ended. TestMyCode now uses your MOOC.fi login; try again.",
+      actions: [],
+    }
   }
   if (isSessionLost(error)) {
     return {
@@ -543,6 +649,15 @@ export function presentationFor(error: Error): ErrorPresentation {
         "This exercise is no longer in the course. Refresh the courses to see its exercises.",
       actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
     }
+  }
+  if (error instanceof ProjectsDirMoveError) {
+    const why = presentationFor(error.cause)
+    // A FileAccessError already names its own remedy.
+    const advice =
+      error.cause instanceof FileAccessError
+        ? ""
+        : " Close terminals and programs that use the exercises, then try again."
+    return { message: `${why.message}${advice} ${reported}`, actions: why.actions }
   }
   if (error instanceof SpawnError) {
     return spawnFailurePresentation(error)

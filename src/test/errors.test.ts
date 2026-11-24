@@ -1,3 +1,4 @@
+import { langsError } from "../api/langsErrors"
 import {
   CertificateError,
   FileAccessError,
@@ -9,6 +10,7 @@ import {
   AuthorizationError,
   ChapterLockedError,
   ChapterNotOpenError,
+  LegacyTmcLoginEndedError,
   CliCrashedError,
   ConnectionError,
   DeadlinePassedError,
@@ -23,6 +25,8 @@ import {
   OutOfTriesError,
   ObsoleteClientError,
   presentationFor,
+  ProjectsDirMoveError,
+  RateLimitedError,
   RuntimeError,
   ServerError,
   SpawnError,
@@ -262,6 +266,65 @@ suite("presentationFor", function () {
     expect(presentationFor(new RuntimeError("tmc-langs-cli exited")).message).toBe(
       "tmc-langs-cli exited.",
     )
+  })
+
+  test("a CLI error is worded by its kind, not by the CLI's message", function () {
+    const locked = langsError({ kind: "chapter-completed-and-locked" }, "403 from …", "", "mooc")
+    const unlocked = langsError({ kind: "chapter-not-unlocked-yet" }, "403 from …", "", "mooc")
+
+    expect(locked).toBeInstanceOf(ChapterLockedError)
+    expect(locked.message).toBe("403 from …")
+    expect(presentationFor(locked).message).toContain("chapter is locked")
+    expect(presentationFor(unlocked).message).toContain("Complete the chapters before")
+  })
+
+  test("a file a CLI error is about is named in its sentence", function () {
+    const error = langsError({ kind: "disk-full", path: "/home/x" }, "os error 28", "", undefined)
+
+    expect(error).toBeInstanceOf(FileAccessError)
+    expect(presentationFor(error).message).toBe(
+      "The disk or your home folder quota is full (/home/x). Free some space and try again.",
+    )
+  })
+
+  test("a missing toolchain keeps the CLI's naming of the program", function () {
+    const error = langsError({ kind: "toolchain-missing" }, "python was not found", "", undefined)
+
+    expect(presentationFor(error).message).toMatch(/^Python was not found\. If you installed/)
+  })
+
+  test("a rate limit says how long to wait, and blames Get Help only for pastes", function () {
+    const limited = langsError({ kind: "rate-limited", retryAfterSeconds: 300 }, "429", "", "mooc")
+
+    expect(presentationFor(limited).message).toContain("from your network. Try again in 5 minutes")
+    Object.assign(limited, { isPasteLimit: true })
+    expect(limited).toBeInstanceOf(RateLimitedError)
+    expect(presentationFor(limited).message).toContain("used Get Help on this exercise too often")
+  })
+
+  test("a refused tmc.mooc.fi token ends only the old tmc.mooc.fi login", function () {
+    const error = langsError({ kind: "invalid-token" }, "401", "", "tmc")
+
+    expect(error).toBeInstanceOf(LegacyTmcLoginEndedError)
+    expect(isSessionLost(error)).toBe(false)
+    expect(presentationFor(error).message).toContain("old tmc.mooc.fi login has ended")
+  })
+
+  test("a failed folder move gives the cause's sentence and remedy, then where the exercises are", function () {
+    const cause = langsError(
+      { kind: "projects-dir-unreachable", path: "/mnt" },
+      "gone",
+      "",
+      undefined,
+    )
+
+    const { message, actions } = presentationFor(
+      new ProjectsDirMoveError(cause, "Your exercises are now in /old."),
+    )
+
+    expect(message).toMatch(/^The exercises folder \(\/mnt\) cannot be reached\./)
+    expect(message).toContain("then try again. Your exercises are now in /old.")
+    expect(actions).toEqual(presentationFor(cause).actions)
   })
 
   test("the sentence holds none of a CLI failure's diagnostics", function () {
