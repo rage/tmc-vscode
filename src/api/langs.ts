@@ -1538,8 +1538,12 @@ export default class Langs {
     const output = langsResponse.data["output-data"]
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone suffices to diagnose a failure, so every error carries both.
-    // The CLI lists a boxed error twice in a row, once as the box and once as itself.
-    const trace = output.trace.filter((line, i, lines) => line !== lines[i - 1])
+    // The CLI lists a boxed error twice in a row, once as the box and once as itself, and
+    // starts with the outermost error, which is the message already.
+    const trace = output.trace.filter(
+      (line, i, lines) =>
+        line !== lines[i - 1] && !(i === 0 && line === `Caused by: ${langsResponse.message}`),
+    )
     // Staff find the server's log line by this id.
     const requestLine = output.request_id ? `courses.mooc.fi request id: ${output.request_id}` : ""
     const details = [trace.join("\n"), stderr, requestLine].filter(Boolean).join("\n\n")

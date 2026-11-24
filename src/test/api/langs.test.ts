@@ -349,7 +349,7 @@ suite("Langs class arg building", function () {
     expect(presentationFor(result.val as Error).message).toBe(
       "This exercise is no longer in the course. Refresh the courses to see its exercises.",
     )
-    expect((result.val as ExerciseNotFoundError).details).toContain(line)
+    expect((result.val as ExerciseNotFoundError).details ?? "").not.toContain(line)
   })
 
   test("waitForMoocGrading polls the task submission's grading", async function () {
@@ -1005,12 +1005,12 @@ suite("Langs error-kind mapping", function () {
     },
   )
 
-  test("a cause the CLI lists twice in a row appears once in the details", async function () {
+  test("the details list each cause once, leaving out the message itself", async function () {
     const langs = newLangs()
     const trace = ["Caused by: outer", "Caused by: inner", "Caused by: inner"]
     stubSpawn(langs, () => Ok(errorOutput("generic", "outer", trace)))
     const result = await langs.getEnrolledMoocCourses()
-    expect((result.val as RuntimeError).details).toBe("Caused by: outer\nCaused by: inner")
+    expect((result.val as RuntimeError).details).toBe("Caused by: inner")
   })
 
   test("an error the CLI reports no HTTP status for has none", async function () {
