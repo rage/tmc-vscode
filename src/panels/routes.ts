@@ -67,14 +67,19 @@ export function initializationErrorHelpPanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext,
 ): ErrorHelpPanel {
-  const exception =
-    "Try adding an exception for the directory " +
-    `'${redactPersonalInfo(cliFolder(extensionContext))}'.`
+  // Unredacted: only this window shows it, and the student has to find the folder to allow it.
+  const folder = cliFolder(extensionContext)
+  const exception = `Try adding an exception for the directory '${folder}'.`
   if (actionContext.startup.kind !== "degraded") {
     const hint =
       "An antivirus program can stop the TestMyCode tools from running, and a proxy or " +
       `firewall can block their network requests. ${exception}`
-    return { id: nextPanelId(), type: "ErrorHelp", topic: { kind: "general", hint } }
+    return {
+      id: nextPanelId(),
+      type: "ErrorHelp",
+      topic: { kind: "general", hint },
+      cliFolder: folder,
+    }
   }
   const networkHint =
     "A proxy, firewall or antivirus program blocking network requests can cause this. " + exception
@@ -82,13 +87,14 @@ export function initializationErrorHelpPanel(
   const langsFailure = failures.langs
   const cliHint =
     langsFailure instanceof CliVerificationError
-      ? `The file '${redactPersonalInfo(langsFailure.cliPath)}' may be damaged, or changed by another program ` +
+      ? `The file '${langsFailure.cliPath}' may be damaged, or changed by another program ` +
         "such as an antivirus. Restarting downloads it again. If the download keeps failing: " +
         networkHint
       : networkHint
   return {
     id: nextPanelId(),
     type: "ErrorHelp",
+    cliFolder: folder,
     topic: {
       kind: "startup",
       failures: STARTUP_STEPS.flatMap((step) => {
@@ -114,10 +120,11 @@ export function initializationErrorHelpPanel(
 }
 
 /** A new help panel on the failure `detailsId` names, or saying it is gone. */
-export function errorDetailsPanel(detailsId: string): ErrorHelpPanel {
+export function errorDetailsPanel(detailsId: string, folder?: string): ErrorHelpPanel {
   return {
     id: nextPanelId(),
     type: "ErrorHelp",
+    ...(folder === undefined ? {} : { cliFolder: folder }),
     topic: { kind: "operation", detailsId, details: errorDetails.get(detailsId) ?? null },
   }
 }

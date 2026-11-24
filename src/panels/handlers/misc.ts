@@ -35,6 +35,16 @@ export const miscHandlers = {
       host.showBeside(errorDetailsPanel(message.detailsId))
     },
   },
+  revealCliFolder: {
+    requiresReady: false,
+    async handle(_message, { host }): Promise<void> {
+      // The folder comes from the screen the host built, never from the webview.
+      const folder = host.route?.type === "ErrorHelp" ? host.route.cliFolder : undefined
+      if (folder !== undefined) {
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(folder))
+      }
+    },
+  },
   requestLogTail: {
     requiresReady: false,
     handle(): Result<string, never> {

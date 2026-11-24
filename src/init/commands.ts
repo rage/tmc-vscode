@@ -25,7 +25,7 @@ import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
-import { Logger } from "../utilities"
+import { cliFolder, Logger } from "../utilities"
 import { openWebLink } from "../utilities/webLink"
 import { openWalkthroughWhenRegistered, walkthroughProgressOf } from "../window/walkthrough"
 
@@ -149,7 +149,12 @@ export function registerCommands(
 
   register(SHOW_ERROR_DETAILS_COMMAND, (detailsId: unknown) => {
     if (typeof detailsId === "string") {
-      TmcPanel.renderBeside(context, actionContext, errorDetailsPanel(detailsId), undefined)
+      TmcPanel.renderBeside(
+        context,
+        actionContext,
+        errorDetailsPanel(detailsId, cliFolder(context)),
+        undefined,
+      )
     }
   })
 

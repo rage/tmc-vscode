@@ -32,7 +32,7 @@ import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
-import { Logger } from "../utilities"
+import { cliFolder, Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { messageHandlers } from "./handlers"
@@ -923,7 +923,9 @@ function restoredRoute(
     }
     case "ErrorHelp":
       if (route.kind === "operation") {
-        return route.detailsId === undefined ? undefined : errorDetailsPanel(route.detailsId)
+        return route.detailsId === undefined
+          ? undefined
+          : errorDetailsPanel(route.detailsId, cliFolder(extensionContext))
       }
       // A startup help reopened after a healthy start would list another start's failures.
       return route.kind === "startup" && isReady(actionContext)

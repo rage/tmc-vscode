@@ -231,6 +231,17 @@ suite("initializationErrorHelpPanel", () => {
     ])
   })
 
+  test("shows the real CLI folder, not its redacted form", () => {
+    const extensionContext = createMockContext()
+    const folder = path.join(extensionContext.globalStorageUri.fsPath, "cli")
+
+    const panel = initializationErrorHelpPanel(createMockActionContext(), extensionContext)
+
+    expect(panel.cliFolder).toBe(folder)
+    expect(panel.topic.kind === "general" && panel.topic.hint).toContain(`'${folder}'`)
+    expect(JSON.stringify(panel)).not.toContain("<extension storage>")
+  })
+
   test("after a ready startup, says what to try when the tools fail", () => {
     const { topic } = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
@@ -1570,6 +1581,27 @@ suite("TmcPanel host services for the webview", () => {
     await listener({ type: "runCommand", command })
 
     expect(executeCommand).toHaveBeenCalledExactlyOnceWith(command, ...args)
+  })
+
+  test("reveals the CLI folder of the help screen it is on, and no path the webview names", async () => {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
+    const extensionContext = createMockContext()
+    const shown = initializationErrorHelpPanel(createMockActionContext(), extensionContext)
+    const { listener } = await mountSidePanel(createMockActionContext(), extensionContext, shown)
+
+    await listener({
+      type: "revealCliFolder",
+      sourcePanel: targetOf(shown),
+      path: "/etc",
+    })
+
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
+      "revealFileInOS",
+      expect.objectContaining({
+        fsPath: path.join(extensionContext.globalStorageUri.fsPath, "cli"),
+      }),
+    )
   })
 
   test("runs no command outside the allow-list", async () => {

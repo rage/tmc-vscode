@@ -118,6 +118,8 @@ export const ErrorHelpPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ErrorHelp"),
   topic: HelpTopicSchema,
+  /** The folder the TestMyCode tools are installed in, as the student's file manager shows it. */
+  cliFolder: z.string().optional(),
 })
 
 export type ErrorHelpPanel = z.infer<typeof ErrorHelpPanelSchema>
@@ -600,6 +602,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("showErrorDetails"),
     detailsId: z.string(),
+  }),
+  // Opens the CLI folder the named help screen shows in the file manager.
+  z.object({
+    type: z.literal("revealCliFolder"),
+    sourcePanel: targetPanelSchema("ErrorHelp"),
   }),
   // The latest log lines, for the help screen.
   z.object({
