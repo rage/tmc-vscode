@@ -62,6 +62,16 @@ export class TmcPage {
     public readonly webview: FrameLocator,
   ) {}
 
+  /**
+   * Waits for the Get Started walkthrough, which the extension opens only after a 6 s wait for
+   * VS Code to register it.
+   */
+  public async expectWalkthroughShown(): Promise<void> {
+    await expect(this.page.getByText("Get Started with TestMyCode").first()).toBeVisible({
+      timeout: 30_000,
+    })
+  }
+
   public async openMenu(): Promise<void> {
     // Scoped to the activity bar: editor tabs such as "TestMyCode Help" share the name.
     const activityBarTab = this.page

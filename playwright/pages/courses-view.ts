@@ -54,6 +54,8 @@ export class CoursesViewPage extends TmcPage {
     await this.reloadingWindow(() =>
       this.runInlineAction(this.row(course), "Open Course Workspace"),
     )
+    // The course home opens once the extension starts there, covering any file opened before.
+    await this.panelHeaded(course)
   }
 
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */

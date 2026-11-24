@@ -40,8 +40,11 @@ async function openCourseHome(
   coursesView: CoursesViewPage,
   courseHome: CourseHomePage,
 ): Promise<void> {
-  await coursesView.row(COURSE_TITLE).click()
-  await courseHome.expectShown(COURSE_TITLE)
+  // A click landing while the tree re-renders after a download only selects the row.
+  await expect(async () => {
+    await coursesView.row(COURSE_TITLE).click()
+    await expect(courseHome.heading(COURSE_TITLE)).toBeVisible({ timeout: 5_000 })
+  }).toPass({ timeout: 30_000 })
 }
 
 vsCodeTest(

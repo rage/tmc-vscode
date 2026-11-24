@@ -75,7 +75,7 @@ vsCodeTest.describe(() => {
       const tmc = new TmcPage(page, webview)
 
       await tmc.openMenu()
-      await expect(page.getByText("Get Started with TestMyCode").first()).toBeVisible()
+      await tmc.expectWalkthroughShown()
       const logIn = page
         .locator(".getting-started-step")
         .filter({ has: page.locator(".step-title").getByText("Log In", { exact: true }) })
