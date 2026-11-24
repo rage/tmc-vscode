@@ -574,9 +574,9 @@ function closedChapterError(failures: ExerciseFailure[], details: string): BaseE
   if (!chapter) {
     return langsError({ kind: "chapter-not-open-yet" }, details, details, failures[0]?.id.kind)
   }
-  const when = proseDateTime(chapter.opensAt) ?? "later"
+  const when = proseDateTime(chapter.opensAt)
   return new ChapterNotOpenError(
-    `The chapter "${chapter.name}" has not opened yet. Its exercises can be downloaded once it opens ${when}.`,
+    `The chapter "${chapter.name}" has not opened yet. Its exercises can be downloaded once it opens${when ? ` ${when}` : ""}.`,
     details,
   )
 }
