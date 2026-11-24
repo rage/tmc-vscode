@@ -21,6 +21,7 @@ import {
   toError,
   unwrap,
 } from "../../shared/lib"
+import type { AuthState } from "../api/authState"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -35,7 +36,6 @@ import {
   ExerciseNotFoundError,
   ForbiddenError,
   InvalidRequestError,
-  isSessionLost,
   isSubmitRefusal,
   NotFoundError,
   OutOfTriesError,
@@ -99,6 +99,8 @@ interface Submission {
   availablePoints: number
   /** A mooc exercise's course material page, as the stored course last named it. */
   materialPageUrl?: string | undefined
+  /** The courses.mooc.fi account submitting, when the session names one. */
+  accountId?: string | undefined
 }
 
 /** Collects what a backend reports while it works on a submission, and shows it in the panel. */
@@ -256,19 +258,23 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
       taskSubmissionId: submitted.val.task_submission_id,
       exercisePageUrl,
     }
+    // VS Code may close before the grading ends.
+    await rememberPending(grading)
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
 }
 
-/** Whether `error` is a refusal that waiting longer for the grading cannot change. */
+/**
+ * Whether `error` is a refusal that waiting longer for the grading cannot change. A lost session
+ * is not: the wait can go on after a new login.
+ */
 function isTerminalGradingFailure(error: Error): boolean {
   return (
     error instanceof NotFoundError ||
     error instanceof ExerciseNotFoundError ||
     error instanceof ForbiddenError ||
     error instanceof InvalidRequestError ||
-    error instanceof UnexpectedResponseError ||
-    isSessionLost(error)
+    error instanceof UnexpectedResponseError
   )
 }
 
@@ -276,12 +282,19 @@ async function rememberPending(grading: UnfinishedGrading): Promise<void> {
   await pendingGradings.set(grading.exerciseId, {
     taskSubmissionId: grading.taskSubmissionId,
     exercisePageUrl: grading.exercisePageUrl,
+    accountId: grading.accountId,
   })
 }
 
+/** The courses.mooc.fi account `authState` is logged in as, when the session names one. */
+export function moocAccountIdOf(authState: AuthState): string | undefined {
+  const { session } = authState
+  return session?.kind === "mooc" ? session.account?.id : undefined
+}
+
 /**
- * Offers the results screen `panel` the grading of `exercise`'s latest submission that a reload
- * stopped waiting for, if there is one, as a grading still in progress.
+ * Offers the results screen `panel` the grading of `exercise`'s latest submission by `accountId`
+ * that a reload stopped waiting for, if there is one, as a grading still in progress.
  *
  * @returns Whether there was one.
  */
@@ -290,8 +303,9 @@ export function resumePendingGrading(
   courseId: CourseIdentifier,
   availablePoints: number,
   panel: ExerciseSubmissionPanel,
+  accountId: string | undefined,
 ): boolean {
-  const pending = pendingGradings.get(exercise.id)
+  const pending = pendingGradings.get(exercise.id, accountId)
   if (!pending) {
     return false
   }
@@ -303,6 +317,7 @@ export function resumePendingGrading(
     availablePoints,
     taskSubmissionId: pending.taskSubmissionId,
     exercisePageUrl: pending.exercisePageUrl,
+    accountId,
   })
   return true
 }
@@ -575,6 +590,7 @@ export async function submitExercise(
         courseId,
         availablePoints: unwrap(courseExercise).availablePoints,
         materialPageUrl: courseExercise.kind === "mooc" ? courseExercise.data.pageUrl : undefined,
+        accountId: moocAccountIdOf(actionContext.authState),
       }
       forgetEarlierSubmissions(submission.panel)
       submissionViews.open(submission.panel)

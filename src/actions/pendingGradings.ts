@@ -8,6 +8,8 @@ const PENDING_GRADINGS_KEY = "pendingMoocGradings"
 export interface PendingGrading {
   taskSubmissionId: string
   exercisePageUrl: string | undefined
+  /** The courses.mooc.fi account that submitted it, when the session named one. */
+  accountId: string | undefined
 }
 
 /**
@@ -22,8 +24,13 @@ class PendingGradings {
     this._memento = memento
   }
 
-  public get(exerciseId: ExerciseIdentifier): PendingGrading | undefined {
-    return this._all()[ExerciseIdentifier.key(exerciseId)]
+  /** The pending grading of `exerciseId` submitted by `accountId`; another account's is kept. */
+  public get(
+    exerciseId: ExerciseIdentifier,
+    accountId: string | undefined,
+  ): PendingGrading | undefined {
+    const pending = this._all()[ExerciseIdentifier.key(exerciseId)]
+    return pending?.accountId === accountId ? pending : undefined
   }
 
   public async set(exerciseId: ExerciseIdentifier, pending: PendingGrading): Promise<void> {

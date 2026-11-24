@@ -35,6 +35,7 @@ import {
   DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
+  InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
   WorkspaceUntrustedError,
@@ -1125,7 +1126,9 @@ suite("a mooc grading left pending across a reload", () => {
     pendingGradings.attach(createMockContext().globalState)
     const { actionContext, wait } = moocContextWith({ status: "no-grading-yet" })
     await submitExercise(actionContext, moocExercise)
-    expect(pendingGradings.get(moocExercise.id)?.taskSubmissionId).toBe(TASK_SUBMISSION_ID)
+    expect(pendingGradings.get(moocExercise.id, undefined)?.taskSubmissionId).toBe(
+      TASK_SUBMISSION_ID,
+    )
     submissionViews.clear()
 
     const panel = exerciseResultsPanel(actionContext, moocExercise).unwrap()
@@ -1137,17 +1140,68 @@ suite("a mooc grading left pending across a reload", () => {
     wait.mockResolvedValue(Ok({ status: "grading-hidden" }))
     const waited = await keepWaitingForGrading(actionContext, panel.id)
     expect(waited.ok).toBe(true)
-    expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("is saved once the submission is accepted, before the grading ends", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith({ status: "grading-hidden" })
+    let pendingWhileWaiting: unknown
+    wait.mockImplementation(async () => {
+      pendingWhileWaiting = pendingGradings.get(moocExercise.id, undefined)
+      return Ok({ status: "grading-hidden" })
+    })
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(pendingWhileWaiting).toMatchObject({ taskSubmissionId: TASK_SUBMISSION_ID })
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("is kept when the session ends while waiting, so a new login can keep waiting", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith(undefined)
+    wait.mockResolvedValueOnce(Err(new InvalidTokenError("401")))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeDefined()
+    expect(lastView()).toMatchObject({ canKeepWaiting: true })
+    wait.mockResolvedValue(Ok({ status: "grading-hidden" }))
+    const panelId = submissionViews.latestFor(moocExercise.id)!.panel.id
+    expect((await keepWaitingForGrading(actionContext, panelId)).ok).toBe(true)
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("belongs to the account that submitted it", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext } = moocContextWith({ status: "no-grading-yet" })
+    const loggedInAs = (id: string): ReadyActionContext => ({
+      ...actionContext,
+      authState: {
+        ...actionContext.authState,
+        session: { kind: "mooc", account: { id, name: null, email: null } },
+      },
+    })
+    await submitExercise(loggedInAs("user-a"), moocExercise)
+    submissionViews.clear()
+
+    exerciseResultsPanel(loggedInAs("user-b"), moocExercise).unwrap()
+    expect(submissionViews.latestFor(moocExercise.id)?.view.canKeepWaiting).toBeFalsy()
+    submissionViews.clear()
+
+    exerciseResultsPanel(loggedInAs("user-a"), moocExercise).unwrap()
+    expect(submissionViews.latestFor(moocExercise.id)?.view.canKeepWaiting).toBe(true)
   })
 
   test("is dropped when a later submission fails to upload", async () => {
     pendingGradings.attach(createMockContext().globalState)
     await submitExercise(moocContextWith({ status: "no-grading-yet" }).actionContext, moocExercise)
-    expect(pendingGradings.get(moocExercise.id)).toBeDefined()
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeDefined()
 
     await submitExercise(moocContextWithErr(new Error("upload failed")).actionContext, moocExercise)
 
-    expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
   })
 })
 

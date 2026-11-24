@@ -8,7 +8,7 @@ import { exerciseSubmissionPanel } from "../panels/routes"
 import { exerciseStandingView } from "../ui/exerciseStanding"
 import { submissionViews } from "../ui/submissionViews"
 import { storedExerciseOf } from "./storedExercise"
-import { resumePendingGrading } from "./submitExercise"
+import { moocAccountIdOf, resumePendingGrading } from "./submitExercise"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -42,6 +42,7 @@ export function exerciseResultsPanel(
       LocalCourseData.getCourseId(course),
       courseExercise.data.availablePoints,
       panel,
+      moocAccountIdOf(actionContext.authState),
     )
   submissionViews.update({
     panel,
