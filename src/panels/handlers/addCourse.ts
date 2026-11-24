@@ -48,6 +48,8 @@ export const addCourseHandlers = {
           name: course.name,
           organization: course.organization_name,
           description: course.description,
+          ...(course.language_code ? { languageCode: course.language_code } : {}),
+          ...(course.is_staff ? { isStaff: true } : {}),
         }),
       )
       return Ok({ kind: "listed", items })
@@ -201,7 +203,13 @@ function catalogOf(panelId: number): Catalog {
 function catalogCourse(
   { startup }: ReadyActionContext,
   panel: AddCoursePanel,
-  course: ListedCourse & { name: string; organization: string; description: string | null },
+  course: ListedCourse & {
+    name: string
+    organization: string
+    description: string | null
+    languageCode?: string
+    isStaff?: boolean
+  },
 ): CatalogCourse {
   const key = CourseIdentifier.key(course.id)
   catalogOf(panel.id).courses.set(key, { id: course.id, organizationSlug: course.organizationSlug })
@@ -210,6 +218,8 @@ function catalogCourse(
     name: course.name,
     organization: course.organization,
     ...optionalDescription(course.description),
+    ...(course.languageCode ? { languageCode: course.languageCode } : {}),
+    ...(course.isStaff ? { isStaff: true } : {}),
     isAdded: startup.userData.getCourse(course.id).ok,
   }
 }

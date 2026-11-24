@@ -268,6 +268,10 @@ export const CatalogCourseSchema = z.object({
   name: z.string(),
   organization: z.string(),
   description: z.string().optional(),
+  /** The course's language, such as "fi-FI", to tell its language versions apart. */
+  languageCode: z.string().optional(),
+  /** The student teaches or assists on the course, which is listed without an enrollment. */
+  isStaff: z.boolean().optional(),
   isAdded: z.boolean(),
 })
 

@@ -509,7 +509,11 @@
     <div class="summary">
       {#if view.availablePoints > 0}
         <div class="summary-points">
-          <Meter label="Points" value={view.awardedPoints} max={view.availablePoints} />
+          <Meter
+            label={view.backend === "mooc" ? "Programming points" : "Points"}
+            value={view.awardedPoints}
+            max={view.availablePoints}
+          />
         </div>
       {/if}
       {#if view.nextDeadline}

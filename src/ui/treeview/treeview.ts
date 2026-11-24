@@ -4,6 +4,7 @@ import type { BackendKind } from "../../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
+  backendName,
   LocalCourseData,
   LOGGED_OUT_MESSAGE,
   NOT_LOGGED_IN_MESSAGE,
@@ -63,6 +64,8 @@ interface RenderContext {
   activeCourse: { slug: string; backend: BackendKind } | undefined
   /** This window is the workspace of the course being rendered. */
   isCourseWorkspace?: boolean
+  /** Titles more than one added course has, whose rows must tell them apart. */
+  sharedTitles?: ReadonlySet<string>
 }
 
 /** A course, part or exercise row of the Courses view; the view's row commands receive these. */
@@ -135,11 +138,21 @@ export class CourseTreeItem extends vscode.TreeItem {
     ].join(".")
     const newExercises = countOf(newCount, "new exercise")
     const updates = countOf(updateCount, "exercise update")
+    const site = backendName(course.kind)
+    const languageCode = course.kind === "mooc" ? course.data.languageCode : undefined
+    const origin = [site, languageCode].filter(Boolean).join(", ")
+    // A mooc course's quizzes and other exercises are not served here, so its points are not all.
+    const pointKind = course.kind === "mooc" ? "programming points" : "points"
     this._tooltipLines = showFacts(this, title, [
+      context.sharedTitles?.has(title) && {
+        description: origin,
+        spoken: origin,
+        tooltip: `On ${origin}`,
+      },
       points && {
         description: points.short,
         spoken: points.spoken,
-        tooltip: `${points.short} points`,
+        tooltip: `${points.short} ${pointKind}`,
       },
       accessLoss === "forbidden" && {
         description: "no access",
@@ -798,13 +811,17 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
       const slug = workspaceManager?.activeCourse
       const backend = workspaceManager?.activeCourseBackend
       const activeCourse = slug && backend ? { slug, backend } : undefined
-      this._roots = this._currentViews().map(
+      const views = this._currentViews()
+      const titles = views.map(({ course }) => LocalCourseData.getCourseTitle(course))
+      const sharedTitles = new Set(titles.filter((title, i) => titles.indexOf(title) !== i))
+      this._roots = views.map(
         ({ course, parts }) =>
           new CourseTreeItem(course, parts, {
             now,
             locale: PROSE_LOCALE,
             isOffline: this._unreachableBackends.has(course.kind),
             activeCourse,
+            sharedTitles,
           }),
       )
     }

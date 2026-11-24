@@ -206,6 +206,17 @@ suite("CoursesTree", function () {
     expect(view.message).toBe("")
   })
 
+  test("names the site of two added courses that share a title", function () {
+    courses = [tmcCourse({ title: "Programming" }), moocCourse({ title: "Programming" })]
+    tree.setSource(source())
+
+    const descriptions = tree
+      .getChildren()
+      .map((item) => String((item as vscode.TreeItem).description ?? ""))
+    expect(descriptions[0]).toContain("tmc.mooc.fi")
+    expect(descriptions[1]).toContain("courses.mooc.fi")
+  })
+
   test("the fresh-install welcome says what the logged-out view says", function () {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),

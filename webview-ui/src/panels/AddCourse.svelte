@@ -65,10 +65,33 @@
       : undefined,
   )
 
-  async function loadMooc() {
-    mooc = { state: "loading" }
+  /** @param isQuiet Keeps the current list on screen while the new one loads. */
+  async function loadMooc(isQuiet = false) {
+    if (!isQuiet) {
+      mooc = { state: "loading" }
+    }
     const outcome = await request("requestMoocCatalog", { sourcePanel })
     mooc = outcome.ok ? { state: "loaded", value: outcome.value } : failed(outcome.error)
+  }
+
+  // A student sent to enroll on the website comes back to this screen expecting the course.
+  const REFOCUS_RELOAD_INTERVAL_MS = 5000
+  let lastLoadedAt = Date.now()
+  function reloadOnReturn() {
+    if (document.visibilityState !== "visible" || mooc.state === "loading") {
+      return
+    }
+    if (Date.now() - lastLoadedAt < REFOCUS_RELOAD_INTERVAL_MS) {
+      return
+    }
+    lastLoadedAt = Date.now()
+    void loadMooc(true)
+  }
+
+  function refresh() {
+    lastLoadedAt = Date.now()
+    void loadMooc()
+    void loadOrganizations()
   }
 
   async function loadOrganizations() {
@@ -101,6 +124,12 @@
       await tick()
       restoreScroll()
     })
+    window.addEventListener("focus", reloadOnReturn)
+    document.addEventListener("visibilitychange", reloadOnReturn)
+    return () => {
+      window.removeEventListener("focus", reloadOnReturn)
+      document.removeEventListener("visibilitychange", reloadOnReturn)
+    }
   })
 
   async function browse(organization: CatalogOrganization) {
@@ -184,6 +213,15 @@
     return () => clearTimeout(timer)
   })
 
+  /** "Finnish" for "fi-FI"; the code itself when the browser has no name for it. */
+  function languageName(code: string): string {
+    try {
+      return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
+    } catch {
+      return code
+    }
+  }
+
   function plural(count: number, noun: string): string {
     return `${count} ${noun}${count === 1 ? "" : "s"}`
   }
@@ -194,7 +232,10 @@
 {/snippet}
 
 {#snippet toolbar()}
-  <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
+  <ToolbarButton icon="refresh" label="Refresh" onclick={refresh} />
+  {#if isMoocListed}
+    <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
+  {/if}
 {/snippet}
 
 {#snippet courseList(courses: CatalogCourse[], label: string)}
@@ -202,7 +243,13 @@
     {#each courses as course (course.key)}
       <CatalogCard
         name={course.name}
-        context={course.organization}
+        context={[
+          course.organization,
+          course.languageCode && `in ${languageName(course.languageCode)}`,
+          course.isStaff && "you teach it",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         description={course.description}
         failure={addFailure?.key === course.key
           ? {
@@ -246,7 +293,7 @@
 {/snippet}
 
 <div class="add-course">
-  <PanelHeader title="Add Course" toolbar={isMoocListed ? toolbar : undefined} />
+  <PanelHeader title="Add Course" {toolbar} />
   <p class="muted intro">Pick the course you're taking.</p>
 
   <div class="search">
@@ -285,6 +332,15 @@
         {@render noMatches()}
       {:else}
         {@render courseList(shownMoocCourses, `${MOOC} courses`)}
+      {/if}
+      {#if mooc.state === "loaded" && mooc.value.kind === "listed" && mooc.value.items.length > 0}
+        <p class="muted">
+          These are the courses you are enrolled on, and the ones you teach. Enroll on {MOOC}
+          to see more here.
+        </p>
+        <div class="actions">
+          <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
+        </div>
       {/if}
     </Section>
   {/if}
