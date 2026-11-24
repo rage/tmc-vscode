@@ -3,6 +3,8 @@ import * as path from "path"
 
 import { CLIENT_NAME } from "../config/constants"
 
+// tmc-langs pins these names and folders in `config_files_stay_where_tmc_vscode_looks_for_them`.
+
 /** The CLI's credential files: legacy `credentials.json` and the per-host `credentials_mooc_<host>.json`. */
 export const CREDENTIALS_FILE = /^credentials(_mooc(_.+)?)?\.json$/
 
