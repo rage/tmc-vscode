@@ -12,6 +12,7 @@ import {
   NotFoundError,
   ServerError,
   TmcLoginNotAcceptedError,
+  TmcLoginUnconfirmedError,
 } from "../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { downloadFailures } from "../ui/downloadFailures"
@@ -153,7 +154,11 @@ export async function updateCourse(
         warnings: sessionRefusalWarnings(actionContext, courseId.kind, error),
       })
     }
-    if (error instanceof ConnectionError || error instanceof ServerError) {
+    if (
+      error instanceof ConnectionError ||
+      error instanceof ServerError ||
+      error instanceof TmcLoginUnconfirmedError
+    ) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       actionContext.coursesTree.setBackendReachable(courseId.kind, false)
       return Ok({ isUpdated: false, warnings: [] })

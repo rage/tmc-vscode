@@ -1,4 +1,11 @@
 import {
+  CertificateError,
+  FileAccessError,
+  ForbiddenError,
+  isSessionLost,
+  LoginClientRejectedError,
+  ProjectsDirUnreachableError,
+  ToolchainMissingError,
   AuthorizationError,
   ChapterLockedError,
   ChapterNotOpenError,
@@ -101,13 +108,28 @@ suite("presentationFor", function () {
     expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
+  test("a courses.mooc.fi 403 is lost access to the course, not a logout", function () {
+    const error = Object.assign(new ForbiddenError("no_access"), { backend: "mooc" as const })
+
+    expect(presentationFor(error).message).toContain("You do not have access")
+    expect(isSessionLost(error)).toBe(false)
+  })
+
+  test.each([
+    [new CertificateError("tls"), "tmc.openTroubleshooting"],
+    [new ToolchainMissingError("python not found"), "tmc.openTroubleshooting"],
+    [new FileAccessError("in-use", "held"), "tmc.openTroubleshooting"],
+    [new ProjectsDirUnreachableError("gone"), "tmc.changeTmcDataPath"],
+    [new LoginClientRejectedError("client"), "workbench.extensions.action.checkForUpdates"],
+  ])("%s offers its remedy", (error, command) => {
+    expect(presentationFor(error).actions.map((action) => action.command)).toEqual([command])
+  })
+
   // Logging in again cannot make tmc.mooc.fi accept the login.
   test("a login tmc.mooc.fi does not accept offers no login", function () {
-    const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
+    const presentation = presentationFor(new TmcLoginNotAcceptedError("Ask the course staff."))
 
-    expect(presentation.message).toBe(
-      "This course's server did not accept your MOOC.fi login. Try again later.",
-    )
+    expect(presentation.message).toBe("Ask the course staff.")
     expect(presentation.actions).toEqual([])
   })
 

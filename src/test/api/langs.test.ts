@@ -9,7 +9,22 @@ import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Langs, { decodeLangsStdout } from "../../api/langs"
 import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config/constants"
 import {
+  ArchiveTooLargeError,
   AuthorizationError,
+  CertificateError,
+  ConnectionTimeoutError,
+  ExecutableBlockedError,
+  FileAccessError,
+  InvalidRequestError,
+  LegacyTmcLoginEndedError,
+  LocalConfigCorruptError,
+  LoginClientRejectedError,
+  ProjectsDirUnreachableError,
+  ProxyError,
+  TmcLoginUnconfirmedError,
+  ToolchainMissingError,
+  UnexpectedResponseError,
+  UnsupportedExerciseError,
   ChapterLockedError,
   ExerciseLockedError,
   ChapterNotOpenError,
@@ -1086,19 +1101,99 @@ suite("Langs error-kind mapping", function () {
     expect(courseCalls).toBe(2)
   })
 
-  test("a tmc command's not-logged-in is tmc.mooc.fi not accepting the login", async function () {
+  test("tmc.mooc.fi refusing the courses.mooc.fi login is no lost session", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput("tmc-login-not-accepted")))
+
+    const tmc = await langs.getTmcOrganizations()
+    expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
+    expect(onLogout).not.toHaveBeenCalled()
+  })
+
+  test("a refused legacy tmc.mooc.fi login is not reported as logged out", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+
+    const tmc = await langs.getTmcOrganizations()
+    expect(tmc.val).toBeInstanceOf(LegacyTmcLoginEndedError)
+    expect(onLogout).not.toHaveBeenCalled()
+  })
+
+  test("a 429 names the wait, and only a paste blames Get Help", async function () {
+    const langs = newLangs()
+    const limited = cliOutput({
+      "output-kind": "output-data",
+      status: "finished",
+      message: "boom",
+      result: "error",
+      data: {
+        "output-data-kind": "error",
+        "output-data": {
+          kind: "rate-limited",
+          trace: [],
+          retry_after_secs: 90,
+          request_id: "req-1",
+        },
+      },
+    })
+    stubSpawn(langs, () => Ok(limited))
+
+    const courses = await langs.getEnrolledMoocCourses()
+    expect(courses.val).toBeInstanceOf(RateLimitedError)
+    expect((courses.val as Error).message).toBe(
+      "The server is receiving too many requests from your network. Try again in 90 seconds.",
+    )
+    expect((courses.val as RateLimitedError).details).toContain("request id: req-1")
+
+    const paste = await langs.paste(idOfMoocExercise("ex"), "/ex")
+    expect((paste.val as Error).message).toBe(
+      "You have used Get Help on this exercise too often. Try again in 90 seconds.",
+    )
+  })
+
+  test("a not-logged-in from either backend ends the session", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
     langs.on("logout", onLogout)
     stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
 
     const tmc = await langs.getTmcOrganizations()
-    expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
+    expect(tmc.val).toBeInstanceOf(AuthorizationError)
+    expect(tmc.val).not.toBeInstanceOf(TmcLoginNotAcceptedError)
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, tmc.val)
+  })
 
-    const mooc = await langs.getEnrolledMoocCourses()
-    expect(mooc.val).toBeInstanceOf(AuthorizationError)
-    expect(mooc.val).not.toBeInstanceOf(TmcLoginNotAcceptedError)
+  test.each([
+    ["connection-timeout", ConnectionTimeoutError],
+    ["certificate-error", CertificateError],
+    ["proxy-error", ProxyError],
+    ["login-client-rejected", LoginClientRejectedError],
+    ["tmc-login-unconfirmed", TmcLoginUnconfirmedError],
+    ["unexpected-response", UnexpectedResponseError],
+    ["invalid-request", InvalidRequestError],
+    ["local-config-corrupt", LocalConfigCorruptError],
+    ["archive-too-large", ArchiveTooLargeError],
+    ["unsupported-exercise", UnsupportedExerciseError],
+    ["toolchain-missing", ToolchainMissingError],
+    ["executable-blocked", ExecutableBlockedError],
+    ["projects-dir-unreachable", ProjectsDirUnreachableError],
+    ["file-in-use", FileAccessError],
+    ["permission-denied", FileAccessError],
+    ["path-too-long", FileAccessError],
+    ["disk-full", FileAccessError],
+  ] as const)("%s maps to its own error, never a lost session", async (kind, errorClass) => {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput(kind)))
+
+    const result = await langs.getEnrolledMoocCourses()
+    expect(result.val).toBeInstanceOf(errorClass)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 
   test("deauthenticate removes both credentials and fires the logout event as expected", async function () {

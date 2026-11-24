@@ -301,6 +301,11 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.openTroubleshooting",
+        "title": "Troubleshooting",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.trustCourseWorkspace",
         "title": "Trust Course Workspace",
         "icon": "$(workspace-untrusted)",

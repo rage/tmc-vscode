@@ -33,6 +33,7 @@ import type {
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import {
+  asSentence,
   BaseError,
   ExerciseIdentifier,
   makeMoocKind,
@@ -52,9 +53,24 @@ import {
   TMC_BACKEND_URL,
   TRUST_DEV_MOOC_HOST,
 } from "../config/constants"
-import type { InitializationError } from "../errors"
+import type { FileAccessFailure, InitializationError } from "../errors"
 import {
+  ArchiveTooLargeError,
   AuthorizationError,
+  CertificateError,
+  ConnectionTimeoutError,
+  ExecutableBlockedError,
+  FileAccessError,
+  InvalidRequestError,
+  LegacyTmcLoginEndedError,
+  LocalConfigCorruptError,
+  LoginClientRejectedError,
+  ProjectsDirUnreachableError,
+  ProxyError,
+  TmcLoginUnconfirmedError,
+  ToolchainMissingError,
+  UnexpectedResponseError,
+  UnsupportedExerciseError,
   ChapterLockedError,
   ExerciseLockedError,
   ChapterNotOpenError,
@@ -180,6 +196,15 @@ const MAX_LOGGED_ARG_LENGTH = 120
  * Replaces an oversized argument with its length, so the output channel users paste into
  * bug reports stays readable when a whole settings value goes through argv.
  */
+/** A server's Retry-After as words, rounded up to whole minutes from two minutes on. */
+export function formatWait(seconds: number): string {
+  if (seconds < 120) {
+    const whole = Math.max(1, Math.ceil(seconds))
+    return whole === 1 ? "1 second" : `${whole} seconds`
+  }
+  return `${Math.ceil(seconds / 60)} minutes`
+}
+
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
 }
@@ -1313,7 +1338,11 @@ export default class Langs {
     return {
       result: result.then((res) =>
         res
-          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
+          .andThen((x) =>
+            this._checkLangsResponse(x, outputDataKind, auth, getStderr(), {
+              isPaste: langsArgs.args.includes("paste"),
+            }),
+          )
           .mapErr((error) => Object.assign(error, { backend: langsArgs.backend })),
       ),
       interrupt,
@@ -1409,6 +1438,7 @@ export default class Langs {
     outputDataKind: T,
     auth: AuthAttribution = {},
     stderr = "",
+    context: { isPaste?: boolean } = {},
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
     // expected data kind first would misreport every panic and discard its message.
@@ -1434,16 +1464,33 @@ export default class Langs {
 
     const data = langsResponse.data
     const message = langsResponse.message
-    const errorKind = data["output-data"].kind
+    const output = data["output-data"]
+    const errorKind = output.kind
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone suffices to diagnose a failure, so every error carries both.
     // The CLI lists a boxed error twice in a row, once as the box and once as itself.
-    const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
-    const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
-    const httpStatus = data["output-data"].http_status ?? undefined
+    const trace = output.trace.filter((line, i, lines) => line !== lines[i - 1])
+    // Staff find the server's log line by this id.
+    const requestLine = output.request_id ? `courses.mooc.fi request id: ${output.request_id}` : ""
+    const details = [trace.join("\n"), stderr, requestLine].filter(Boolean).join("\n\n")
+    const httpStatus = output.http_status ?? undefined
+    const filePath = output.path ?? undefined
+    const retryAfterSeconds =
+      output.retry_after_secs === null || output.retry_after_secs === undefined
+        ? undefined
+        : Number(output.retry_after_secs)
+    const fileError = (failure: FileAccessFailure, sentence: string): Err<FileAccessError> =>
+      Err(Object.assign(new FileAccessError(failure, sentence, details), { path: filePath }))
+    const inPath = filePath ? ` (${filePath})` : ""
     switch (errorKind) {
       case "connection-error":
         return Err(new ConnectionError(message, details))
+      case "connection-timeout":
+        return Err(new ConnectionTimeoutError(message, details))
+      case "certificate-error":
+        return Err(new CertificateError(message, details))
+      case "proxy-error":
+        return Err(new ProxyError(message, details))
       case "forbidden":
         return Err(new ForbiddenError(message, details))
       case "insufficient-scope":
@@ -1494,33 +1541,63 @@ export default class Langs {
         )
       case "upload-expired":
         return Err(new UploadExpiredError(message, details))
-      case "rate-limited":
-        return Err(
-          new RateLimitedError(
-            "You have sent this exercise to the pastebin too often. Try again in a few minutes.",
-            details,
-          ),
-        )
+      case "rate-limited": {
+        const wait =
+          retryAfterSeconds === undefined
+            ? "in a few minutes"
+            : `in ${formatWait(retryAfterSeconds)}`
+        const sentence = context.isPaste
+          ? `You have used Get Help on this exercise too often. Try again ${wait}.`
+          : `The server is receiving too many requests from your network. Try again ${wait}.`
+        return Err(Object.assign(new RateLimitedError(sentence, details), { retryAfterSeconds }))
+      }
       case "unknown-upload":
         // Never a race: the backend has no record of a file the CLI named for this
         // exercise, so a retry cannot help.
         return Err(new UnknownUploadError(message, details))
       case "invalid-token": {
         this._clearBackendCache(auth.backend)
+        if (auth.backend === "tmc") {
+          // Only the old tmc.mooc.fi login was refused; a courses.mooc.fi one may remain.
+          return Err(
+            new LegacyTmcLoginEndedError(
+              "Your old tmc.mooc.fi login has ended. TestMyCode now uses your MOOC.fi login; try again.",
+              details,
+            ),
+          )
+        }
         const rejection = new InvalidTokenError(message)
         if (!auth.expected) {
           this._onLogout?.(false, rejection)
         }
         return Err(rejection)
       }
+      case "tmc-login-not-accepted":
+        return Err(
+          new TmcLoginNotAcceptedError(
+            "tmc.mooc.fi did not accept your MOOC.fi login. Ask the course staff to check that " +
+              "your MOOC.fi account is linked to tmc.mooc.fi.",
+            details,
+          ),
+        )
+      case "tmc-login-unconfirmed":
+        return Err(
+          new TmcLoginUnconfirmedError(
+            "courses.mooc.fi could not confirm your login to tmc.mooc.fi just now. Try again in a few minutes.",
+            details,
+          ),
+        )
+      case "login-client-rejected":
+        return Err(
+          new LoginClientRejectedError(
+            "courses.mooc.fi did not accept this version of TestMyCode for logging in. Update the " +
+              "extension; if it is up to date, report the problem.",
+            details,
+          ),
+        )
       case "not-logged-in": {
         this._clearBackendCache(auth.backend)
-        // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
-        // cannot change that.
-        const rejection =
-          auth.backend === "tmc"
-            ? new TmcLoginNotAcceptedError(message, details)
-            : new AuthorizationError(message, details)
+        const rejection = new AuthorizationError(message, details)
         if (!auth.expected) {
           this._onLogout?.(false, rejection)
         }
@@ -1543,6 +1620,86 @@ export default class Langs {
         return Err(Object.assign(new ServerError(message, details), { httpStatus }))
       case "obsolete-client":
         return Err(new ObsoleteClientError(message, details))
+      case "invalid-request":
+        return Err(Object.assign(new InvalidRequestError(message, details), { httpStatus }))
+      case "unexpected-response":
+        return Err(new UnexpectedResponseError(message, details))
+      case "local-config-corrupt":
+        return Err(
+          Object.assign(
+            new LocalConfigCorruptError(
+              `A file TestMyCode keeps on this computer could not be read${inPath}.`,
+              details,
+            ),
+            { path: filePath },
+          ),
+        )
+      case "archive-too-large":
+        return Err(
+          new ArchiveTooLargeError(
+            "The exercise is larger than allowed. Remove large files, such as data sets or " +
+              "build output, from the exercise folder and try again.",
+            details,
+          ),
+        )
+      case "unsupported-exercise":
+        return Err(
+          new UnsupportedExerciseError(
+            "This exercise cannot be done in VS Code. Do it on the course page.",
+            details,
+          ),
+        )
+      case "file-in-use":
+        return fileError(
+          "in-use",
+          `Another program is using a file TestMyCode needs${inPath}. Close terminals, running ` +
+            "programs and other editors using the exercise folder, then try again. Antivirus " +
+            "or a sync app such as OneDrive can also hold files for a moment.",
+        )
+      case "permission-denied":
+        return fileError(
+          "permission-denied",
+          `TestMyCode was not allowed to use a file${inPath}. Check that the exercise folder ` +
+            "is not read-only or protected, then try again.",
+        )
+      case "path-too-long":
+        return fileError(
+          "path-too-long",
+          `A file path is too long for this computer${inPath}. Move the exercises folder ` +
+            "closer to the root of the drive, such as C:\\TMC.",
+        )
+      case "disk-full":
+        return fileError(
+          "disk-full",
+          `The disk or your home folder quota is full${inPath}. Free some space and try again.`,
+        )
+      case "toolchain-missing":
+        return Err(
+          new ToolchainMissingError(
+            `${asSentence(message)} If you installed it after starting VS Code, close every VS ` +
+              "Code window and start VS Code again.",
+            details,
+          ),
+        )
+      case "executable-blocked":
+        return Err(
+          new ExecutableBlockedError(
+            "A program built from the exercise was blocked or removed, probably by antivirus " +
+              "software. Allow the exercises folder in the antivirus program and try again.",
+            details,
+          ),
+        )
+      case "projects-dir-unreachable":
+        return Err(
+          Object.assign(
+            new ProjectsDirUnreachableError(
+              `The exercises folder${inPath} cannot be reached. Connect the drive or network ` +
+                "folder it is on, or move the exercises folder.",
+              details,
+            ),
+            { path: filePath },
+          ),
+        )
     }
 
     return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))

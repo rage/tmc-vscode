@@ -26,6 +26,9 @@ export const TRUST_DEV_MOOC_HOST = __TMC_LANGS_MOOC_TRUST_LOCALHOST__
 export const EXTENSION_VERSION = __EXTENSION_VERSION__
 
 export const CLIENT_NAME = "vscode_plugin"
+
+export const TROUBLESHOOTING_URL =
+  "https://github.com/rage/tmc-vscode/blob/master/docs/troubleshooting.md"
 export const EXTENSION_ID = "moocfi.test-my-code"
 export const OUTPUT_CHANNEL_NAME = "TestMyCode"
 

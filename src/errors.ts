@@ -6,11 +6,29 @@ export class AuthorizationError extends BaseError {
 }
 
 /**
- * tmc.mooc.fi refused the request's credentials: the courses.mooc.fi login, which it may not
- * accept yet, or none at all. Logging in again does not fix the former.
+ * tmc.mooc.fi refused the courses.mooc.fi login that courses.mooc.fi itself still accepts, such
+ * as one with no linked tmc.mooc.fi account. Logging in again does not fix it.
  */
 export class TmcLoginNotAcceptedError extends AuthorizationError {
   public override readonly name = "TMC Login Not Accepted Error"
+}
+
+/** tmc.mooc.fi could not have courses.mooc.fi confirm the login just now; the login is fine. */
+export class TmcLoginUnconfirmedError extends BaseError {
+  public override readonly name = "TMC Login Unconfirmed Error"
+}
+
+/** courses.mooc.fi's login service refused this client itself; no new login can fix that. */
+export class LoginClientRejectedError extends BaseError {
+  public override readonly name = "Login Client Rejected Error"
+}
+
+/**
+ * A stored tmc.mooc.fi login from an earlier version was refused and has been removed. Later
+ * commands use the courses.mooc.fi login, if there is one.
+ */
+export class LegacyTmcLoginEndedError extends BaseError {
+  public override readonly name = "Legacy TMC Login Ended Error"
 }
 
 export class BottleneckError extends BaseError {
@@ -19,7 +37,33 @@ export class BottleneckError extends BaseError {
 
 /** A backend could not be reached at all; one that answered with an error status is not this. */
 export class ConnectionError extends BaseError {
-  public override readonly name = "Connection Error"
+  public override readonly name: string = "Connection Error"
+}
+
+/** No answer in time: the server may be slow rather than unreachable. */
+export class ConnectionTimeoutError extends ConnectionError {
+  public override readonly name = "Connection Timeout Error"
+}
+
+/** TLS failed, typically a network security product's certificate or a wrong system clock. */
+export class CertificateError extends ConnectionError {
+  public override readonly name = "Certificate Error"
+}
+
+/** A proxy refused the connection or asked for credentials. */
+export class ProxyError extends ConnectionError {
+  public override readonly name = "Proxy Error"
+}
+
+/** The server answered with something unreadable, such as a captive portal's sign-in page. */
+export class UnexpectedResponseError extends BaseError {
+  public override readonly name = "Unexpected Response Error"
+}
+
+/** The server refused the request as invalid; sending it again cannot help. */
+export class InvalidRequestError extends BaseError {
+  public override readonly name = "Invalid Request Error"
+  public httpStatus?: number | undefined
 }
 
 /**
@@ -117,6 +161,7 @@ export class ServerError extends BaseError {
   public httpStatus?: number | undefined
 }
 
+/** The server refused access to what was asked for, such as a closed or unpublished course. */
 export class ForbiddenError extends BaseError {
   public override readonly name = "Forbidden Error"
 }
@@ -143,9 +188,11 @@ export class NotEnrolledError extends BaseError {
 /** Runs `tmc.enrollOnCourse`, which opens the page of a course the student is not enrolled on. */
 export const ENROLL_ON_COURSE_COMMAND = "tmc.enrollOnCourse"
 
-/** courses.mooc.fi refused a paste because the exercise was pasted too often recently. */
+/** The server refused a request because too many came recently. */
 export class RateLimitedError extends BaseError {
   public override readonly name = "Rate Limited Error"
+  /** How long the server asked to wait, when it said. */
+  public retryAfterSeconds?: number | undefined
 }
 
 /** A submission named an uploaded file whose retention window had elapsed. */
@@ -222,6 +269,52 @@ export class FileSystemError extends BaseError {
   public override readonly name = "File System Error"
 }
 
+/** Why the CLI could not use a file; see {@link FileAccessError}. */
+export type FileAccessFailure = "in-use" | "permission-denied" | "path-too-long" | "disk-full"
+
+/** The CLI could not read or write a file the user can do something about; `path` names it. */
+export class FileAccessError extends BaseError {
+  public override readonly name = "File Access Error"
+
+  public constructor(
+    public readonly failure: FileAccessFailure,
+    message: string,
+    details?: string,
+  ) {
+    super(message, details)
+  }
+}
+
+/** A file TestMyCode keeps on this computer could not be read. */
+export class LocalConfigCorruptError extends BaseError {
+  public override readonly name = "Local Config Corrupt Error"
+}
+
+/** An exercise or submission archive is over a size or entry limit. */
+export class ArchiveTooLargeError extends BaseError {
+  public override readonly name = "Archive Too Large Error"
+}
+
+/** The exercise cannot be worked on in the editor, only on the course page. */
+export class UnsupportedExerciseError extends BaseError {
+  public override readonly name = "Unsupported Exercise Error"
+}
+
+/** A program the exercise needs, such as Python or a JDK, was not found. */
+export class ToolchainMissingError extends BaseError {
+  public override readonly name = "Toolchain Missing Error"
+}
+
+/** A program built from the exercise was blocked or removed, typically by antivirus software. */
+export class ExecutableBlockedError extends BaseError {
+  public override readonly name = "Executable Blocked Error"
+}
+
+/** The exercises folder is missing, such as one on a drive that is not connected. */
+export class ProjectsDirUnreachableError extends BaseError {
+  public override readonly name = "Projects Dir Unreachable Error"
+}
+
 export class SpawnError extends BaseError {
   public override readonly name = "Langs Spawn Error"
 }
@@ -241,6 +334,9 @@ export const TRUST_COURSE_WORKSPACE_COMMAND = "tmc.trustCourseWorkspace"
 export class WorkspaceUntrustedError extends BaseError {
   public override readonly name = "Workspace Untrusted Error"
 }
+
+/** Opens the troubleshooting page for problems on the student's computer or network. */
+export const TROUBLESHOOTING_COMMAND = "tmc.openTroubleshooting"
 
 /** The command that opens where the last {@link AiUseRefusedError}'s cause can be fixed. */
 export const SHOW_AI_USE_PROBLEM_COMMAND = "tmc.showAiUseProblem"
@@ -295,9 +391,9 @@ function userSentence(error: Error): string {
 
 /** Whether `error` means the courses.mooc.fi session is gone, which only a new login fixes. */
 export function isSessionLost(error: Error): boolean {
-  const backend = error instanceof BaseError ? error.backend : undefined
   return (
-    error instanceof InvalidTokenError || (error instanceof AuthorizationError && backend !== "tmc")
+    error instanceof InvalidTokenError ||
+    (error instanceof AuthorizationError && !(error instanceof TmcLoginNotAcceptedError))
   )
 }
 
@@ -330,10 +426,7 @@ export function presentationFor(error: Error): ErrorPresentation {
     }
   }
   if (error instanceof TmcLoginNotAcceptedError) {
-    return {
-      message: "This course's server did not accept your MOOC.fi login. Try again later.",
-      actions: [],
-    }
+    return { message: reported, actions: [] }
   }
   if (isSessionLost(error)) {
     return {
@@ -345,6 +438,38 @@ export function presentationFor(error: Error): ErrorPresentation {
     return {
       message: LOGGED_OUT_MESSAGE,
       actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+    }
+  }
+  if (error instanceof ForbiddenError && backend === "mooc") {
+    return {
+      message:
+        "You do not have access to this on courses.mooc.fi. The course may be closed or not " +
+        "published yet, or your enrollment may have ended.",
+      actions: [],
+    }
+  }
+  if (error instanceof LoginClientRejectedError) {
+    return {
+      message: reported,
+      actions: [
+        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
+      ],
+    }
+  }
+  if (error instanceof ProjectsDirUnreachableError) {
+    return {
+      message: reported,
+      actions: [{ label: "Move Exercises Folder", command: "tmc.changeTmcDataPath" }],
+    }
+  }
+  if (
+    error instanceof ToolchainMissingError ||
+    error instanceof ExecutableBlockedError ||
+    error instanceof FileAccessError
+  ) {
+    return {
+      message: reported,
+      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
     }
   }
   if (error instanceof NotEnrolledError) {
@@ -389,10 +514,49 @@ export function presentationFor(error: Error): ErrorPresentation {
       ],
     }
   }
+  if (error instanceof ConnectionTimeoutError && backend !== undefined) {
+    return {
+      message:
+        "The server did not answer in time. It may be busy or the connection slow; try again in a moment.",
+      actions: [],
+    }
+  }
+  if (error instanceof CertificateError) {
+    return {
+      message:
+        "The server's certificate was not trusted. Check that this computer's date and time " +
+        "are right; a network security product that inspects connections can also cause this.",
+      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
+    }
+  }
+  if (error instanceof ProxyError) {
+    return {
+      message:
+        "A proxy refused the connection. Check the proxy settings of this computer or VS Code.",
+      actions: [{ label: "Troubleshooting", command: TROUBLESHOOTING_COMMAND }],
+    }
+  }
   if (error instanceof ConnectionError && backend !== undefined) {
     return {
       message: "Could not reach the server. Check your network connection.",
       actions: [],
+    }
+  }
+  if (error instanceof UnexpectedResponseError) {
+    return {
+      message:
+        "The server's answer could not be read. If your network first shows a web page to " +
+        "accept, as on hotel or campus Wi-Fi, open any page in a browser, accept it and try again.",
+      actions: [],
+    }
+  }
+  if (error instanceof InvalidRequestError) {
+    return {
+      message:
+        "The server refused the request. Update the extension; if it is up to date, report the problem.",
+      actions: [
+        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
+      ],
     }
   }
   if (

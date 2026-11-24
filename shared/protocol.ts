@@ -63,9 +63,11 @@ const InitializationFailureSchema = z.object({
  * openIssueReporter.
  */
 export const RunnableCommandSchema = z.enum([
+  "tmc.changeTmcDataPath",
   "tmc.enrollOnCourse",
   "tmc.logs",
   "tmc.myCourses",
+  "tmc.openTroubleshooting",
   "tmc.showAiUseProblem",
   "tmc.showMoocLogin",
   "tmc.trustCourseWorkspace",

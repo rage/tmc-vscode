@@ -56,6 +56,7 @@ const expectedCommands = [
   "tmc.settings",
   "tmc.openNextExercise",
   "tmc.openTMCExercisesFolder",
+  "tmc.openTroubleshooting",
   "tmc.pasteExercise",
   "tmc.resetExercise",
   "tmc.showAccountMenu",
@@ -84,6 +85,7 @@ const expectedCommands = [
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
+  "tmc.openTroubleshooting",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
@@ -94,6 +96,7 @@ const expectedDegradedCommands = [
 const expectedServiceFreeCommands = [
   "tmc.settings",
   "tmc.logs",
+  "tmc.openTroubleshooting",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
 ]
@@ -626,7 +629,7 @@ suite("walkthrough", function () {
       (step) => step.media.markdown ?? [],
     )
     const texts = media.map((file) => fs.readFileSync(path.join(root, file), "utf8"))
-    expect(texts.some((text) => text.includes("Data collected by the extension"))).toBe(true)
+    expect(texts.some((text) => text.includes("What the extension sends"))).toBe(true)
   })
 
   test("the step that opens a course workspace says to trust it and each new exercise", function () {
