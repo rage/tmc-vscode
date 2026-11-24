@@ -257,6 +257,14 @@ suite("ExerciseTestController", function () {
     ])
   })
 
+  test("two exercises sharing a folder are listed once instead of failing", function () {
+    const s = setup({ slugs: ["same", "same"] })
+
+    const labels: string[] = []
+    s.fake.items.forEach((item) => void labels.push(item.label))
+    expect(labels).toEqual(["same"])
+  })
+
   test("re-syncing keeps an exercise's item and the tests found under it", async function () {
     const s = setup()
     await s.controller.runExercise(exerciseAt(s))

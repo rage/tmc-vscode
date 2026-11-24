@@ -27,7 +27,7 @@ import {
 } from "../errors"
 import { testedLocallyView } from "../panels/submissionView"
 import { submissionViews } from "../ui/submissionViews"
-import { countOf } from "../utilities"
+import { countOf, Logger } from "../utilities"
 import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
@@ -74,7 +74,17 @@ export class ExerciseTestController implements vscode.Disposable {
   public syncExercises(): void {
     const exercises = exercisesOpenInCourseWorkspace(this._actionContext.startup.workspaceManager)
     this._exercisesByItemId.clear()
-    this._controller.items.replace(exercises.map((exercise) => this._itemFor(exercise)))
+    // Two exercises sharing a folder share an item id, which `replace` throws on.
+    const items = new Map<string, vscode.TestItem>()
+    for (const exercise of exercises) {
+      const item = this._itemFor(exercise)
+      if (items.has(item.id)) {
+        Logger.warn(`Two exercises share the folder ${exercise.uri.fsPath}; listing it once.`)
+        continue
+      }
+      items.set(item.id, item)
+    }
+    this._controller.items.replace([...items.values()])
     this._diagnostics.retain(exercises.map((exercise) => exercise.uri))
   }
 
