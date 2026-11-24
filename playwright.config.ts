@@ -2,8 +2,9 @@ import { defineConfig, devices } from "@playwright/test"
 
 export default defineConfig({
   testDir: "./playwright",
-  // Run by playwright.upgrade.config.ts, against packaged VSIXs.
-  testIgnore: "upgrade/**",
+  // upgrade/: run by playwright.upgrade.config.ts, against packaged VSIXs. real/: opt-in, see
+  // playwright.real.config.ts.
+  testIgnore: ["upgrade/**", "real/**"],
   globalSetup: "./playwright/mockBackendLock.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -24,7 +24,8 @@
     "shared/generated/**",
     "webview-ui/public/build/**",
     "backend/cli/**",
-    "backend/resources/**"
+    "backend/resources/**",
+    "playwright/real/**"
   ],
   "rules": {
     "import/namespace": "error",
