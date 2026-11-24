@@ -42,8 +42,14 @@ interface Refusal {
 export class AiUseGate {
   private _lastRefusal: Refusal | undefined
 
-  /** @param _restriction The open course workspace's; `undefined` outside one. */
-  public constructor(private readonly _restriction: Pick<AiRestriction, "enforce"> | undefined) {}
+  /**
+   * @param _restriction The open course workspace's; `undefined` outside one.
+   * @param _appName The editor's `vscode.env.appName`.
+   */
+  public constructor(
+    private readonly _restriction: Pick<AiRestriction, "enforce"> | undefined,
+    private readonly _appName = "Visual Studio Code",
+  ) {}
 
   /**
    * Why working on an exercise of `course` must be refused right now, or `undefined` when it
@@ -57,6 +63,15 @@ export class AiUseGate {
   ): Promise<AiUseRefusedError | undefined> {
     if (isAiAllowed(course)) {
       return undefined
+    }
+    const editor = aiNativeEditorName(this._appName)
+    if (editor) {
+      const refusal = new AiUseRefusedError(
+        `This course does not allow AI assistance, and ${editor} has AI built in that ` +
+          "TestMyCode cannot switch off. Use Visual Studio Code or VSCodium for this course.",
+      )
+      this._lastRefusal = { error: refusal }
+      return refusal
     }
     const lapse = this._restriction
       ? await this._restriction.enforce(exerciseUri)
@@ -74,6 +89,16 @@ export class AiUseGate {
     await this._lastRefusal?.showProblem?.()
   }
 }
+
+/**
+ * Editors built on VS Code whose own AI no setting turns off, by the name they report as
+ * `vscode.env.appName`; `undefined` for any other editor.
+ */
+export function aiNativeEditorName(appName: string): string | undefined {
+  return AI_NATIVE_EDITORS.find((name) => appName.toLowerCase().includes(name.toLowerCase()))
+}
+
+const AI_NATIVE_EDITORS = ["Cursor", "Windsurf", "Trae", "Kiro", "Void"]
 
 function refusalForExtensions(): Refusal | undefined {
   const [first, ...rest] = enabledAiExtensions()

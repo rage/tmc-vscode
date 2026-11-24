@@ -508,7 +508,7 @@ async function activateInner(
       ? {
           kind: "ready",
           accountHandover: new AccountHandover(globalState),
-          aiUseGate: new AiUseGate(aiRestriction),
+          aiUseGate: new AiUseGate(aiRestriction, vscode.env.appName),
           courseWorkspaceSwitches,
           langs: langs.val,
           resources: resources.val,
