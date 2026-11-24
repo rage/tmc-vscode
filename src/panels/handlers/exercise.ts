@@ -93,6 +93,12 @@ export const exerciseHandlers = {
       )
     },
   },
+  cancelSubmission: {
+    requiresReady: true,
+    handle(message): void {
+      actions.cancelSubmissionUpload(message.sourcePanel.id)
+    },
+  },
   keepWaitingForGrading: {
     requiresReady: true,
     async handle(message, { host, actionContext }): Promise<Result<undefined, Error>> {

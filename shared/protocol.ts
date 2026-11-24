@@ -586,6 +586,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     requestId: z.number(),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
+  // Stops the upload of the submission the named panel shows.
+  z.object({
+    type: z.literal("cancelSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+  }),
   // Runs an exercise command on the exercise the named panel shows.
   z.object({
     type: z.literal("exerciseAction"),

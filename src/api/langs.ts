@@ -1173,6 +1173,7 @@ export default class Langs {
   public async submitMoocExercise(
     exerciseId: string,
     exercisePath: string,
+    onInterruptHandle?: (interrupt: () => void) => void,
   ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
     return this._submitting("mooc", () =>
       this._fetch(
@@ -1187,6 +1188,7 @@ export default class Langs {
             exercisePath,
           ),
           onNotification: (notification) => this._showNotification(notification),
+          onInterruptHandle,
           processTimeout: SUBMIT_PROCESS_TIMEOUT,
           interruptOnDeactivate: true,
         },

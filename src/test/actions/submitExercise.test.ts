@@ -14,6 +14,7 @@ import {
 import { exerciseResultsPanel } from "../../actions/exerciseResults"
 import { pendingGradings } from "../../actions/pendingGradings"
 import {
+  cancelSubmissionUpload,
   checkCanSubmit,
   keepWaitingForGrading,
   onDidFinishSubmission,
@@ -426,7 +427,7 @@ suite("submitExercise action, mooc", () => {
     const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
 
-    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise")
+    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise", expect.any(Function))
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
@@ -1139,5 +1140,30 @@ suite("a mooc grading left pending across a reload", () => {
     const waited = await keepWaitingForGrading(actionContext, panel.id)
     expect(waited.ok).toBe(true)
     expect(pendingGradings.get(moocExercise.id)).toBeUndefined()
+  })
+})
+
+suite("cancelling a mooc submission's upload", () => {
+  test("stops the upload and says the submission was cancelled", async () => {
+    const { actionContext, submit } = moocContextWith(undefined)
+    let finish: (() => void) | undefined
+    submit.mockImplementation(
+      async (_id: string, _path: string, onInterruptHandle: (interrupt: () => void) => void) => {
+        const stopped = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        onInterruptHandle(() => finish?.())
+        await stopped
+        return Err(new Error("The TestMyCode tools were stopped."))
+      },
+    )
+
+    const submitting = submitExercise(actionContext, moocExercise)
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const panelId = submissionViews.latestFor(moocExercise.id)!.panel.id
+    cancelSubmissionUpload(panelId)
+    await submitting
+
+    expect(lastView()).toMatchObject({ headline: "Submission cancelled", tone: "info" })
   })
 })

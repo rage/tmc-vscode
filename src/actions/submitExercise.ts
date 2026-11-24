@@ -170,6 +170,21 @@ interface UnfinishedGrading extends Submission {
 // Keyed by panel id so a webview names only its own panel.
 const unfinishedGradings = new Map<number, UnfinishedGrading>()
 
+/** Stops the upload a results panel shows, by panel id, while it runs. */
+const uploadCancels = new Map<number, () => void>()
+
+/** Stops the upload of the submission results panel `panelId` shows; nothing if none runs. */
+export function cancelSubmissionUpload(panelId: number): void {
+  uploadCancels.get(panelId)?.()
+}
+
+const CANCELLED_VIEW: SubmissionView = {
+  ...submitFailedView({ message: "The submission was cancelled." }),
+  headline: "Submission cancelled",
+  tone: "info",
+  explanation: "If it reached the server before you cancelled, it is graded and shows in History.",
+}
+
 /** Drops what earlier submissions of `panel`'s exercise left pending. */
 function forgetEarlierSubmissions(panel: ExerciseSubmissionPanel): void {
   for (const pending of [unfinishedGradings, pendingFeedback]) {
@@ -217,9 +232,19 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
 function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
   return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
-    const submitted = await langs.submitMoocExercise(exerciseId, submission.exercise.uri.fsPath)
+    let isCancelled = false
+    const submitted = await langs.submitMoocExercise(
+      exerciseId,
+      submission.exercise.uri.fsPath,
+      (interrupt) =>
+        uploadCancels.set(submission.panel.id, () => {
+          isCancelled = true
+          interrupt()
+        }),
+    )
+    uploadCancels.delete(submission.panel.id)
     if (submitted.err) {
-      return submitted
+      return isCancelled ? Ok({ recorded: undefined, view: CANCELLED_VIEW }) : submitted
     }
     const exercisePageUrl = submitted.val.exercise_page_url ?? submission.materialPageUrl
     reporter.received(exercisePageUrl)
