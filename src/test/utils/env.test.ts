@@ -51,10 +51,13 @@ suite("getAllLangsCLIs", function () {
 
 suite("getPlatform", function () {
   test("resolves the hosts tmc-langs publishes builds for", function () {
-    withHost("linux", "x64", () => expect(getPlatform()).toBe("linux64"))
-    withHost("linux", "ia32", () => expect(getPlatform()).toBe("linux32"))
-    withHost("linux", "arm64", () => expect(getPlatform()).toBe("linuxarm64"))
-    withHost("linux", "arm", () => expect(getPlatform()).toBe("linuxarm"))
+    // The runner's own report has no glibc version off Linux, which reads as musl.
+    withGlibc("2.35", () => {
+      withHost("linux", "x64", () => expect(getPlatform()).toBe("linux64"))
+      withHost("linux", "ia32", () => expect(getPlatform()).toBe("linux32"))
+      withHost("linux", "arm64", () => expect(getPlatform()).toBe("linuxarm64"))
+      withHost("linux", "arm", () => expect(getPlatform()).toBe("linuxarm"))
+    })
     withHost("darwin", "x64", () => expect(getPlatform()).toBe("macos64"))
     withHost("darwin", "arm64", () => expect(getPlatform()).toBe("macosarm64"))
     withHost("win32", "x64", () => expect(getPlatform()).toBe("windows64"))
