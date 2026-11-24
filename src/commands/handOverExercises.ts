@@ -57,15 +57,16 @@ let checkedAccountId: string | undefined
  * Runs {@link handOverExercises} when `accountId` is not the account last checked, as when
  * another window logged in as someone else or courses.mooc.fi named the account only later.
  */
-export async function handOverExercisesOnAccountChange(
+export function handOverExercisesOnAccountChange(
   actionContext: ReadyActionContext,
   accountId: string,
 ): Promise<void> {
-  if (accountId === checkedAccountId) {
-    return
-  }
-  checkedAccountId = accountId
-  await handOverExercises(actionContext)
+  // Checked in the queue, as a check queued before this one may have covered the account.
+  return handOverQueue.run(async () => {
+    if (accountId !== checkedAccountId) {
+      await handOverOnce(actionContext)
+    }
+  })
 }
 
 /**

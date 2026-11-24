@@ -7,7 +7,10 @@ import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
 import { langsError } from "../../api/langsErrors"
-import { handOverExercises } from "../../commands/handOverExercises"
+import {
+  handOverExercises,
+  handOverExercisesOnAccountChange,
+} from "../../commands/handOverExercises"
 import type Resources from "../../config/resources"
 import { submissionViews } from "../../ui/submissionViews"
 import { idOfMoocExercise } from "../fixtures/identifiers"
@@ -279,5 +282,17 @@ suite("handOverExercises", function () {
 
     expect(context.dialog.choose).not.toHaveBeenCalled()
     expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-a"])
+  })
+  test("an account whose check failed is checked again at its next change", async function () {
+    const { context } = setUp("user-retried", true)
+    const getAccountId = vi.mocked(context.startup.langs.getMoocAccountId)
+    getAccountId.mockResolvedValueOnce(Err(new Error("the CLI failed")))
+
+    await handOverExercisesOnAccountChange(context, "user-retried")
+    await handOverExercisesOnAccountChange(context, "user-retried")
+    await handOverExercisesOnAccountChange(context, "user-retried")
+
+    expect(getAccountId).toHaveBeenCalledTimes(2)
+    expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-retried"])
   })
 })
