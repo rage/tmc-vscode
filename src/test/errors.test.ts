@@ -9,8 +9,10 @@ import {
   AuthorizationError,
   ChapterLockedError,
   ChapterNotOpenError,
+  CliCrashedError,
   ConnectionError,
   DeadlinePassedError,
+  EmptyLangsResponseError,
   ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
@@ -180,12 +182,63 @@ suite("presentationFor", function () {
     expect(withBackend.message).not.toContain("tmc.mooc.fi")
   })
 
-  test("a CLI that cannot run points at the antivirus help", function () {
-    const presentation = presentationFor(new SpawnError("spawn EACCES"))
+  test("a CLI that is gone offers to download it again", function () {
+    const presentation = presentationFor(
+      Object.assign(new SpawnError("spawn ENOENT"), { code: "ENOENT" }),
+    )
 
-    expect(presentation.message).toContain("antivirus")
+    expect(presentation.message).toContain("download them again")
+    expect(presentation.actions.map((action) => action.command)).toContain(
+      "workbench.action.restartExtensionHost",
+    )
+  })
+
+  test.each(["EACCES", "EPERM", "UNKNOWN"])(
+    "a CLI that %s on spawn points at the security policy and the administrator guide",
+    function (code) {
+      const presentation = presentationFor(Object.assign(new SpawnError(`spawn ${code}`), { code }))
+
+      expect(presentation.message).toContain("security policy")
+      expect(presentation.message).toContain("docs/administrators.md")
+      expect(presentation.message).not.toContain("antivirus program may")
+    },
+  )
+
+  test("a busy CLI asks for a moment, not for a reinstall", function () {
+    const presentation = presentationFor(
+      Object.assign(new SpawnError("spawn EBUSY"), { code: "EBUSY" }),
+    )
+
+    expect(presentation.message).toContain("Try again in a moment")
+    expect(presentation.actions).toEqual([])
+  })
+
+  test("a CLI that exits without a result reports the exit code and offers a bug report", function () {
+    const presentation = presentationFor(
+      Object.assign(new EmptyLangsResponseError("no result"), { exitCode: 3 }),
+    )
+
+    expect(presentation.message).toContain("exited with code 3")
+    expect(presentation.actions.map((action) => action.label)).toEqual(["Report an Issue"])
+  })
+
+  test("a CLI killed by a signal says which", function () {
+    const presentation = presentationFor(
+      Object.assign(new EmptyLangsResponseError("no result"), { signal: "SIGKILL" }),
+    )
+
+    expect(presentation.message).toContain("killed by SIGKILL")
+  })
+
+  test("a CLI panic offers a bug report instead of the raw panic text", function () {
+    const presentation = presentationFor(
+      new CliCrashedError("Process panicked unexpectedly with message: index out of bounds"),
+    )
+
+    expect(presentation.message).toContain("stopped unexpectedly")
+    expect(presentation.message).not.toContain("index out of bounds")
     expect(presentation.actions).toEqual([
-      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Report an Issue", command: "workbench.action.openIssueReporter" },
     ])
   })
 

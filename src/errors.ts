@@ -145,8 +145,16 @@ export class DeviceLoginExpiredError extends BaseError {
   public override readonly name = "Device Login Expired Error"
 }
 
+/** The CLI ended without a result: it crashed, ran out of memory or was killed. */
 export class EmptyLangsResponseError extends BaseError {
   public override readonly name = "Empty Langs Response Error"
+  public exitCode?: number | null
+  public signal?: string | null
+}
+
+/** The CLI's panic handler reported a bug in the CLI itself. */
+export class CliCrashedError extends BaseError {
+  public override readonly name = "CLI Crashed Error"
 }
 
 /** A backend answered 404: what was asked for does not exist, or not for this user. */
@@ -315,6 +323,7 @@ export class ProjectsDirUnreachableError extends BaseError {
   public override readonly name = "Projects Dir Unreachable Error"
 }
 
+/** The CLI could not be started; `code` is the errno name, such as ENOENT or EACCES. */
 export class SpawnError extends BaseError {
   public override readonly name = "Langs Spawn Error"
 }
@@ -395,6 +404,52 @@ export function isSessionLost(error: Error): boolean {
     error instanceof InvalidTokenError ||
     (error instanceof AuthorizationError && !(error instanceof TmcLoginNotAcceptedError))
   )
+}
+
+const REPORT_ISSUE_ACTION: ErrorAction = {
+  label: "Report an Issue",
+  command: "workbench.action.openIssueReporter",
+}
+
+/** Where administrators learn which executable to allow. */
+const ADMINISTRATOR_GUIDE_URL =
+  "https://github.com/rage/tmc-vscode/blob/master/docs/administrators.md"
+
+/** The errno names a security policy raises when it refuses to run a file that is there. */
+const POLICY_DENIAL_CODES = ["EACCES", "EPERM", "UNKNOWN"]
+
+function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
+  const showHelp: ErrorAction = { label: "Show Help", command: "tmc.viewInitializationErrorHelp" }
+  switch (error.code) {
+    case "ENOENT":
+      return {
+        message:
+          "The TestMyCode tools are missing from this computer, perhaps removed by an antivirus program. Restart the extension to download them again.",
+        actions: [
+          { label: "Download Again", command: "workbench.action.restartExtensionHost" },
+          showHelp,
+        ],
+      }
+    case "EBUSY":
+      return {
+        message:
+          "Another program, such as an antivirus scan, is using the TestMyCode tools. Try again in a moment.",
+        actions: [],
+      }
+    default:
+      if (error.code !== undefined && POLICY_DENIAL_CODES.includes(error.code)) {
+        return {
+          message:
+            "This computer would not run the TestMyCode tools; a security policy may be blocking them. " +
+            `An administrator may need to allow them, see ${ADMINISTRATOR_GUIDE_URL}.`,
+          actions: [showHelp],
+        }
+      }
+      return {
+        message: "The TestMyCode tools could not be started. Show Help says what to try.",
+        actions: [showHelp, REPORT_ISSUE_ACTION],
+      }
+  }
 }
 
 /**
@@ -493,11 +548,23 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
     }
   }
-  if (error instanceof SpawnError || error instanceof EmptyLangsResponseError) {
+  if (error instanceof SpawnError) {
+    return spawnFailurePresentation(error)
+  }
+  if (error instanceof EmptyLangsResponseError) {
+    const how = error.signal
+      ? `was killed by ${error.signal}`
+      : `exited with code ${error.exitCode ?? "unknown"}`
+    return {
+      message: `The TestMyCode tools stopped unexpectedly (they ${how}). Report an Issue if this keeps happening.`,
+      actions: [REPORT_ISSUE_ACTION],
+    }
+  }
+  if (error instanceof CliCrashedError) {
     return {
       message:
-        "An antivirus program may be blocking the TestMyCode tools. Show Help says how to allow them.",
-      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
+        "The TestMyCode tools stopped unexpectedly. Report an Issue and attach the details from Show Details.",
+      actions: [REPORT_ISSUE_ACTION],
     }
   }
   if (error instanceof InitializationError) {

@@ -1,6 +1,6 @@
 import * as cp from "child_process"
+import { dirname } from "path"
 
-import kill from "tree-kill"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { z } from "zod"
@@ -78,6 +78,7 @@ import {
   DeadlinePassedError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
+  CliCrashedError,
   EmptyLangsResponseError,
   ExerciseNotFoundError,
   ForbiddenError,
@@ -100,11 +101,14 @@ import {
 import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
 import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
+import { proxyEnvironment } from "./proxyEnvironment"
 
 interface Options {
   cliConfigDir?: string | undefined
   /** The JDK the CLI's Java plugin should use, read per spawn; empty for the one on `PATH`. */
   javaHome?: (() => string) | undefined
+  /** VS Code's proxy settings, read per spawn; the CLI has no other way to learn them. */
+  httpProxy?: (() => { proxy: string; noProxy: string[] }) | undefined
 }
 
 interface ExecutionOptions {
@@ -314,6 +318,15 @@ export type RestoreTarget = Enum<
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
 
+const SPAWN_BUSY_RETRY_DELAY_MS = 500
+
+/**
+ * How long after the CLI exits its stdout may stay open. Every process the CLI started on
+ * Windows inherits the pipe, so one that outlives it would otherwise hold the command until its
+ * timeout.
+ */
+const STDOUT_END_GRACE_MS = 3000
+
 /** POSIX has process groups, so a child spawned `detached` can be signalled as a whole tree. */
 const HAS_PROCESS_GROUPS = process.platform !== "win32"
 
@@ -323,16 +336,21 @@ const HAS_PROCESS_GROUPS = process.platform !== "win32"
  * On POSIX the child leads its own process group (see the `detached` spawn option), so one
  * synchronous signal reaches the whole tree and has taken effect before this returns --
  * which is what lets a synchronous `deactivate` stop a submit in flight. Windows has no
- * process groups, so `tree-kill` walks the tree asynchronously there instead.
+ * process groups, so `taskkill /T` walks the tree asynchronously there instead.
  */
 function killProcessTree(cprocess: cp.ChildProcess): void {
   const pid = cprocess.pid
-  // Undefined until the spawn succeeds, and `tree-kill` throws on a non-numeric pid.
+  // Undefined until the spawn succeeds.
   if (pid === undefined) {
     return
   }
   if (!HAS_PROCESS_GROUPS) {
-    kill(pid)
+    // `tree-kill` runs `taskkill` through cmd.exe, which can flash a console window.
+    cp.execFile("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, (error) => {
+      if (error) {
+        Logger.warn(`taskkill of process ${pid} failed:`, error)
+      }
+    })
     return
   }
   try {
@@ -1362,17 +1380,33 @@ export default class Langs {
     if (process.err) {
       return { result: Promise.resolve(process), interrupt: (): void => {} }
     }
-    const { interrupt, result, getStderr } = process.val
+    let current = process.val
+    const interrupt = (): void => current.interrupt()
     langsArgs.onInterruptHandle?.(interrupt)
     const auth: AuthAttribution = {
       backend: langsArgs.backend,
       expected: langsArgs.suppressAuthEvents,
     }
+    const runOnce = async (): Promise<Awaited<LangsProcessRunner["result"]>> => {
+      const first = await current.result
+      // A scanner can hold the executable for a moment; the process never ran, so rerunning is safe.
+      if (!(first.err && first.val instanceof SpawnError && first.val.code === "EBUSY")) {
+        return first
+      }
+      Logger.warn("The TestMyCode tools were busy, trying once more")
+      await sleep(SPAWN_BUSY_RETRY_DELAY_MS)
+      const retry = this._spawnLangsProcess(langsArgs)
+      if (retry.err) {
+        return retry
+      }
+      current = retry.val
+      return await current.result
+    }
     return {
-      result: result.then((res) =>
+      result: runOnce().then((res) =>
         res
           .andThen((x) =>
-            this._checkLangsResponse(x, outputDataKind, auth, getStderr(), {
+            this._checkLangsResponse(x, outputDataKind, auth, current.getStderr(), {
               isPaste: langsArgs.args.includes("paste"),
             }),
           )
@@ -1477,7 +1511,7 @@ export default class Langs {
     // expected data kind first would misreport every panic and discard its message.
     if (langsResponse.status === "crashed") {
       Logger.error("Langs process crashed.", langsResponse.message)
-      return Err(new BaseError(langsResponse.message || "Langs process crashed.", stderr))
+      return Err(new CliCrashedError(langsResponse.message || "Langs process crashed.", stderr))
     }
     if (!dataMatchesKind(langsResponse, outputDataKind)) {
       // The kinds, not the payload: that is the user's data, in a log users paste into bug reports.
@@ -1777,6 +1811,7 @@ export default class Langs {
     const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL
     const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir
     const javaHome = this._options.javaHome?.() ?? ""
+    const proxyEnv = proxyEnvironment(this._options.httpProxy?.(), process.env)
 
     Logger.info(`Running ${loggableCommand}`)
     Logger.debug(`TMC backend at ${tmcBackendUrl}`)
@@ -1789,6 +1824,7 @@ export default class Langs {
     let active = true
     let interrupted = false
     let spawnFailure: Error | undefined
+    let exitStatus: { code: number | null; signal: NodeJS.Signals | null } | undefined
     let cprocess
     const startTime = Date.now()
     try {
@@ -1796,7 +1832,12 @@ export default class Langs {
         // Gives the child its own process group, so {@link killProcessTree} can reach the
         // plugins it spawns (Maven, pytest) with one signal. No-op on Windows.
         detached: HAS_PROCESS_GROUPS,
+        windowsHide: true,
+        // Windows looks for the tools the CLI starts in its working directory before PATH, and
+        // the inherited one can be a course folder.
+        cwd: dirname(this.cliPath),
         env: {
+          ...proxyEnv,
           ...process.env,
           ...env,
           RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
@@ -1821,6 +1862,7 @@ export default class Langs {
     const processResult = new Promise<number | null>((resolve, reject) => {
       let resultCode: number | undefined
       let stdoutEnded = false
+      let pipeGraceTimer: NodeJS.Timeout | undefined
 
       const timeoutMs = processTimeout === undefined ? CLI_PROCESS_TIMEOUT : processTimeout
       const timeout =
@@ -1853,6 +1895,7 @@ ${error.message}`
       })
       cprocess.stdout.on("end", () => {
         stdoutEnded = true
+        clearTimeout(pipeGraceTimer)
         if (resultCode !== undefined) {
           if (timeout) {
             clearTimeout(timeout)
@@ -1865,6 +1908,7 @@ ${error.message}`
         // closure must not signal it.
         active = false
         resultCode = code ?? 0
+        exitStatus = { code, signal }
         const ending = signal ? `was killed by ${signal}` : `exited with code ${resultCode}`
         Logger.info(`Process ${ending} after ${Date.now() - startTime}ms: ${loggableCommand}`)
         if (stdoutEnded) {
@@ -1872,6 +1916,17 @@ ${error.message}`
             clearTimeout(timeout)
           }
           resolve(code)
+        } else {
+          pipeGraceTimer = setTimeout(() => {
+            Logger.warn(
+              `The TestMyCode tools' output stayed open ${STDOUT_END_GRACE_MS}ms after they exited; a process they started is probably holding it`,
+            )
+            if (timeout) {
+              clearTimeout(timeout)
+            }
+            cprocess.stdout.destroy()
+            resolve(code)
+          }, STDOUT_END_GRACE_MS)
         }
       })
       cprocess.stdout.on("data", (chunk: string) => {
@@ -1951,7 +2006,10 @@ ${error.message}`
         )
       }
       return Err(
-        new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
+        Object.assign(
+          new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
+          { exitCode: exitStatus?.code ?? null, signal: exitStatus?.signal ?? null },
+        ),
       )
     })()
 

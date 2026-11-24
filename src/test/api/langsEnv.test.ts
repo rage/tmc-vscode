@@ -6,11 +6,19 @@ import Langs from "../../api/langs"
 
 // The env is assembled inside `_spawnLangsProcess`; the mock records it at `cp.spawn` and
 // aborts, so no real CLI runs.
-const spawnCalls: { env: NodeJS.ProcessEnv | undefined }[] = vi.hoisted(() => [])
+const spawnCalls: {
+  env: NodeJS.ProcessEnv | undefined
+  cwd: string | undefined
+  windowsHide: boolean | undefined
+}[] = vi.hoisted(() => [])
 
 vi.mock("child_process", () => ({
-  spawn: (_command: string, _args: string[], options: { env?: NodeJS.ProcessEnv }) => {
-    spawnCalls.push({ env: options.env })
+  spawn: (
+    _command: string,
+    _args: string[],
+    options: { env?: NodeJS.ProcessEnv; cwd?: string; windowsHide?: boolean },
+  ) => {
+    spawnCalls.push({ env: options.env, cwd: options.cwd, windowsHide: options.windowsHide })
     throw new Error("stopped before spawning a real process")
   },
 }))
@@ -80,6 +88,87 @@ suite("Langs CLI environment", function () {
     const captured = spawnCalls[0]
     expect(captured?.env && "TMC_LANGS_MOOC_CLIENT_ID" in captured.env).toBe(false)
     expect(captured?.env && "TMC_LANGS_MOOC_TRUST_LOCALHOST" in captured.env).toBe(false)
+  })
+
+  test("the CLI starts hidden, in its own folder rather than the inherited working directory", async function () {
+    const cliPath = path.join("/opt", "tmc", "cli", "tmc-langs-cli")
+    const langs = new Langs(cliPath, "test-client", "1.0.0")
+
+    await langs.isAuthenticated()
+
+    expect(spawnCalls[0]?.windowsHide).toBe(true)
+    expect(spawnCalls[0]?.cwd).toBe(path.dirname(cliPath))
+  })
+
+  suite("proxy", function () {
+    const proxyKeys = [
+      "HTTPS_PROXY",
+      "https_proxy",
+      "HTTP_PROXY",
+      "http_proxy",
+      "NO_PROXY",
+      "no_proxy",
+    ]
+    const savedProxy = new Map<string, string | undefined>()
+
+    beforeEach(function () {
+      for (const key of proxyKeys) {
+        savedProxy.set(key, process.env[key])
+        Reflect.deleteProperty(process.env, key)
+      }
+    })
+
+    afterEach(function () {
+      for (const key of proxyKeys) {
+        const value = savedProxy.get(key)
+        if (value === undefined) {
+          Reflect.deleteProperty(process.env, key)
+        } else {
+          process.env[key] = value
+        }
+      }
+    })
+
+    test("VS Code's http.proxy and http.noProxy reach the CLI", async function () {
+      const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", {
+        httpProxy: () => ({
+          proxy: "http://proxy.school.example:3128",
+          noProxy: ["localhost", ".local"],
+        }),
+      })
+
+      await langs.isAuthenticated()
+
+      const env = spawnCalls[0]?.env ?? {}
+      expect(env.HTTPS_PROXY).toBe("http://proxy.school.example:3128")
+      expect(env.HTTP_PROXY).toBe("http://proxy.school.example:3128")
+      expect(env.NO_PROXY).toBe("localhost,.local")
+    })
+
+    test("a proxy variable the environment already has is left alone", async function () {
+      process.env.HTTPS_PROXY = "http://from-env:1"
+      process.env.http_proxy = "http://lowercase:2"
+      const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", {
+        httpProxy: () => ({ proxy: "http://from-settings:3", noProxy: [] }),
+      })
+
+      await langs.isAuthenticated()
+
+      const env = spawnCalls[0]?.env ?? {}
+      expect(env.HTTPS_PROXY).toBe("http://from-env:1")
+      expect(env.HTTP_PROXY).toBeUndefined()
+      expect(env.NO_PROXY).toBeUndefined()
+    })
+
+    test("empty settings add nothing", async function () {
+      const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", {
+        httpProxy: () => ({ proxy: "", noProxy: [] }),
+      })
+
+      await langs.isAuthenticated()
+
+      expect(spawnCalls[0]?.env?.HTTPS_PROXY).toBeUndefined()
+    })
   })
 
   test("a configured Java home becomes JAVA_HOME and leaves PATH alone", async function () {
