@@ -3,11 +3,10 @@ import * as path from "path"
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import * as vscode from "vscode"
 
 import { FileSystemError } from "../errors"
 import { fileProblemOf, Logger } from "../utilities"
-import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
+import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -33,14 +32,9 @@ export async function moveExercisesAside(
     .replaceAll(":", "-")
     .replace(/\.\d+Z$/, "")
   const target = `${projectsDirectory}-moved-${stamp}`
-  // An editor left open would write its file back into the emptied exercises folder on save.
-  const folder = { uri: vscode.Uri.file(projectsDirectory) }
-  const saved = await saveExerciseDocuments(folder)
-  if (saved.err) {
-    return saved
-  }
-  if (!(await closeExerciseEditors(folder))) {
-    return Err(new Error("Some of the exercises' editors are still open."))
+  const released = await releaseExerciseEditors(projectsDirectory)
+  if (released.err) {
+    return released
   }
   // Entry by entry, without graceful-fs's minute of silent retries, to name what is held.
   try {

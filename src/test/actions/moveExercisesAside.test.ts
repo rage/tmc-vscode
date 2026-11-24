@@ -14,8 +14,7 @@ vi.mock("../../actions/refreshLocalExercises", () => ({
   refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
 }))
 vi.mock("../../window/exerciseDocuments", () => ({
-  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
-  closeExerciseEditors: vi.fn(async () => true),
+  releaseExerciseEditors: vi.fn(async () => Ok.EMPTY),
 }))
 
 function folders(): { projects: string; aside: string } {

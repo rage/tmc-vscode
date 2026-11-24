@@ -3,12 +3,12 @@ import * as path from "path"
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
 import { FileAccessError, FileSystemError } from "../errors"
 import { isPathInside, Logger } from "../utilities"
-import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
+import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -66,15 +66,10 @@ export async function moveExtensionDataPath(
     )
   }
 
-  // An editor left open would save into the old folder once its files have moved.
   if (current !== undefined) {
-    const folder = { uri: vscode.Uri.file(current) }
-    const saved = await saveExerciseDocuments(folder)
-    if (saved.err) {
-      return saved
-    }
-    if (!(await closeExerciseEditors(folder))) {
-      return Err(new Error("Close the exercises' editors before moving the exercises folder."))
+    const released = await releaseExerciseEditors(current)
+    if (released.err) {
+      return released
     }
   }
 
