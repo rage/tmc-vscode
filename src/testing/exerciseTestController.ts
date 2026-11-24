@@ -74,7 +74,8 @@ export class ExerciseTestController implements vscode.Disposable {
   public syncExercises(): void {
     const exercises = exercisesOpenInCourseWorkspace(this._actionContext.startup.workspaceManager)
     this._exercisesByItemId.clear()
-    // Two exercises sharing a folder share an item id, which `replace` throws on.
+    // tmc-langs lists one exercise per folder; were two to share one, their shared item id
+    // would make `replace` throw.
     const items = new Map<string, vscode.TestItem>()
     for (const exercise of exercises) {
       const item = this._itemFor(exercise)
