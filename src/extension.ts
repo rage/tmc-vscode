@@ -82,6 +82,7 @@ import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
+import { recordCliPath } from "./uninstall"
 import type { VersionChange } from "./utilities"
 import {
   cliFolder,
@@ -291,6 +292,7 @@ async function activateInner(
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath, globalState)
+    void recordCliPath(cliPathResult.val)
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
