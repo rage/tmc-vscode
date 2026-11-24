@@ -275,7 +275,6 @@ async function activateInner(
     downloadUrl: TMC_LANGS_DL_URL,
     version: TMC_LANGS_VERSION,
     builtInChecksums: TMC_LANGS_CHECKSUMS,
-    cliPath: settings.getCliPath(),
   })
   if (cliFolder(context) !== legacyCliFolder(context)) {
     void fs.promises.rm(legacyCliFolder(context), { recursive: true, force: true }).catch(() => {})

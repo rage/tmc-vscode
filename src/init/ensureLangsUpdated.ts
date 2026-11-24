@@ -211,42 +211,16 @@ export interface LangsInstallConfig {
   downloadUrl: string
   version: string
   /**
-   * SHA-256 of every executable of `version`, by file name. A download or `cliPath` must match
-   * it, and a file name missing from it fails the install. `null` where the served CLI is not a
+   * SHA-256 of every executable of `version`, by file name. A download must match it, and a
+   * file name missing from it fails the install. `null` where the served CLI is not a
    * release (dev and test profiles): the `.sha256` beside the download is then the only check.
    */
   builtInChecksums?: Record<string, string> | null | undefined
-  /** A CLI the user installed themselves; used instead of a download. */
-  cliPath?: string | undefined
-}
-
-/** Checks the CLI the user named, which is never downloaded or replaced. */
-async function useCustomCli(
-  cliPath: string,
-  executable: string,
-  expectedSha256: string | undefined,
-): Promise<Result<string, Error>> {
-  if (!(await fs.pathExists(cliPath))) {
-    return Err(
-      new InitializationError(`testMyCode.cliPath points to ${cliPath}, which does not exist.`),
-    )
-  }
-  if (expectedSha256 !== undefined) {
-    const verified = await verifyCli(cliPath, `${cliPath}.sha256`, expectedSha256)
-    if (!verified.match) {
-      return Err(
-        new InitializationError(
-          `testMyCode.cliPath points to ${cliPath}, which is not ${executable} (SHA-256 ${verified.cliDigest || "unreadable"}, expected ${expectedSha256}).`,
-        ),
-      )
-    }
-  }
-  return Ok(cliPath)
 }
 
 /**
  * Installs the langs version this extension pins unless already present and verified, then
- * removes old versions. A `config.cliPath` replaces all of that with checking that file.
+ * removes old versions.
  *
  * @param config Owned by the caller (the extension passes the build-inlined constants and the
  * user's settings, tests pass a local server).
@@ -271,9 +245,6 @@ async function ensureLangsUpdated(
   const expectedSha256 = builtInChecksums?.[executable]
   if (builtInChecksums && expectedSha256 === undefined) {
     return Err(new InitializationError(`This extension has no built-in checksum for ${executable}`))
-  }
-  if (config.cliPath) {
-    return await useCustomCli(config.cliPath, executable, expectedSha256)
   }
   if (platform === "linuxmusl64") {
     void dialog.warningNotification(

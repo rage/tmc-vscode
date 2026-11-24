@@ -682,64 +682,6 @@ suite("ensureLangsUpdated against the built-in checksums", function () {
     expect((result.val as Error).message).toContain("no built-in checksum")
     expect(state.hits.cli).toBe(0)
   })
-
-  suite("with testMyCode.cliPath", function () {
-    test("uses a CLI that matches the built-in checksum and downloads nothing", async function () {
-      const state = await serve(cli, sha256(cli))
-      const own = path.join(tmpDir.name, "installed-by-admin")
-      fs.writeFileSync(own, cli)
-
-      const result = await ensureLangsUpdated(
-        path.join(tmpDir.name, "cli"),
-        createDialogMock()[0],
-        {
-          downloadUrl: serverUrl(server as http.Server),
-          version,
-          builtInChecksums: { [executable]: sha256(cli) },
-          cliPath: own,
-        },
-      )
-
-      expect(result.val).toBe(own)
-      expect(state.hits.cli).toBe(0)
-    })
-
-    test("rejects a CLI of another build", async function () {
-      const own = path.join(tmpDir.name, "installed-by-admin")
-      fs.writeFileSync(own, "an older build")
-
-      const result = await ensureLangsUpdated(
-        path.join(tmpDir.name, "cli"),
-        createDialogMock()[0],
-        {
-          downloadUrl: "http://127.0.0.1:9/",
-          version,
-          builtInChecksums: { [executable]: sha256(cli) },
-          cliPath: own,
-        },
-      )
-
-      expect(result.err).toBe(true)
-      expect((result.val as Error).message).toContain(`is not ${executable}`)
-    })
-
-    test("reports a missing file instead of downloading", async function () {
-      const missing = path.join(tmpDir.name, "nowhere")
-
-      const result = await ensureLangsUpdated(
-        path.join(tmpDir.name, "cli"),
-        createDialogMock()[0],
-        {
-          downloadUrl: "http://127.0.0.1:9/",
-          version,
-          cliPath: missing,
-        },
-      )
-
-      expect(result.err).toBe(true)
-      expect((result.val as Error).message).toContain("does not exist")
-    })
-  })
 })
 
 suite("ensureLangsUpdated install hygiene", function () {
@@ -869,13 +811,6 @@ suite("ensureLangsUpdated install hygiene", function () {
     })
     const [dialog] = createDialogMock()
     try {
-      await ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
-        downloadUrl: "http://127.0.0.1:9/",
-        version,
-        cliPath: path.join(tmpDir.name, "unused"),
-      })
-      expect(dialog.warningNotification).not.toHaveBeenCalled()
-
       await ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
         downloadUrl: "http://127.0.0.1:9/",
         version,

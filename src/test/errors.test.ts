@@ -194,12 +194,12 @@ suite("presentationFor", function () {
   })
 
   test.each(["EACCES", "EPERM", "UNKNOWN"])(
-    "a CLI that %s on spawn points at the security policy and the administrator guide",
+    "a CLI that %s on spawn names the security policy and IT support",
     function (code) {
       const presentation = presentationFor(Object.assign(new SpawnError(`spawn ${code}`), { code }))
 
       expect(presentation.message).toContain("security policy")
-      expect(presentation.message).toContain("docs/administrators.md")
+      expect(presentation.message).toContain("IT support")
       expect(presentation.message).not.toContain("antivirus program may")
     },
   )

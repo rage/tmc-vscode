@@ -13,7 +13,7 @@ Running tests locally may also reach your toolchain's package servers, such as M
 
 ## The TestMyCode tools do not start or will not download
 
-The tools are a program the extension downloads into its own folder, `cli` under the extension's VS Code global storage (on Windows under `%APPDATA%\Code\User\globalStorage\`). If the download fails, check that `download.mooc.fi` is reachable. If the program will not start, an antivirus or application-control policy may be blocking it: allow that folder. Administrators: see [administrators.md](administrators.md).
+The tools are a program the extension downloads into its own folder: on Windows `%LOCALAPPDATA%\moocfi.test-my-code\cli`, elsewhere `cli` under the extension's VS Code global storage. TestMyCode's Help screen shows the exact folder. If the download fails, check that `download.mooc.fi` is reachable. If the program will not start, an antivirus program may be blocking it: allow that folder. On a managed computer, a security policy may block it; ask your IT support to allow it.
 
 ## Behind a proxy
 

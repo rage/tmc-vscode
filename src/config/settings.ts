@@ -80,11 +80,6 @@ export default class Settings implements vscode.Disposable {
     return Settings._configuration().get<string>("javaHome", "").trim()
   }
 
-  /** A CLI the student installed themselves, or `""` to have the extension download it. */
-  public getCliPath(): string {
-    return Settings._configuration().get<string>("cliPath", "").trim()
-  }
-
   /** VS Code's own proxy settings (`http.proxy`, `http.noProxy`), which the CLI cannot read. */
   public getHttpProxy(): { proxy: string; noProxy: string[] } {
     const http = vscode.workspace.getConfiguration("http")

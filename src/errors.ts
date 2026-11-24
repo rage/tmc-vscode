@@ -411,10 +411,6 @@ const REPORT_ISSUE_ACTION: ErrorAction = {
   command: "workbench.action.openIssueReporter",
 }
 
-/** Where administrators learn which executable to allow. */
-const ADMINISTRATOR_GUIDE_URL =
-  "https://github.com/rage/tmc-vscode/blob/master/docs/administrators.md"
-
 /** The errno names a security policy raises when it refuses to run a file that is there. */
 const POLICY_DENIAL_CODES = ["EACCES", "EPERM", "UNKNOWN"]
 
@@ -440,8 +436,8 @@ function spawnFailurePresentation(error: SpawnError): ErrorPresentation {
       if (error.code !== undefined && POLICY_DENIAL_CODES.includes(error.code)) {
         return {
           message:
-            "This computer would not run the TestMyCode tools; a security policy may be blocking them. " +
-            `An administrator may need to allow them, see ${ADMINISTRATOR_GUIDE_URL}.`,
+            "This computer would not run the TestMyCode tools; a security policy may be blocking " +
+            "them. Ask your IT support to allow them.",
           actions: [showHelp],
         }
       }

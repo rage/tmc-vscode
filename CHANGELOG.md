@@ -41,7 +41,7 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - Courses that do not allow AI cannot be worked on in editors with AI built in, such as Cursor or Windsurf.
 - The log is redacted like Show Details, and starts with the platform, tools version and servers.
 - The downloaded TestMyCode tools are checked against checksums built into the extension; an interrupted download resumes, and slow connections have no overall time limit.
-- New setting `testMyCode.cliPath` points to an administrator-installed TestMyCode tools binary. On Windows the tools are kept in the local profile instead of the roaming one, and on musl Linux the musl build is used.
+- On Windows the TestMyCode tools are kept in the local profile instead of the roaming one, and on musl Linux the musl build is used. A security policy that blocks them is named, with advice to ask IT support.
 - VS Code's `http.proxy` settings are passed to the TestMyCode tools.
 - Dates in sentences are formatted in English with their time zone. Screens keep focus after actions and dismissals, and the login code is spelled out for screen readers.
 - Updated TMC-langs to 0.42.1.
