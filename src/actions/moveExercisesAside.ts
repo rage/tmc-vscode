@@ -41,9 +41,26 @@ export async function moveExercisesAside(
   if (!(await closeExerciseEditors(folder))) {
     return Err(new Error("Some of the exercises' editors are still open."))
   }
+  // Entry by entry, without graceful-fs's minute of silent retries, to name what is held.
   try {
-    await fs.move(projectsDirectory, target)
-    await fs.ensureDir(projectsDirectory)
+    await fs.ensureDir(target)
+    for (const entry of await fs.readdir(projectsDirectory)) {
+      try {
+        await fs.promises.rename(path.join(projectsDirectory, entry), path.join(target, entry))
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code
+        const isHeld = code === "EBUSY" || code === "EPERM" || code === "EACCES"
+        return Err(
+          new FileSystemError(
+            e,
+            isHeld
+              ? `${entry} is in use, so the exercises could not all be moved to ${target}. ` +
+                  "Close terminals, programs and other VS Code windows using it, then log in again."
+              : `Failed to move ${entry} to ${target}.`,
+          ),
+        )
+      }
+    }
   } catch (e) {
     return Err(new FileSystemError(e, `Failed to move ${projectsDirectory} to ${target}.`))
   }
@@ -55,6 +72,12 @@ export async function moveExercisesAside(
   }
   return Ok(target)
 }
+
+/** Names, in the exercises folder, the folder a bring-back is moving exercises from. */
+const BRING_BACK_MARKER = ".tmc-bringing-back"
+
+/** Files the OS puts in any folder, which do not make the exercises folder hold exercises. */
+const OS_METADATA_FILES = new Set([".ds_store", "thumbs.db", "desktop.ini", BRING_BACK_MARKER])
 
 /**
  * Moves exercises moved aside by {@link moveExercisesAside} back into the exercises folder.
@@ -70,16 +93,27 @@ export async function bringBackMovedExercises(
   if (!projectsDirectory) {
     return Err(new Error("The exercises folder is not known."))
   }
+  const marker = path.join(projectsDirectory, BRING_BACK_MARKER)
   try {
-    const entries = await fs.readdir(projectsDirectory).catch(() => [])
-    if (entries.length > 0) {
+    const entries = (await fs.readdir(projectsDirectory).catch(() => [])).filter(
+      (entry) => !OS_METADATA_FILES.has(entry.toLowerCase()),
+    )
+    const resumedFrom = await fs.readFile(marker, "utf-8").catch(() => undefined)
+    // A bring-back cut short left the marker, and its own entries, behind.
+    if (entries.length > 0 && resumedFrom !== folder) {
       return Ok(false)
     }
     // Fills the folder rather than replacing it: every tmc-langs call recreates a missing one.
     await fs.ensureDir(projectsDirectory)
+    await fs.writeFile(marker, folder)
     for (const entry of await fs.readdir(folder)) {
-      await fs.move(path.join(folder, entry), path.join(projectsDirectory, entry))
+      const destination = path.join(projectsDirectory, entry)
+      if (await fs.pathExists(destination)) {
+        continue
+      }
+      await fs.move(path.join(folder, entry), destination)
     }
+    await fs.remove(marker)
     await fs.rmdir(folder)
   } catch (e) {
     return Err(new FileSystemError(e, `Failed to move ${folder} back to ${projectsDirectory}.`))

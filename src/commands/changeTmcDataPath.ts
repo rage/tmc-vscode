@@ -30,6 +30,18 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   if (!newPath) {
     return
   }
+  const risk = riskyFolderReason(newPath.fsPath)
+  if (risk) {
+    const isMoving = await dialog.choose(
+      `${risk} Exercises work best in a local folder that no app syncs, such as C:\\TMC.`,
+      { detail: "Tests and submissions may fail there, or files may be held or duplicated." },
+      ["Move Anyway", true],
+      ["Cancel", false],
+    )
+    if (!isMoving) {
+      return
+    }
+  }
 
   Logger.info(`Moving the exercises folder to ${newPath.fsPath}`)
   const res = await withOperation(
@@ -57,4 +69,32 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
       (): void => void vscode.commands.executeCommand("tmcTreeView.refreshCourses"),
     ])
   }
+}
+
+const SYNCED_FOLDER_NAMES = /[\\/](OneDrive[^\\/]*|Dropbox|Google Drive|iCloud Drive|Box)([\\/]|$)/i
+
+/** Why `folder` is a poor place for exercises, as a sentence, or `undefined` when it is fine. */
+export function riskyFolderReason(
+  folder: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const syncRoots = [env.OneDrive, env.OneDriveCommercial, env.OneDriveConsumer].filter(
+    (root): root is string => !!root,
+  )
+  if (
+    SYNCED_FOLDER_NAMES.test(folder) ||
+    syncRoots.some((root) => folder.toLowerCase().startsWith(root.toLowerCase()))
+  ) {
+    return `${folder} is synced to the cloud.`
+  }
+  if (/^(\\\\|\/\/)/.test(folder)) {
+    return `${folder} is on a network drive.`
+  }
+  if (/^\/(media|mnt|Volumes)\//.test(folder)) {
+    return `${folder} may be on a removable or network drive.`
+  }
+  if (folder.length > 120) {
+    return `${folder} is a long path, and the exercises' own files add to it.`
+  }
+  return undefined
 }

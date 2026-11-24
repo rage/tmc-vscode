@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
-import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
+import { changeTmcDataPath, riskyFolderReason } from "../../commands/changeTmcDataPath"
 import type Resources from "../../config/resources"
 import { Logger } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -143,5 +143,24 @@ suite("Change TMC data path command", function () {
 
     expect(notifications).toEqual([])
     expect(errors).toEqual(["Failed to move the exercises folder."])
+  })
+})
+
+suite("riskyFolderReason", function () {
+  test.each([
+    ["C:\\Users\\a\\OneDrive\\TMC", "synced to the cloud"],
+    ["/home/a/Dropbox/tmc", "synced to the cloud"],
+    ["\\\\server\\share\\tmc", "network drive"],
+    ["/media/usb/tmc", "removable or network drive"],
+  ])("warns about %s", (folder, reason) => {
+    expect(riskyFolderReason(folder, {})).toContain(reason)
+  })
+
+  test("warns about a folder under the OneDrive the environment names", function () {
+    expect(riskyFolderReason("D:\\Sync\\tmc", { OneDrive: "D:\\Sync" })).toContain("synced")
+  })
+
+  test("accepts a local folder", function () {
+    expect(riskyFolderReason("/home/a/tmc", {})).toBeUndefined()
   })
 })
