@@ -4,13 +4,17 @@ import type * as vscode from "vscode"
 import type { MoocAccountActions } from "../../api/moocAuthenticationProvider"
 import { MoocAuthenticationProvider } from "../../api/moocAuthenticationProvider"
 
-function harness(isLoggedIn: boolean): {
+function harness(
+  isLoggedIn: boolean,
+  label?: { current: string | undefined },
+): {
   provider: MoocAuthenticationProvider
   account: MoocAccountActions
 } {
   let loggedIn = isLoggedIn
   const account = {
     isLoggedIn: () => loggedIn,
+    accountLabel: () => label?.current,
     login: vi.fn(async () => {
       loggedIn = true
       return true
@@ -81,6 +85,27 @@ suite("MoocAuthenticationProvider", function () {
     expect(events.map((event) => [event.added?.length, event.removed?.length])).toEqual([
       [1, 0],
       [0, 1],
+    ])
+  })
+
+  test("a named account replaces the unnamed entry, leaving exactly one", async function () {
+    const label: { current: string | undefined } = { current: undefined }
+    const { provider } = harness(true, label)
+    const events: vscode.AuthenticationProviderAuthenticationSessionsChangeEvent[] = []
+    provider.onDidChangeSessions((event) => void events.push(event))
+
+    label.current = "Ada (ada@example.com)"
+    provider.setLoggedIn(true)
+    provider.setLoggedIn(true)
+
+    const sessions = await provider.getSessions(undefined)
+    expect(sessions.map((session) => session.account.label)).toEqual([
+      "Ada (ada@example.com) (courses.mooc.fi)",
+    ])
+    expect(events).toHaveLength(1)
+    expect(events[0]?.removed?.map((session) => session.account.label)).toEqual(["courses.mooc.fi"])
+    expect(events[0]?.added?.map((session) => session.account.label)).toEqual([
+      "Ada (ada@example.com) (courses.mooc.fi)",
     ])
   })
 })

@@ -78,7 +78,7 @@ import { failedUpdates } from "./ui/failedUpdates"
 import { JobProgressNotifications } from "./ui/jobProgressNotifications"
 import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
 import { shownCourseHome } from "./ui/shownCourseHome"
-import { AccountStatusBarItem } from "./ui/statusBarAccount"
+import { AccountStatusBarItem, accountLabel } from "./ui/statusBarAccount"
 import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
@@ -578,6 +578,7 @@ async function activateInner(
     authState.subscribe(() => account.update(authState))
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
+      accountLabel: () => accountLabel(authState.session),
       login: async () => (await login(readyContext)) === "loggedIn",
       logout: () => logout(readyContext),
     })
