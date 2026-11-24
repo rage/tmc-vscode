@@ -38,6 +38,7 @@ import {
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
   InvalidTokenError,
+  LegacyTmcLoginEndedError,
   NotEnrolledError,
   NotFoundError,
   OutOfTriesError,
@@ -166,12 +167,12 @@ suite("tmc langs cli spec", function () {
     // A backend-rejected token ends a session too: the CLI deletes the credential, so the extension
     // must be told. Not get-course-data: its LangsError wrapping hides the 401 the CLI otherwise
     // turns into invalid-token (see "should not get existing api data in general").
-    test("reports a logout when the backend rejects the stored token", async function () {
+    test("drops a stored tmc.mooc.fi token the backend rejects, without ending the session", async function () {
       writeCredentials(configDir, "no-longer-accepted")
 
       const result = await tmc.getCourses("test")
-      expect(result.val).to.be.instanceOf(InvalidTokenError)
-      expect(onLoggedOutCalls).to.be.equal(1)
+      expect(result.val).to.be.instanceOf(LegacyTmcLoginEndedError)
+      expect(onLoggedOutCalls).to.be.equal(0)
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     })
 
