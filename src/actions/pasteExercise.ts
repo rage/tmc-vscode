@@ -51,7 +51,7 @@ export async function pasteExercise(
         ),
       )
   }
-  if (course.ok && course.val.kind === "mooc" && course.val.data.examAnswerableUntil) {
+  if (course.ok && LocalCourseData.isMoocExam(course.val)) {
     return Err(new Error("Get Help is not available in an exam."))
   }
   const trusted = checkWorkspaceTrust(actionContext)

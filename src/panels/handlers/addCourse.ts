@@ -17,7 +17,7 @@ import { withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL } from "../../config/constants"
 import { AuthorizationError } from "../../errors"
 import type { LoginOptions } from "../../ui/loginScreens"
-import { formatDateTime, Logger, openWebLink, PROSE_LOCALE } from "../../utilities"
+import { formatDateTime, Logger, openWebLink, parseDate, PROSE_LOCALE } from "../../utilities"
 import { showNextWalkthroughStep, walkthroughProgressOf } from "../../window/walkthrough"
 import type { HandlerMap, PanelHost } from "../router"
 
@@ -30,7 +30,11 @@ export const addCourseHandlers = {
       if (!panel) {
         return Err(NOT_SHOWN)
       }
-      const listing = await actions.listEnrolledMoocCourses(actionContext)
+      // listMoocExams gates itself on the setting and login, so it need not wait for the listing.
+      const [listing, exams] = await Promise.all([
+        actions.listEnrolledMoocCourses(actionContext),
+        actions.listMoocExams(actionContext),
+      ])
       if (listing === actions.MOOC_DISABLED) {
         return Ok({ kind: "disabled" })
       }
@@ -41,14 +45,13 @@ export const addCourseHandlers = {
         Logger.warn("Failed to list the courses.mooc.fi courses", listing.val)
         return listing
       }
-      const exams = await actions.listMoocExams(actionContext)
       const examItems = exams.map((exam) =>
         catalogCourse(actionContext, panel, {
           id: makeMoocKind({ moocCourseId: exam.id }),
           organizationSlug: "",
           name: exam.name,
           organization: "Exam",
-          description: `Answers close on ${formatDateTime(new Date(exam.answerable_until), PROSE_LOCALE)}.`,
+          description: examClosingNote(exam),
           exam,
         }),
       )
@@ -255,4 +258,9 @@ function optionalDescription(text: string | null): { description?: string } {
 function shownAddCourse(host: PanelHost, id: number): AddCoursePanel | undefined {
   const route = host.route
   return route?.type === "AddCourse" && route.id === id ? route : undefined
+}
+
+function examClosingNote(exam: MoocExam): string {
+  const closesAt = parseDate(exam.answerable_until)
+  return closesAt ? `Answers close on ${formatDateTime(closesAt, PROSE_LOCALE)}.` : ""
 }

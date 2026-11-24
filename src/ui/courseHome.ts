@@ -23,6 +23,7 @@ import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
 import { installSentence, missingLanguageExtensions } from "../api/languageExtensions"
 import {
+  countOf,
   findNextDateAfter,
   formatDateTime,
   formatDeadlineBriefly,
@@ -226,6 +227,7 @@ export function buildCourseHomeView(
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
         const { materialUrl, pendingReview, solutionUrl, submitRefusal, triesLeft } = ex
+        const isInReview = submitRefusal !== undefined && isLockedForReview(ex.mooc, submitRefusal)
         return {
           id: ex.id,
           name: ex.name,
@@ -235,17 +237,13 @@ export function buildCourseHomeView(
           ...(triesLeft === undefined ? {} : { triesLeft }),
           ...(submitRefusal
             ? {
-                submitRefusal: isLockedForReview(ex.mooc, submitRefusal)
-                  ? {
-                      label: "in review",
-                      sentence: REVIEWING_STAGE_NOTES[ex.mooc?.reviewingStage ?? ""] ?? "",
-                      icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
-                    }
-                  : {
-                      label: SUBMIT_REFUSAL_LABELS[submitRefusal],
-                      sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
-                      icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
-                    },
+                submitRefusal: {
+                  label: isInReview ? "in review" : SUBMIT_REFUSAL_LABELS[submitRefusal],
+                  sentence: isInReview
+                    ? (REVIEWING_STAGE_NOTES[ex.mooc?.reviewingStage ?? ""] ?? "")
+                    : submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                  icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
+                },
               }
             : {}),
           awardedPoints: ex.awardedPoints,
@@ -264,7 +262,7 @@ export function buildCourseHomeView(
           isUpdateable: ex.isUpdateable,
           ...(materialUrl ? { materialUrl } : {}),
           ...(solutionUrl ? { solutionUrl } : {}),
-          ...reviewFields(ex.mooc, locale),
+          ...reviewFields(ex.mooc, locale, isInReview),
           ...(ex.mooc?.instructions ? { instructions: ex.mooc.instructions } : {}),
         }
       }),
@@ -315,8 +313,12 @@ const TEACHER_DECISIONS: Record<string, string> = {
 function reviewFields(
   exercise: SharedMoocCourseExercise | undefined,
   locale: string,
+  isStageShownAsRefusal: boolean,
 ): Pick<CourseHomeExercise, "reviewNote" | "teacherReview"> {
-  const note = exercise?.reviewingStage ? REVIEWING_STAGE_NOTES[exercise.reviewingStage] : undefined
+  const note =
+    exercise?.reviewingStage && !isStageShownAsRefusal
+      ? REVIEWING_STAGE_NOTES[exercise.reviewingStage]
+      : undefined
   const review = exercise?.teacherReview
   const reviewedAt = review ? parseDate(review.createdAt) : null
   const decision = review ? TEACHER_DECISIONS[review.decision] : undefined
@@ -327,7 +329,7 @@ function reviewFields(
           teacherReview: {
             sentence:
               `A teacher reviewed your answer${reviewedAt ? ` on ${formatDateTime(reviewedAt, locale)}` : ""}` +
-              `: ${review.scoreGiven} ${review.scoreGiven === 1 ? "point" : "points"}` +
+              `: ${countOf(review.scoreGiven, "point")}` +
               `${decision ? `, ${decision}` : ""}.`,
             justification: review.justification,
           },

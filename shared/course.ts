@@ -478,6 +478,11 @@ export namespace LocalCourseData {
     return lcd.kind === "tmc" && lcd.data.perhapsExamMode
   }
 
+  /** Whether the course is a courses.mooc.fi exam, whose id is an exam id; see {@link isExamMode}. */
+  export function isMoocExam(lcd: LocalCourseData): boolean {
+    return lcd.kind === "mooc" && !!lcd.data.examAnswerableUntil
+  }
+
   export function getNewExercises(lcd: LocalCourseData): ExerciseIdentifier[] {
     return match(
       lcd,

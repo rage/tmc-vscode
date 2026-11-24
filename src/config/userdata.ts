@@ -169,12 +169,7 @@ export class UserData {
     if (persistentData) {
       this._tmcCourses = new Map(persistentData.courses.map((x) => [x.id, x]))
       this._moocCourses = new Map(persistentData.mooc_courses.map((x) => [x.id, x]))
-
-      for (const course of this.getCourses()) {
-        for (const exercise of LocalCourseData.getExercises(course)) {
-          this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
-        }
-      }
+      this._rebuildPassed()
     } else {
       this._tmcCourses = new Map()
       this._moocCourses = new Map()
@@ -531,10 +526,7 @@ export class UserData {
    * {@link restoreCourses} puts them back.
    */
   public async takeAllCourses(): Promise<Result<StoredCourses, Error>> {
-    const taken = {
-      courses: Array.from(this._tmcCourses.values()),
-      mooc_courses: Array.from(this._moocCourses.values()),
-    }
+    const taken = this._snapshot()
     this._tmcCourses.clear()
     this._moocCourses.clear()
     this._passedExercises.clear()
@@ -554,11 +546,7 @@ export class UserData {
         this._moocCourses.set(course.id, course)
       }
     }
-    for (const course of this.getCourses()) {
-      for (const exercise of LocalCourseData.getExercises(course)) {
-        this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
-      }
-    }
+    this._rebuildPassed()
     return this._updatePersistentData()
   }
 
@@ -595,11 +583,7 @@ export class UserData {
       if (this._mergeStored()) {
         this._coursesChanged.fire(undefined)
       }
-      const snapshot = {
-        courses: Array.from(this._tmcCourses.values()),
-        mooc_courses: Array.from(this._moocCourses.values()),
-      }
-      await this._storage.updateUserData(snapshot, { isMoocOnlyChange })
+      await this._storage.updateUserData(this._snapshot(), { isMoocOnlyChange })
       this._rememberStoredIds()
     })
   }
@@ -632,15 +616,26 @@ export class UserData {
       isRefreshingOthers,
     )
     if (tmc || mooc) {
-      this._passedExercises.clear()
-      for (const course of this.getCourses()) {
-        for (const exercise of LocalCourseData.getExercises(course)) {
-          this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
-        }
-      }
+      this._rebuildPassed()
     }
     this._rememberStoredIds()
     return tmc || mooc
+  }
+
+  private _snapshot(): StoredCourses {
+    return {
+      courses: Array.from(this._tmcCourses.values()),
+      mooc_courses: Array.from(this._moocCourses.values()),
+    }
+  }
+
+  private _rebuildPassed(): void {
+    this._passedExercises.clear()
+    for (const course of this.getCourses()) {
+      for (const exercise of LocalCourseData.getExercises(course)) {
+        this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
+      }
+    }
   }
 
   private _rememberStoredIds(): void {

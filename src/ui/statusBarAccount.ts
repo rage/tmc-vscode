@@ -88,24 +88,16 @@ export class AccountStatusBarItem implements vscode.Disposable {
   /** Follows `AuthState`. */
   public update(account: AccountState): void {
     const label = accountLabel(account.session)
-    if (label !== this._label) {
+    const status = statusOf(account)
+    if (label !== this._label || status !== this._status) {
       this._label = label
-      this._status = statusOf(account)
+      this._status = status
       this._render()
-      return
     }
-    this._setStatus(statusOf(account))
   }
 
   public dispose(): void {
     this._item.dispose()
-  }
-
-  private _setStatus(status: AccountStatus): void {
-    if (status !== this._status) {
-      this._status = status
-      this._render()
-    }
   }
 
   private _render(): void {

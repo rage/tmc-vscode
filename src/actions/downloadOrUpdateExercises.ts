@@ -597,7 +597,5 @@ function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>):
 
 function isStoredExam(actionContext: ReadyActionContext, courseId: CourseIdentifier): boolean {
   const stored = actionContext.startup.userData.getCourse(courseId)
-  return (
-    stored.ok && stored.val.kind === "mooc" && stored.val.data.examAnswerableUntil !== undefined
-  )
+  return stored.ok && LocalCourseData.isMoocExam(stored.val)
 }

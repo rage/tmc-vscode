@@ -1,9 +1,11 @@
+import * as path from "path"
+
 import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import { Logger } from "../utilities"
+import { isPathInside, Logger } from "../utilities"
 
 /** Asks for a new folder for the extension's data and moves the exercises there. */
 export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
@@ -83,7 +85,7 @@ export function riskyFolderReason(
   )
   if (
     SYNCED_FOLDER_NAMES.test(folder) ||
-    syncRoots.some((root) => folder.toLowerCase().startsWith(root.toLowerCase()))
+    syncRoots.some((root) => isPathInside(root, folder, path.win32))
   ) {
     return `${folder} is synced to the cloud.`
   }

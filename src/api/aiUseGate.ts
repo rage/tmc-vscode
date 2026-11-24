@@ -11,6 +11,7 @@ import type { AiRestrictionLapse, WorkspaceFileUnwritable } from "./aiRestrictio
 import { isAiAllowed } from "./aiRestriction"
 import type Dialog from "./dialog"
 import type { NotificationButton } from "./dialog"
+import type { WorkspaceFileProblem } from "./workspaceManager"
 
 /** An AI extension from {@link AI_EXTENSIONS} that is enabled in this window. */
 export interface EnabledAiExtension {
@@ -128,28 +129,23 @@ export async function warnOfUnwritableWorkspaceFile(
   await dialog.warningNotification(error.message, ...buttons)
 }
 
+/** File problems fixed outside VS Code, so the refusal reveals the file. */
+const HELD_FILE_SENTENCES: Partial<Record<WorkspaceFileProblem, (fileName: string) => string>> = {
+  readOnly: (fileName: string) => `${fileName} is read-only. Make it writable and try again.`,
+  inUse: (fileName: string) =>
+    `another program, such as a sync app or antivirus, holds ${fileName}. Close it and try again.`,
+  protected: (fileName: string) =>
+    `this computer does not let VS Code change ${fileName}, as folder protection such as ` +
+    "Windows Controlled Folder Access can. Allow VS Code and try again.",
+}
+
 function refusalForUnwritableFile(lapse: WorkspaceFileUnwritable): Refusal {
   const notApplied = "AI settings in the course workspace couldn't be applied"
   const fileName = path.basename(lapse.file.fsPath)
-  if (lapse.problem === "readOnly") {
+  const sentence = lapse.problem && HELD_FILE_SENTENCES[lapse.problem]
+  if (sentence) {
     return {
-      error: new AiUseRefusedError(
-        `${notApplied}: ${fileName} is read-only. Make it writable and try again.`,
-        "Reveal File",
-      ),
-      showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
-    }
-  }
-  if (lapse.problem === "inUse" || lapse.problem === "protected") {
-    return {
-      error: new AiUseRefusedError(
-        lapse.problem === "inUse"
-          ? `${notApplied}: another program, such as a sync app or antivirus, holds ${fileName}. ` +
-              "Close it and try again."
-          : `${notApplied}: this computer does not let VS Code change ${fileName}, as folder ` +
-              "protection such as Windows Controlled Folder Access can. Allow VS Code and try again.",
-        "Reveal File",
-      ),
+      error: new AiUseRefusedError(`${notApplied}: ${sentence(fileName)}`, "Reveal File"),
       showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
     }
   }

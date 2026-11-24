@@ -87,6 +87,7 @@ import {
   cliFolder,
   legacyCliFolder,
   Logger,
+  semVerCompare,
   setRedactedExtensionStorage,
   versionChangeSince,
 } from "./utilities"
@@ -811,7 +812,7 @@ async function activateInner(
       isUnasked: true,
     }).catch((e) => Logger.warn("Could not open the walkthrough", e))
   } else if (readyContext && versionChange === "updated") {
-    if (isMajorUpdate(previousVersion, EXTENSION_VERSION)) {
+    if ((semVerCompare(EXTENSION_VERSION, previousVersion ?? "", "major") ?? 0) > 0) {
       void dialog.notification(
         `TestMyCode ${EXTENSION_VERSION} looks different: your courses are in the TestMyCode view, ` +
           "Run Tests and Submit are buttons in the editor title, and the old Ctrl+Shift+T, C and A " +
@@ -840,12 +841,3 @@ async function activateInner(
 // Everything activation starts is registered in `context.subscriptions`, which VS Code
 // disposes for us; this exists because the extension API requires the export.
 export function deactivate(): void {}
-
-/** Whether `current` is a new major version over `previous`, which a student must be told about. */
-function isMajorUpdate(previous: string | undefined, current: string): boolean {
-  return Number.isFinite(majorOf(previous)) && majorOf(current) > majorOf(previous)
-}
-
-function majorOf(version: string | undefined): number {
-  return Number(version?.split(".")[0])
-}

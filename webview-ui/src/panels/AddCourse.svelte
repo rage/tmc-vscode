@@ -213,10 +213,12 @@
     return () => clearTimeout(timer)
   })
 
+  const languageNames = new Intl.DisplayNames(["en"], { type: "language" })
+
   /** "Finnish" for "fi-FI"; the code itself when the browser has no name for it. */
   function languageName(code: string): string {
     try {
-      return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code
+      return languageNames.of(code) ?? code
     } catch {
       return code
     }

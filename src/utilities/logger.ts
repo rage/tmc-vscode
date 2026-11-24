@@ -163,14 +163,15 @@ function replaceDirectory(
   return text.replace(pattern, replacement)
 }
 
-function currentUsername(): string | undefined {
+// Once: on a directory-service machine every lookup can go through NSS.
+const currentUsername = _.once((): string | undefined => {
   try {
     return os.userInfo().username
   } catch {
     // A directory-service account may have no passwd entry.
     return env["USER"] ?? env["USERNAME"]
   }
-}
+})
 
 export class Logger {
   public static output: OutputChannel | undefined

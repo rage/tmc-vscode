@@ -232,23 +232,16 @@ export function moocGradingView(
   if (status.status === "no-grading-yet") {
     return { ...emptyView, ...stillGrading, headline: "Grading has not started yet" }
   }
-  if (status.status === "grading-hidden") {
-    return {
-      ...emptyView,
-      phase: "finished",
-      headline: "Submission received",
-      tone: "info",
-      explanation: "Its result is shown once the exam ends.",
-    }
-  }
-  if (status.status === "unrecognized") {
+  if (status.status === "grading-hidden" || status.status === "unrecognized") {
     return {
       ...emptyView,
       phase: "finished",
       headline: "Submission received",
       tone: "info",
       explanation:
-        "This version of TestMyCode cannot show its grading. See its result on the course page.",
+        status.status === "grading-hidden"
+          ? "Its result is shown once the exam ends."
+          : "This version of TestMyCode cannot show its grading. See its result on the course page.",
     }
   }
   const { grading } = status

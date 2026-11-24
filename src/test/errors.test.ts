@@ -120,7 +120,7 @@ suite("presentationFor", function () {
   test.each([
     [new CertificateError("tls"), "tmc.openTroubleshooting"],
     [new ToolchainMissingError("python not found"), "tmc.openTroubleshooting"],
-    [new FileAccessError("in-use", "held"), "tmc.openTroubleshooting"],
+    [new FileAccessError("held"), "tmc.openTroubleshooting"],
     [new ProjectsDirUnreachableError("gone"), "tmc.changeTmcDataPath"],
     [new LoginClientRejectedError("client"), "workbench.extensions.action.checkForUpdates"],
   ])("%s offers its remedy", (error, command) => {

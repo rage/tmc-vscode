@@ -277,20 +277,9 @@ export class FileSystemError extends BaseError {
   public override readonly name = "File System Error"
 }
 
-/** Why the CLI could not use a file; see {@link FileAccessError}. */
-export type FileAccessFailure = "in-use" | "permission-denied" | "path-too-long" | "disk-full"
-
 /** The CLI could not read or write a file the user can do something about; `path` names it. */
 export class FileAccessError extends BaseError {
   public override readonly name = "File Access Error"
-
-  public constructor(
-    public readonly failure: FileAccessFailure,
-    message: string,
-    details?: string,
-  ) {
-    super(message, details)
-  }
 }
 
 /** A file TestMyCode keeps on this computer could not be read. */

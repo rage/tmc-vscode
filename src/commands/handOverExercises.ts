@@ -13,7 +13,7 @@ import type { ReadyActionContext } from "../actions/types"
 import type { NotificationButton } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { submissionViews } from "../ui/submissionViews"
-import { Logger } from "../utilities"
+import { Logger, SerialQueue } from "../utilities"
 
 function openFolderButton(folder: string): NotificationButton {
   return [
@@ -30,12 +30,10 @@ function openFolderButton(folder: string): NotificationButton {
  */
 export function handOverExercises(actionContext: ReadyActionContext): Promise<void> {
   // A login and the account check it triggers must not both offer to move the exercises.
-  const next = handOverQueue.then(() => handOverOnce(actionContext))
-  handOverQueue = next.catch(() => undefined)
-  return next
+  return handOverQueue.run(() => handOverOnce(actionContext))
 }
 
-let handOverQueue: Promise<void> = Promise.resolve()
+const handOverQueue = new SerialQueue()
 
 async function handOverOnce(actionContext: ReadyActionContext): Promise<void> {
   const accountSwitch = await findAccountSwitch(actionContext)

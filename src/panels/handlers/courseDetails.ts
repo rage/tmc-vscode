@@ -232,12 +232,13 @@ async function runCourseAction(
       await vscode.commands.executeCommand("tmc.removeCourse", courseId)
       return
     case "addSuccessorCourse": {
-      const view = buildCourseHomeView(actionContext, courseId)
-      const successor = view.ok ? view.val.successor : undefined
-      if (!successor) {
+      const course = actionContext.startup.userData.getCourse(courseId)
+      const successorCourseId =
+        course.ok && course.val.kind === "mooc" ? course.val.data.successorCourseId : undefined
+      if (!successorCourseId) {
         return
       }
-      const successorId = makeMoocKind({ moocCourseId: successor.courseId })
+      const successorId = makeMoocKind({ moocCourseId: successorCourseId })
       if (actionContext.startup.userData.getCourse(successorId).ok) {
         await vscode.commands.executeCommand("tmc.courseDetails", successorId)
         return

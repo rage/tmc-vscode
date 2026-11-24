@@ -22,7 +22,7 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import { isSamePath, Logger } from "../utilities"
+import { isSamePath, Logger, SerialQueue } from "../utilities"
 import { missingAiOffSettings } from "./aiRestriction"
 import { languageExtensionForLanguageId } from "./languageExtensions"
 
@@ -97,18 +97,6 @@ async function updateWorkspaceFoldersAndWait(
   } finally {
     listener?.dispose()
     clearTimeout(timer)
-  }
-}
-
-/** Runs tasks one at a time, each once every earlier one has settled. */
-class SerialQueue {
-  private _tail: Promise<unknown> = Promise.resolve()
-
-  /** Settles as `task` does; a rejection does not stop the tasks queued after it. */
-  public run<T>(task: () => T | Thenable<T>): Promise<T> {
-    const result = this._tail.then(task)
-    this._tail = result.catch(() => undefined)
-    return result
   }
 }
 

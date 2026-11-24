@@ -210,10 +210,8 @@
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
-            {#if exercise.pendingReview}
-              <span>{exercise.pendingReview.label}</span>
-            {:else if refusal}
-              <span>{refusal.label}</span>
+            {#if reason}
+              <span>{reason.label}</span>
             {:else if dueDeadline}
               <button
                 type="button"

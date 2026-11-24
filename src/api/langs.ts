@@ -55,7 +55,7 @@ import {
   TMC_BACKEND_URL,
   TRUST_DEV_MOOC_HOST,
 } from "../config/constants"
-import type { FileAccessFailure, InitializationError } from "../errors"
+import type { InitializationError } from "../errors"
 import {
   ArchiveTooLargeError,
   AuthorizationError,
@@ -101,7 +101,7 @@ import {
   UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
-import { sleep } from "../utilities/utils"
+import { countOf, sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
 import { proxyEnvironment } from "./proxyEnvironment"
 
@@ -210,13 +210,14 @@ const MAX_CACHED_RESPONSES = 128
 /** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
 const MAX_LOGGED_ARG_LENGTH = 120
 
-/** A server's Retry-After as words, rounded up to whole minutes from two minutes on. */
-export function formatWait(seconds: number): string {
-  if (seconds < 120) {
-    const whole = Math.max(1, Math.ceil(seconds))
-    return whole === 1 ? "1 second" : `${whole} seconds`
+/** When to try again after a server's Retry-After, rounded up to whole minutes from two on. */
+function retryWait(seconds: number | undefined): string {
+  if (seconds === undefined) {
+    return "in a few minutes"
   }
-  return `${Math.ceil(seconds / 60)} minutes`
+  return seconds < 120
+    ? `in ${countOf(Math.max(1, Math.ceil(seconds)), "second")}`
+    : `in ${Math.ceil(seconds / 60)} minutes`
 }
 
 /**
@@ -1260,7 +1261,15 @@ export default class Langs {
       () => this._submitting("tmc", () => this._fetch(command, "new-submission")),
       () => this._fetch(command, "mooc-paste"),
     )
-    return res.map((pasted) => pasted.paste_url)
+    return res
+      .map((pasted) => pasted.paste_url)
+      .mapErr((error) =>
+        error instanceof RateLimitedError
+          ? Object.assign(error, {
+              message: `You have used Get Help on this exercise too often. Try again ${retryWait(error.retryAfterSeconds)}.`,
+            })
+          : error,
+      )
   }
 
   /**
@@ -1433,11 +1442,7 @@ export default class Langs {
     return {
       result: runOnce().then((res) =>
         res
-          .andThen((x) =>
-            this._checkLangsResponse(x, outputDataKind, auth, current.getStderr(), {
-              isPaste: langsArgs.args.includes("paste"),
-            }),
-          )
+          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, current.getStderr()))
           .mapErr((error) => Object.assign(error, { backend: langsArgs.backend })),
       ),
       interrupt,
@@ -1533,7 +1538,6 @@ export default class Langs {
     outputDataKind: T,
     auth: AuthAttribution = {},
     stderr = "",
-    context: { isPaste?: boolean } = {},
   ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
     // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
     // expected data kind first would misreport every panic and discard its message.
@@ -1574,8 +1578,8 @@ export default class Langs {
       output.retry_after_secs === null || output.retry_after_secs === undefined
         ? undefined
         : Number(output.retry_after_secs)
-    const fileError = (failure: FileAccessFailure, sentence: string): Err<FileAccessError> =>
-      Err(Object.assign(new FileAccessError(failure, sentence, details), { path: filePath }))
+    const fileError = (sentence: string): Err<FileAccessError> =>
+      Err(Object.assign(new FileAccessError(sentence, details), { path: filePath }))
     const inPath = filePath ? ` (${filePath})` : ""
     switch (errorKind) {
       case "connection-error":
@@ -1636,16 +1640,16 @@ export default class Langs {
         )
       case "upload-expired":
         return Err(new UploadExpiredError(message, details))
-      case "rate-limited": {
-        const wait =
-          retryAfterSeconds === undefined
-            ? "in a few minutes"
-            : `in ${formatWait(retryAfterSeconds)}`
-        const sentence = context.isPaste
-          ? `You have used Get Help on this exercise too often. Try again ${wait}.`
-          : `The server is receiving too many requests from your network. Try again ${wait}.`
-        return Err(Object.assign(new RateLimitedError(sentence, details), { retryAfterSeconds }))
-      }
+      case "rate-limited":
+        return Err(
+          Object.assign(
+            new RateLimitedError(
+              `The server is receiving too many requests from your network. Try again ${retryWait(retryAfterSeconds)}.`,
+              details,
+            ),
+            { retryAfterSeconds },
+          ),
+        )
       case "unknown-upload":
         // Never a race: the backend has no record of a file the CLI named for this
         // exercise, so a retry cannot help.
@@ -1746,26 +1750,22 @@ export default class Langs {
         )
       case "file-in-use":
         return fileError(
-          "in-use",
           `Another program is using a file TestMyCode needs${inPath}. Close terminals, running ` +
             "programs and other editors using the exercise folder, then try again. Antivirus " +
             "or a sync app such as OneDrive can also hold files for a moment.",
         )
       case "permission-denied":
         return fileError(
-          "permission-denied",
           `TestMyCode was not allowed to use a file${inPath}. Check that the exercise folder ` +
             "is not read-only or protected, then try again.",
         )
       case "path-too-long":
         return fileError(
-          "path-too-long",
           `A file path is too long for this computer${inPath}. Move the exercises folder ` +
             "closer to the root of the drive, such as C:\\TMC.",
         )
       case "disk-full":
         return fileError(
-          "disk-full",
           `The disk or your home folder quota is full${inPath}. Free some space and try again.`,
         )
       case "toolchain-missing":

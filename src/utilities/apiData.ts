@@ -110,7 +110,7 @@ function instructionsOf(slide: TmcExerciseSlide): Pick<MoocLocalCourseExercise, 
  * The text of Gutenberg blocks, as the exercise service stores an assignment: each block's
  * `attributes.content` HTML, then its inner blocks'.
  */
-export function blockTexts(blocks: unknown): string[] {
+function blockTexts(blocks: unknown): string[] {
   if (!Array.isArray(blocks)) {
     return []
   }
