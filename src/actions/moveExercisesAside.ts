@@ -1,10 +1,9 @@
-import * as path from "path"
-
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
 import { ProjectsRestoreConflictError } from "../errors"
+import { isGoneFromReachableParent } from "../utilities"
 import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -64,10 +63,7 @@ export async function bringBackMovedExercises(
     return Err(new Error("The exercises folder is not known."))
   }
   // langs refuses an absent exercises folder as unreachable; one deleted by hand is just empty.
-  if (
-    !(await fs.pathExists(projectsDirectory)) &&
-    (await fs.pathExists(path.dirname(projectsDirectory)))
-  ) {
+  if (await isGoneFromReachableParent(projectsDirectory)) {
     await fs.ensureDir(projectsDirectory)
   }
   const restored = await langs.restoreProjects(folder)

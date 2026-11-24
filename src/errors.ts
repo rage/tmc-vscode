@@ -610,13 +610,7 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [],
     }
   }
-  if (isSessionLost(error)) {
-    return {
-      message: LOGGED_OUT_MESSAGE,
-      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
-    }
-  }
-  if (error instanceof InsufficientScopeError) {
+  if (isSessionLost(error) || error instanceof InsufficientScopeError) {
     return {
       message: LOGGED_OUT_MESSAGE,
       actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],

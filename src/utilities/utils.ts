@@ -275,3 +275,8 @@ export class SerialQueue {
     return result
   }
 }
+
+/** Whether `folder` is gone from a parent that exists, rather than on a drive that is missing. */
+export async function isGoneFromReachableParent(folder: string): Promise<boolean> {
+  return !(await fs.pathExists(folder)) && (await fs.pathExists(path.dirname(folder)))
+}

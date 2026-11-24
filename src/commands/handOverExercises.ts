@@ -1,5 +1,3 @@
-import * as path from "path"
-
 import * as fs from "fs-extra"
 import * as vscode from "vscode"
 
@@ -13,7 +11,7 @@ import type { ReadyActionContext } from "../actions/types"
 import type { NotificationButton } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { submissionViews } from "../ui/submissionViews"
-import { Logger, SerialQueue } from "../utilities"
+import { isGoneFromReachableParent, Logger, SerialQueue } from "../utilities"
 
 function openFolderButton(folder: string): NotificationButton {
   return [
@@ -139,16 +137,17 @@ async function bringBackOwnExercises(
   const { dialog } = actionContext
   const { accountHandover } = actionContext.startup
   const own = accountHandover.movedAside.filter((moved) => moved.accountIds.includes(accountId))
-  for (const { folder } of own) {
-    // Forgotten only when gone from a reachable place, not when its drive is just missing.
-    if (!(await fs.pathExists(folder)) && (await fs.pathExists(path.dirname(folder)))) {
-      await accountHandover.forgetMovedAside(folder)
-    }
-  }
-  const present = await Promise.all(
-    own.map(async (moved) => (await fs.pathExists(moved.folder)) && moved),
+  const states = await Promise.all(
+    own.map(async (moved) => ({
+      moved,
+      isPresent: await fs.pathExists(moved.folder),
+      isGone: await isGoneFromReachableParent(moved.folder),
+    })),
   )
-  const newest = present.findLast((moved) => moved !== false)
+  for (const { moved } of states.filter(({ isGone }) => isGone)) {
+    await accountHandover.forgetMovedAside(moved.folder)
+  }
+  const newest = states.findLast(({ isPresent }) => isPresent)?.moved
   if (!newest) {
     return
   }

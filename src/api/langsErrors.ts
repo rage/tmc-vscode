@@ -123,6 +123,7 @@ export function langsError(
       : ERROR_CLASS_OF_KIND[kind]
   const error = new ErrorClass(message, details)
   error.langsKind = kind
+  error.backend = backend
   return Object.assign(
     error,
     path === undefined ? {} : { path },

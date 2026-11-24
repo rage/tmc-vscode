@@ -4,7 +4,7 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { Kind, MoocDownloadFailure, TmcDownloadFailure } from "../../shared/langsSchema"
-import type { BackendKind } from "../../shared/lib"
+import type { BackendKind, BaseError } from "../../shared/lib"
 import {
   backendName,
   CourseIdentifier,
@@ -551,10 +551,9 @@ function failureCause(
             details,
           )
         }
-        return langsError({ kind: cause }, details, details, backend)
-      default:
-        return Object.assign(langsError({ kind: cause }, details, details, backend), { backend })
+        break
     }
+    return langsError({ kind: cause }, details, details, backend)
   }
   return new ExerciseUpdateError("The download did not complete.", details)
 }
@@ -564,7 +563,7 @@ function closedChapterError(
   actionContext: ReadyActionContext,
   failures: ExerciseFailure[],
   details: string,
-): ChapterNotOpenError {
+): BaseError {
   const { userData } = actionContext.startup
   const chapter = failures
     .map(({ id }) => {
@@ -573,7 +572,7 @@ function closedChapterError(
     })
     .find(Boolean)
   if (!chapter) {
-    return Object.assign(new ChapterNotOpenError(details), { langsKind: "chapter-not-open-yet" })
+    return langsError({ kind: "chapter-not-open-yet" }, details, details, failures[0]?.id.kind)
   }
   const when = proseDateTime(chapter.opensAt) ?? "later"
   return new ChapterNotOpenError(

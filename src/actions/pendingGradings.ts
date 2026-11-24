@@ -1,7 +1,6 @@
 import type * as vscode from "vscode"
 
-import type { ExerciseIdentifier } from "../../shared/lib"
-import { ExerciseIdentifier as ExerciseId } from "../../shared/lib"
+import { ExerciseIdentifier } from "../../shared/lib"
 
 const PENDING_GRADINGS_KEY = "pendingMoocGradings"
 
@@ -24,19 +23,19 @@ class PendingGradings {
   }
 
   public get(exerciseId: ExerciseIdentifier): PendingGrading | undefined {
-    return this._all()[ExerciseId.key(exerciseId)]
+    return this._all()[ExerciseIdentifier.key(exerciseId)]
   }
 
   public async set(exerciseId: ExerciseIdentifier, pending: PendingGrading): Promise<void> {
     await this._memento?.update(PENDING_GRADINGS_KEY, {
       ...this._all(),
-      [ExerciseId.key(exerciseId)]: pending,
+      [ExerciseIdentifier.key(exerciseId)]: pending,
     })
   }
 
   public async delete(exerciseId: ExerciseIdentifier): Promise<void> {
     const all = this._all()
-    const key = ExerciseId.key(exerciseId)
+    const key = ExerciseIdentifier.key(exerciseId)
     if (key in all) {
       const { [key]: _removed, ...rest } = all
       await this._memento?.update(PENDING_GRADINGS_KEY, rest)
