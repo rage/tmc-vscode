@@ -53,6 +53,25 @@ suite("Storage reads", function () {
     expect(storage.getSessionState()).toEqual(sessionState.v2_0_0)
   })
 
+  test("parses the stored courses again only once another window wrote them", async function () {
+    await storage.updateUserData(userData.v3_0_0)
+    const parse = vi.spyOn(v3.moocLocalCourseDataSchema, "safeParse")
+    expect(storage.getUserData()).toEqual(userData.v3_0_0)
+    expect(parse).not.toHaveBeenCalled()
+
+    const unreadable = { id: "from-a-newer-version", kind: "something new" }
+    await context.globalState.update(v3.USER_DATA_KEY, {
+      ...userData.v3_0_0,
+      mooc_courses: [unreadable],
+    })
+    const error = vi.spyOn(Logger, "error")
+    expect(storage.getUserData()?.mooc_courses).toEqual([])
+    expect(storage.getUserData()?.mooc_courses).toEqual([])
+    expect(error).toHaveBeenCalledOnce()
+    parse.mockRestore()
+    error.mockRestore()
+  })
+
   test("does not report a course catalogue it cannot read as an empty one", async function () {
     const corrupt = { courses: "not a list of courses" }
     await context.globalState.update(v3.USER_DATA_KEY, corrupt)

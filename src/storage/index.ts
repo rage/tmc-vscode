@@ -35,6 +35,8 @@ export default class Storage {
   private _isLegacyMirrorSynced = false
   /** A read found courses this version cannot parse, which writes must keep. */
   private _hasUnreadableCourses = false
+  /** The stored course list last read or written, by identity, and what this version reads of it. */
+  private _lastUserData: { stored: unknown; readable: storage.UserData } | undefined
 
   /** @param memento The extension's `globalState`, behind its `SerializedMemento`. */
   public constructor(memento: vscode.Memento) {
@@ -51,6 +53,10 @@ export default class Storage {
     const stored = this._memento.get<unknown>(storage.USER_DATA_KEY)
     if (stored === undefined) {
       return undefined
+    }
+    // Every write and window focus reads; parsing is only needed once another window wrote.
+    if (this._lastUserData?.stored === stored) {
+      return this._lastUserData.readable
     }
     const lists = storedCourseLists(stored)
     if (!lists) {
@@ -70,7 +76,9 @@ export default class Storage {
       Logger.error(`${skipped} stored courses could not be read; they are kept as they are.`)
     }
     // The stored value's other keys too: a newer version may have added some.
-    return { ...(stored as object), ...readable } as storage.UserData
+    const userData = { ...(stored as object), ...readable } as storage.UserData
+    this._lastUserData = { stored, readable: userData }
+    return userData
   }
 
   /** Whether any course may be stored, readable by this version or not. */
@@ -103,13 +111,17 @@ export default class Storage {
       written && this._hasUnreadableCourses
         ? withUnreadableCourses(written, memento.get<unknown>(storage.USER_DATA_KEY))
         : written
+    this._lastUserData = undefined
     if (isMoocOnlyChange && this._isLegacyMirrorSynced) {
       await memento.update(storage.USER_DATA_KEY, userData)
-      return
+    } else {
+      this._isLegacyMirrorSynced = false
+      await writeUserData(memento, userData)
+      this._isLegacyMirrorSynced = true
     }
-    this._isLegacyMirrorSynced = false
-    await writeUserData(memento, userData)
-    this._isLegacyMirrorSynced = true
+    if (written && userData) {
+      this._lastUserData = { stored: userData, readable: written }
+    }
   }
 
   /** The recorded migration runs as text, for logs and error details. */
