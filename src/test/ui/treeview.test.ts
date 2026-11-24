@@ -527,7 +527,7 @@ suite("CoursesTree", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Closed)]
       const item = onlyExercise({ passed: true, awardedPoints: 1 })
 
-      expect(icon(item)).toEqual(["pass-filled", "testing.iconPassed"])
+      expect(icon(item)).toEqual(["pass-filled", "charts.green"])
       expect(item.contextValue).toBe("exercise.closed.passed.hasModelSolution")
       expect(item.description).toBe("closed · 1/1 points")
     })

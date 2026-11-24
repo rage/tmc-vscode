@@ -22,7 +22,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
 import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
-import { countOf, formatDeadline, formatDeadlineBriefly } from "../../utilities"
+import { countOf, formatDeadline, formatDeadlineBriefly, PROSE_LOCALE } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
 import { pointsText } from "../points"
@@ -249,7 +249,7 @@ export class PartTreeItem extends vscode.TreeItem {
     ])
     this.iconPath = new vscode.ThemeIcon(
       passed === part.exercises.length ? "pass-filled" : "list-tree",
-      passed === part.exercises.length ? new vscode.ThemeColor("testing.iconPassed") : undefined,
+      passed === part.exercises.length ? new vscode.ThemeColor("charts.green") : undefined,
     )
     this.contextValue = [
       "part",
@@ -802,7 +802,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
         ({ course, parts }) =>
           new CourseTreeItem(course, parts, {
             now,
-            locale: vscode.env.language,
+            locale: PROSE_LOCALE,
             isOffline: this._unreachableBackends.has(course.kind),
             activeCourse,
           }),
@@ -873,7 +873,7 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
       break
   }
   if (exercise.passed) {
-    return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
+    return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("charts.green"))
   }
   if (exercise.pendingReview) {
     return new vscode.ThemeIcon(
