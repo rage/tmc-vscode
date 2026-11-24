@@ -14,6 +14,7 @@ import {
   launchVsCode,
   legacyVsix,
   NEXT_VSIX,
+  ROLLBACK_VSIX,
   PINNED_LANGS_VERSION,
   readGlobalState,
 } from "./installedExtension"
@@ -180,6 +181,20 @@ async function runUpgradeScenario(
         await legacy.addCourse(JAVA_COURSE.title, JAVA_COURSE.name)
       })
       expectEditKept(editedFile)
+    })
+
+    await test.step("rollback build: reads the profile 4.x used, and adds a course", async () => {
+      expect(
+        fs.existsSync(ROLLBACK_VSIX),
+        `${ROLLBACK_VSIX} is missing; run bin/packageRollbackVsix.sh`,
+      ).toBe(true)
+      await installVsix(profile, ROLLBACK_VSIX)
+      await withVsCode(profile, "rollback", testInfo, async ({ page }) => {
+        const legacy = new LegacyTmcPage(page)
+        await expectKeptBy355(legacy, isExerciseChecked)
+      })
+      expectEditKept(editedFile)
+      await installVsix(profile, NEXT_VSIX)
     })
 
     await test.step("re-upgrade: nothing is lost, and the course 3.5.5 added shows", async () => {

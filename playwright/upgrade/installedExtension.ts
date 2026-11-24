@@ -19,6 +19,9 @@ const UPGRADE_CACHE_DIR = join(rootPath, ".vscode-test", "upgrade-e2e")
 /** The checkout packaged as an update to {@link LEGACY_RELEASE}, by `bin/packageUpgradeVsix.sh`. */
 export const NEXT_VSIX = join(UPGRADE_CACHE_DIR, "next.vsix")
 
+/** `origin/rollback-3.5.x`, packaged by `bin/packageRollbackVsix.sh`. */
+export const ROLLBACK_VSIX = join(UPGRADE_CACHE_DIR, "rollback.vsix")
+
 const EXTENSION_ID = "moocfi.test-my-code"
 
 /** The last 3.x release, as Open VSX serves it to the users who upgrade from it. */
