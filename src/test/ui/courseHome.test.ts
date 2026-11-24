@@ -164,6 +164,23 @@ suite("buildCourseHomeView", function () {
     expect(row?.teacherReview?.sentence).toContain("1 point, points given by the teacher.")
   })
 
+  test("calls an exercise held by a peer review in review, not locked by the teacher", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({ id: "a", exerciseLocked: true, reviewingStage: "peer_review" }),
+      ],
+    })
+
+    const [row] = buildCourseHomeView(contextFor(course), idOfMoocCourse(MOOC_COURSE_ID), NOW)
+      .unwrap()
+      .parts.flatMap((part) => part.exercises)
+
+    expect(row?.submitRefusal).toMatchObject({
+      label: "in review",
+      sentence: "Give peer reviews on the course page to finish this exercise.",
+    })
+  })
+
   test("says when a mooc course has ended and offers the version that continues it", function () {
     const course = moocLocalCourse({
       closedAt: "2026-05-01T00:00:00Z",

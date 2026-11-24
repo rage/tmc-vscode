@@ -235,11 +235,17 @@ export function buildCourseHomeView(
           ...(triesLeft === undefined ? {} : { triesLeft }),
           ...(submitRefusal
             ? {
-                submitRefusal: {
-                  label: SUBMIT_REFUSAL_LABELS[submitRefusal],
-                  sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
-                  icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
-                },
+                submitRefusal: isLockedForReview(ex.mooc, submitRefusal)
+                  ? {
+                      label: "in review",
+                      sentence: REVIEWING_STAGE_NOTES[ex.mooc?.reviewingStage ?? ""] ?? "",
+                      icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
+                    }
+                  : {
+                      label: SUBMIT_REFUSAL_LABELS[submitRefusal],
+                      sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                      icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
+                    },
               }
             : {}),
           awardedPoints: ex.awardedPoints,
@@ -339,4 +345,23 @@ function examNote(course: LocalCourseData, locale: string): string | undefined {
   return closesAt
     ? `An exam. Its answers close on ${formatDateTime(closesAt, locale)}; results show after that.`
     : undefined
+}
+
+const STAGES_IN_REVIEW = new Set([
+  "peer_review",
+  "self_review",
+  "waiting_for_peer_reviews",
+  "waiting_for_teacher",
+])
+
+/** A review in progress, not a teacher, is what stops more answers to the exercise. */
+function isLockedForReview(
+  exercise: SharedMoocCourseExercise | undefined,
+  refusal: string,
+): boolean {
+  return (
+    refusal === "exerciseLocked" &&
+    exercise?.reviewingStage !== undefined &&
+    STAGES_IN_REVIEW.has(exercise.reviewingStage)
+  )
 }
