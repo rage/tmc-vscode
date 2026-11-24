@@ -1395,16 +1395,18 @@ suite("Langs response cache", function () {
           unchecked_courses: [
             { course_id: uuid(1), kind: "insufficient-scope" },
             { course_id: uuid(2), kind: "not-found" },
+            { course_id: uuid(3), kind: "forbidden" },
           ],
         }),
       ),
     )
     const result = await langs.checkExerciseUpdates("mooc")
-    const [hidden, deleted] = result.unwrap().uncheckedCourses ?? []
+    const [hidden, deleted, closed] = result.unwrap().uncheckedCourses ?? []
     expect(hidden?.courseId).toEqual(idOfMoocCourse(uuid(1)))
     expect(hidden?.refusal).toBeInstanceOf(InsufficientScopeError)
     expect(deleted?.courseId).toEqual(idOfMoocCourse(uuid(2)))
     expect(deleted?.refusal).toBeInstanceOf(NotFoundError)
+    expect(closed?.refusal).toBeInstanceOf(ForbiddenError)
   })
 
   test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {

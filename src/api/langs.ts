@@ -281,7 +281,7 @@ export interface LocalExerciseUpdates {
 export interface UncheckedCourse {
   courseId: CourseIdentifier
   /** What a command about this course alone fails with. */
-  refusal: InsufficientScopeError | NotFoundError
+  refusal: InsufficientScopeError | ForbiddenError | NotFoundError
 }
 
 /** A backend's download result, with each exercise as `toDownload` identifies it. */
@@ -824,7 +824,9 @@ export default class Langs {
           refusal:
             kind === "insufficient-scope"
               ? new InsufficientScopeError("You no longer have access to the course.")
-              : new NotFoundError("The course no longer exists."),
+              : kind === "forbidden"
+                ? new ForbiddenError("You no longer have access to the course.")
+                : new NotFoundError("The course no longer exists."),
         })),
       }))
     }
