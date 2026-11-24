@@ -457,12 +457,23 @@ export const zMoocExam = z.object({
     started_at: z.string()
 });
 
+/**
+ * The chapter that has not opened yet and holds a requested mooc exercise.
+ */
+export const zMoocExerciseClosedChapter = z.object({
+    'chapter-name': z.string(),
+    'chapter-number': z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    'exercise-id': z.uuid(),
+    'opens-at': z.string()
+});
+
 export const zMoocExerciseDownload = z.object({
     'exercise-id': z.uuid(),
     path: z.string()
 });
 
 export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
+    closed_chapters: z.array(zMoocExerciseClosedChapter).optional(),
     downloaded: z.array(zMoocExerciseDownload),
     failed: z.array(z.tuple([
         zMoocExerciseDownload,

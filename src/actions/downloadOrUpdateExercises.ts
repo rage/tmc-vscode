@@ -18,7 +18,12 @@ import {
 import type Dialog from "../api/dialog"
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
-import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type {
+  ClosedChapterOfExercise,
+  ExerciseDownload,
+  ExerciseDownloadProgress,
+  ExerciseDownloads,
+} from "../api/langs"
 import { langsError } from "../api/langsErrors"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
@@ -290,7 +295,7 @@ async function download(
       failedLegs.push(result.val)
       continue
     }
-    const { downloaded, skipped, failed } = result.val
+    const { downloaded, skipped, failed, closedChapters } = result.val
     if (skipped.length > 0) {
       Logger.warn(`${skipped.length} downloads were skipped.`)
     }
@@ -300,7 +305,14 @@ async function download(
     for (const [{ id }, reasons, failure] of failed) {
       Logger.error(`Failed to download exercise ${exerciseName(actionContext, id)}: ${reasons}`)
       succeeded.delete(ExerciseIdentifier.key(id))
-      failures.push({ id, reasons, kind: failure })
+      failures.push({
+        id,
+        reasons,
+        kind: failure,
+        closedChapter: closedChapters.find(
+          (chapter) => ExerciseIdentifier.key(chapter.id) === ExerciseIdentifier.key(id),
+        ),
+      })
     }
   }
 
@@ -328,7 +340,7 @@ async function download(
   if (results.failed.length === 0) {
     return { ...results, warnings }
   }
-  const cause = failureCause(actionContext, failedLegs, failures)
+  const cause = failureCause(failedLegs, failures)
   if (!options.isUnrequested) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
@@ -492,6 +504,8 @@ interface ExerciseFailure {
   id: ExerciseIdentifier
   reasons: string[]
   kind: MoocDownloadFailure | TmcDownloadFailure
+  /** Set when `kind` is `closed-chapter`. */
+  closedChapter?: ClosedChapterOfExercise | undefined
 }
 
 /**
@@ -523,11 +537,7 @@ const BROKEN_PACKAGE_SENTENCE =
  * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise failures when they
  * all share one cause, with tmc-langs' reasons as the details the log gets.
  */
-function failureCause(
-  actionContext: ReadyActionContext,
-  failedLegs: Error[],
-  failures: ExerciseFailure[],
-): Error {
+function failureCause(failedLegs: Error[], failures: ExerciseFailure[]): Error {
   const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
   if (leg) {
     return leg
@@ -541,7 +551,7 @@ function failureCause(
     const backend = failures[0]?.id.kind
     switch (cause) {
       case "closed-chapter":
-        return closedChapterError(actionContext, failures, details)
+        return closedChapterError(failures, details)
       case "broken-package":
         return new ExerciseUpdateError(BROKEN_PACKAGE_SENTENCE, details)
       case "unsupported-exercise":
@@ -558,19 +568,9 @@ function failureCause(
   return new ExerciseUpdateError("The download did not complete.", details)
 }
 
-/** The error for exercises of a chapter not open yet, naming it and when it opens as stored. */
-function closedChapterError(
-  actionContext: ReadyActionContext,
-  failures: ExerciseFailure[],
-  details: string,
-): BaseError {
-  const { userData } = actionContext.startup
-  const chapter = failures
-    .map(({ id }) => {
-      const stored = userData.getExerciseInClosedChapter(id)
-      return stored.ok ? LocalCourseData.getClosedChapterOf(stored.val.course, id) : undefined
-    })
-    .find(Boolean)
+/** The error for exercises of a chapter not open yet, naming it and when it opens. */
+function closedChapterError(failures: ExerciseFailure[], details: string): BaseError {
+  const chapter = failures.find((failure) => failure.closedChapter)?.closedChapter
   if (!chapter) {
     return langsError({ kind: "chapter-not-open-yet" }, details, details, failures[0]?.id.kind)
   }

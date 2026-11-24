@@ -11,7 +11,12 @@ import { downloadOrUpdateExercises, downloadsSettled, findKeptCopy } from "../..
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
-import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../../api/langs"
+import type {
+  ClosedChapterOfExercise,
+  ExerciseDownload,
+  ExerciseDownloadProgress,
+  ExerciseDownloads,
+} from "../../api/langs"
 import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
@@ -20,12 +25,7 @@ import type { BackgroundJob } from "../../ui/backgroundJobs"
 import { backgroundJobs } from "../../ui/backgroundJobs"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
-import {
-  moocCourseExercise,
-  moocLocalCourse,
-  tmcCourseExercise,
-  tmcLocalCourse,
-} from "../fixtures/courses"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -62,11 +62,13 @@ const createDownloadResult = (
   downloaded: ExerciseDownload[],
   skipped: ExerciseDownload[],
   failed: [ExerciseDownload, string[], MoocDownloadFailure?][] = [],
+  closedChapters: ClosedChapterOfExercise[] = [],
 ): Result<ExerciseDownloads, Error> =>
   Ok({
     downloaded,
     failed: failed.map(([download, reasons, failure]) => [download, reasons, failure ?? "other"]),
     skipped,
+    closedChapters,
   })
 
 /** What a fake download is handed: every id it was asked for, whichever backend. */
@@ -320,32 +322,19 @@ suite("downloadOrUpdateExercises action", function () {
     expect(warning?.error).toMatchObject({ details: reason })
   })
 
-  test("says when the chapter of an exercise not open yet opens, as stored", async function () {
+  test("says when the chapter of an exercise not open yet opens", async function () {
     // jest-mock-vscode ships no `env` namespace.
     const vscodeModule: object = vscode
     Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
-    const course = moocLocalCourse({
-      closedChapters: [
-        {
-          name: "Loops",
-          number: 2,
-          opensAt: "2030-01-01T00:00:00Z",
-          exercises: [moocCourseExercise({ id: "e1", name: "loops" })],
-        },
-      ],
-    })
-    const context = actionContext()
-    Object.assign(context.startup.userData, {
-      getExerciseInClosedChapter: () => Ok({ course, exercise: {} }),
-    })
     const reason = "Exercise e1 is in a chapter that has not opened yet"
     tmcMockValues.downloadMoocExercises = createDownloadResult(
       [],
       [],
       [[{ id: idOfMoocExercise("e1"), path: "/mooc/e1" }, [reason], "closed-chapter"]],
+      [{ id: idOfMoocExercise("e1"), name: "Loops", opensAt: "2030-01-01T00:00:00Z" }],
     )
 
-    const result = await downloadResults(context, [idOfMoocExercise("e1")], TEST_COURSE_ID)
+    const result = await downloadResults(actionContext(), [idOfMoocExercise("e1")], TEST_COURSE_ID)
 
     const [warning] = result.warnings
     expect(warning?.error).toBeInstanceOf(errors.ChapterNotOpenError)
@@ -353,6 +342,20 @@ suite("downloadOrUpdateExercises action", function () {
       /^The chapter "Loops" has not opened yet\. Its exercises can be downloaded once it opens on .*2030/,
     )
     expect(warning?.error).toMatchObject({ details: reason })
+  })
+
+  test("words a closed chapter the CLI gave no details of as not open yet", async function () {
+    tmcMockValues.downloadMoocExercises = createDownloadResult(
+      [],
+      [],
+      [[{ id: idOfMoocExercise("e1"), path: "/mooc/e1" }, ["closed"], "closed-chapter"]],
+    )
+
+    const result = await downloadResults(actionContext(), [idOfMoocExercise("e1")], TEST_COURSE_ID)
+
+    const [warning] = result.warnings
+    expect(warning?.error?.message).not.toContain("The chapter")
+    expect(warning?.error).toMatchObject({ details: "closed" })
   })
 
   test.each([

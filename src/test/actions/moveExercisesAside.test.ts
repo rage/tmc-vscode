@@ -1,9 +1,5 @@
-import * as os from "os"
-import * as path from "path"
-
-import * as fs from "fs-extra"
 import { Err, Ok } from "ts-results"
-import { onTestFinished, vi } from "vitest"
+import { vi } from "vitest"
 
 import { bringBackMovedExercises, moveExercisesAside } from "../../actions/moveExercisesAside"
 import type { ReadyActionContext } from "../../actions/types"
@@ -70,26 +66,6 @@ suite("bringBackMovedExercises", function () {
 
     expect(brought.val).toBe(true)
     expect(restoreProjects).toHaveBeenCalledExactlyOnceWith("/aside")
-  })
-
-  test("recreates an exercises folder deleted by hand before restoring into it", async function () {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tmc-aside-"))
-    onTestFinished(() => fs.removeSync(root))
-    const projectsDirectory = path.join(root, "tmcdata")
-    const restoreProjects = vi.fn(async () => {
-      expect(fs.existsSync(projectsDirectory)).toBe(true)
-      return Ok.EMPTY
-    })
-    const context = createMockActionContext({
-      startup: {
-        langs: { restoreProjects } as unknown as Langs,
-        resources: { projectsDirectory } as unknown as Resources,
-      },
-    })
-
-    const brought = await bringBackMovedExercises(context, "/aside")
-
-    expect(brought.val).toBe(true)
   })
 
   test("leaves the folder where it is when the exercises folder has what it would bring back", async function () {

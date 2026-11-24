@@ -6,9 +6,8 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
-import { langsError } from "../api/langsErrors"
 import { FileSystemError, ProjectsDirMoveError, ProjectsDirMoveRefusedError } from "../errors"
-import { isPathInside, isSamePath, Logger } from "../utilities"
+import { Logger } from "../utilities"
 import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -51,20 +50,10 @@ export async function moveExtensionDataPath(
   }
 
   const current = resources.projectsDirectory
-  // tmc-langs refuses this too, with links resolved, but only after the editors were closed.
-  if (current !== undefined && isPathInside(current, newFsPath)) {
-    return Err(
-      langsError(
-        {
-          kind: isSamePath(current, newFsPath)
-            ? "projects-dir-move-to-itself"
-            : "projects-dir-move-into-itself",
-        },
-        `${newFsPath} is inside ${current}`,
-        "",
-        undefined,
-      ),
-    )
+  // Before the editors are closed, which the move itself would only refuse after.
+  const checked = await langs.checkMoveProjectsDirectory(newFsPath)
+  if (checked.err) {
+    return checked
   }
 
   if (current !== undefined) {

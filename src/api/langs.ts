@@ -221,6 +221,16 @@ export interface ExerciseDownloads {
   skipped: ExerciseDownload[]
   /** Each with the reasons the CLI gave, and why it failed. */
   failed: [ExerciseDownload, string[], MoocDownloadFailure | TmcDownloadFailure][]
+  /** The chapter of each `failed` exercise that failed as `closed-chapter`. */
+  closedChapters: ClosedChapterOfExercise[]
+}
+
+/** A chapter not open yet, holding a requested exercise. */
+export interface ClosedChapterOfExercise {
+  id: ExerciseIdentifier
+  name: string
+  /** When the chapter opens, as a timestamp. */
+  opensAt: string
 }
 
 /** How a backend's copies of the locally downloaded exercises differ from the local ones. */
@@ -255,6 +265,7 @@ function toExerciseDownloads<T>(
     failed?: [T, string[], MoocDownloadFailure | TmcDownloadFailure][] | null | undefined
   },
   toDownload: (exercise: T) => ExerciseDownload,
+  closedChapters: ClosedChapterOfExercise[] = [],
 ): ExerciseDownloads {
   return {
     downloaded: downloaded.map((exercise) => toDownload(exercise)),
@@ -264,6 +275,7 @@ function toExerciseDownloads<T>(
       reasons,
       failure,
     ]),
+    closedChapters,
   }
 }
 
@@ -700,6 +712,14 @@ export default class Langs {
   }
 
   /**
+   * Validates {@link moveProjectsDirectory} without moving anything: errs with the same
+   * `ProjectsDirMoveRefusedError` for the current directory or a folder inside it.
+   */
+  public async checkMoveProjectsDirectory(newDirectory: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("move-projects-dir", "--check", newDirectory) })
+  }
+
+  /**
    * Moves every entry of the projects directory into `folder`, under the lock other commands on
    * the projects directory take. Moves nothing on failure; an entry another program holds is a
    * `FileAccessError` naming it. {@link restoreProjects} moves them back.
@@ -713,7 +733,8 @@ export default class Langs {
   /**
    * Moves the entries {@link setProjectsAside} put in `folder` back into the projects directory
    * and deletes `folder`. Errs with `ProjectsRestoreConflictError`, moving nothing, unless the
-   * projects directory holds nothing but OS metadata files.
+   * projects directory holds nothing but OS metadata files. A projects directory deleted by
+   * hand, whose parent exists, counts as empty.
    */
   public async restoreProjects(folder: string): Promise<Result<void, Error>> {
     return this._run({ args: this._settingsCmd("restore-projects", folder) })
@@ -913,10 +934,18 @@ export default class Langs {
     )
     this._responseCache.delete(cacheKey("mooc", "exercise-updates"))
     return res.map((result) =>
-      toExerciseDownloads(result, (exercise) => ({
-        id: makeMoocKind({ moocExerciseId: exercise["exercise-id"] }),
-        path: exercise.path,
-      })),
+      toExerciseDownloads(
+        result,
+        (exercise) => ({
+          id: makeMoocKind({ moocExerciseId: exercise["exercise-id"] }),
+          path: exercise.path,
+        }),
+        (result.closed_chapters ?? []).map((chapter) => ({
+          id: makeMoocKind({ moocExerciseId: chapter["exercise-id"] }),
+          name: chapter["chapter-name"],
+          opensAt: chapter["opens-at"],
+        })),
+      ),
     )
   }
 

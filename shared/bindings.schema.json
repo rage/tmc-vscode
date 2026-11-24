@@ -1536,6 +1536,13 @@
     "DownloadOrUpdateMoocCourseExercisesResult": {
       "type": "object",
       "properties": {
+        "closed_chapters": {
+          "description": "The chapter of each `failed` entry whose failure is `closed-chapter`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MoocExerciseClosedChapter"
+          }
+        },
         "downloaded": {
           "type": "array",
           "items": {
@@ -3152,6 +3159,34 @@
         "name",
         "started_at",
         "answerable_until"
+      ]
+    },
+    "MoocExerciseClosedChapter": {
+      "description": "The chapter that has not opened yet and holds a requested mooc exercise.",
+      "type": "object",
+      "properties": {
+        "chapter-name": {
+          "type": "string"
+        },
+        "chapter-number": {
+          "description": "The chapter's position in the course, from 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "exercise-id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "opens-at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "exercise-id",
+        "chapter-name",
+        "chapter-number",
+        "opens-at"
       ]
     },
     "MoocExerciseDownload": {

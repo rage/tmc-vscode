@@ -667,6 +667,44 @@ suite("Langs class arg building", function () {
     expect(updates).toEqual([{ fraction: 0.25, message: "Moving exercises" }])
   })
 
+  test("checkMoveProjectsDirectory runs the move command with --check", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    expect((await langs.checkMoveProjectsDirectory("/new/dir")).ok).toBe(true)
+    expect(calls[0]?.args).toEqual([
+      "settings",
+      "--client-name",
+      "test-client",
+      "move-projects-dir",
+      "--check",
+      "/new/dir",
+    ])
+  })
+
+  test("downloadMoocExercises names the chapter of an exercise in a closed one", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-exercise-download", {
+          downloaded: [],
+          skipped: [],
+          closed_chapters: [
+            {
+              "exercise-id": uuid(1),
+              "chapter-name": "Loops",
+              "chapter-number": 2,
+              "opens-at": "2030-01-01T00:00:00Z",
+            },
+          ],
+        }),
+      ),
+    )
+    const result = await langs.downloadMoocExercises(["ex-uuid"], undefined, () => {})
+    expect(result.unwrap().closedChapters).toEqual([
+      { id: idOfMoocExercise(uuid(1)), name: "Loops", opensAt: "2030-01-01T00:00:00Z" },
+    ])
+  })
+
   test("authenticate builds the `mooc login` command", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
@@ -843,6 +881,7 @@ suite("Langs cross-backend independence", function () {
       downloaded: [{ id: idOfTmcExercise(1), path: "/p/e" }],
       skipped: [],
       failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"], "other"]],
+      closedChapters: [],
     })
   })
 

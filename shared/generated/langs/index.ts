@@ -51,6 +51,7 @@ import {
     zMoocDeviceLogin,
     zMoocDownloadFailure,
     zMoocExam,
+    zMoocExerciseClosedChapter,
     zMoocExerciseDownload,
     zMoocExerciseUpdates,
     zNewSubmission,
@@ -367,6 +368,12 @@ export type MoocDownloadFailure = z.infer<typeof MoocDownloadFailure>;
  */
 export const MoocExam = zMoocExam;
 export type MoocExam = z.infer<typeof MoocExam>;
+
+/**
+ * The chapter that has not opened yet and holds a requested mooc exercise.
+ */
+export const MoocExerciseClosedChapter = zMoocExerciseClosedChapter;
+export type MoocExerciseClosedChapter = z.infer<typeof MoocExerciseClosedChapter>;
 
 export const MoocExerciseDownload = zMoocExerciseDownload;
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>;

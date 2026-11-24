@@ -11,6 +11,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
 import { presentationFor, ProjectsDirMoveError, ProjectsDirMoveRefusedError } from "../../errors"
+import { releaseExerciseEditors } from "../../window/exerciseDocuments"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -18,6 +19,10 @@ import { createUserDataMock } from "../mocks/userdata"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 import { makeTmpDirs } from "../utils"
+
+vi.mock("../../window/exerciseDocuments", () => ({
+  releaseExerciseEditors: vi.fn(async () => Ok.EMPTY),
+}))
 
 const emptyFolder = (root: string): vscode.Uri => vscode.Uri.file(root + "/new/path/empty")
 const OLD_PATH = "/tmp/tmcdata/projects"
@@ -55,6 +60,7 @@ suite("moveExtensionDataPath action", function () {
     })
 
   beforeEach(function () {
+    vi.mocked(releaseExerciseEditors).mockClear()
     root = makeTmpDirs(virtualFileSystem)
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[userDataMock] = createUserDataMock()
@@ -105,13 +111,23 @@ suite("moveExtensionDataPath action", function () {
     expect(workspaceManagerMock.closeCourseExercises).not.toHaveBeenCalled()
   })
 
-  test("refuses to move the exercises folder into itself", async function () {
-    resources.projectsDirectory = nonEmptyFolder(root).fsPath
+  test("refuses a move the check refuses, before closing any editor", async function () {
+    const refusal = langsError(
+      { kind: "projects-dir-move-into-itself" },
+      "into itself",
+      "",
+      undefined,
+    )
+    tmcMockValues.checkMoveProjectsDirectory = Err(refusal)
 
-    const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
+    const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
 
     expect(result.val).toBeInstanceOf(ProjectsDirMoveRefusedError)
     expect(presentationFor(result.val as Error).message).toContain("into a folder inside it")
+    expect(tmcMock.checkMoveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(
+      emptyFolder(root).fsPath,
+    )
+    expect(releaseExerciseEditors).not.toHaveBeenCalled()
     expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
   })
 
@@ -127,15 +143,6 @@ suite("moveExtensionDataPath action", function () {
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
 
     expect(result.val).toBe(refusal)
-  })
-
-  test("refuses to move the exercises folder into a folder inside it", async function () {
-    resources.projectsDirectory = path.dirname(emptyFolder(root).fsPath)
-
-    const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-
-    expect(result.err).toBe(true)
-    expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
   })
 
   test("reports a completed move whose rescan failed as moved", async function () {
