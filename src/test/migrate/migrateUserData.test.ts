@@ -154,6 +154,19 @@ suite("User data migration", function () {
             expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(userData.v2_1_0);
         });
 
+        test("should keep the courses 3.5.x added after 4.x when importing", async function () {
+            const addedIn3x = { ...userData.v2_1_0.courses[0], id: 999, name: "added-in-3x" };
+            await memento.update(USER_DATA_KEY_V1, {
+                courses: [{ ...userData.v2_1_0.courses[0], title: "stale" }, addedIn3x],
+            });
+            await memento.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            const migrated = migrateUserDataToLatest(memento);
+            expect(migrated.data).to.be.deep.equal({
+                courses: [...userData.v2_1_0.courses, addedIn3x],
+            });
+            expect(migrated.importedV3Fingerprint).to.be.equal(v3_fingerprint(userData.v4_0_0));
+        });
+
         test("should prefer user-data-v1 once user-data-v3 is imported", async function () {
             const changedHere = { courses: [] };
             await memento.update(USER_DATA_KEY_V1, changedHere);
