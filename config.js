@@ -5,7 +5,7 @@ const path = require("path")
 
 const { version: EXTENSION_VERSION } = require("./package.json")
 
-const TMC_LANGS_RUST_VERSION = "0.42.1"
+const TMC_LANGS_RUST_VERSION = "0.43.1"
 
 // Regenerate with `pnpm run vendor:langs-checksums` after bumping the version above.
 const langsChecksums = require("./src/config/langsChecksums.json")
