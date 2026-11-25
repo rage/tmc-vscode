@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 import type { Locator } from "@playwright/test"
 
 import { AddCoursePage } from "./add-course"
@@ -66,6 +66,8 @@ export class CoursesViewPage extends TmcPage {
 
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */
   public async runContextMenuCommand(row: Locator, command: string): Promise<void> {
+    // oxlint-disable-next-line playwright/no-skipped-test -- skips whichever test needs the menu
+    test.skip(process.platform === "darwin", "macOS shows context menus natively, outside the page")
     const item = this.page
       .locator(".monaco-menu")
       .getByRole("menuitem", { name: command, exact: true })

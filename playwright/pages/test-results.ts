@@ -10,10 +10,27 @@ export class TestResultsPage extends TmcPage {
    * the view, and a command palette opened meanwhile never lists its focus command.
    */
   public async open(): Promise<void> {
-    await this.runPaletteCommand("View: Focus into Panel")
-    const tab = this.page.getByRole("tab", { name: "Test Results" })
-    await tab.click()
-    await expect(tab).toHaveAttribute("aria-selected", "true")
+    // Not its tab: a narrow panel moves the tab into its "Additional Views" overflow.
+    const command = "Test Results: Focus on Test Results View"
+    const palette = this.page.locator(".quick-input-widget")
+    await expect(async () => {
+      // Reopened each time: an open palette keeps the list it had before the view existed.
+      if (await palette.isVisible()) {
+        await this.page.keyboard.press("Escape")
+        await expect(palette).toBeHidden({ timeout: 2_000 })
+      }
+      await this.page.keyboard.press("F1")
+      await palette.locator("input").fill(`>${command}`, { timeout: 2_000 })
+      await palette
+        .locator(".quick-input-list .monaco-list-row")
+        .filter({ hasText: command })
+        .first()
+        .click({ timeout: 2_000 })
+    }).toPass({ timeout: 30_000 })
+    await expect(this.page.getByRole("tab", { name: "Test Results" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
   }
 
   /** A row of the view's results tree: a run, an exercise, a test or a failure message. */

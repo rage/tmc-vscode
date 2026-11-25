@@ -55,7 +55,14 @@ export class LegacyTmcPage {
     }).toPass({ timeout: 30_000 })
   }
 
+  /** Logs in on a fresh profile. */
   public async logIn(): Promise<void> {
+    // 3.5.5 shows Welcome at the end of the activation opening the menu starts, in the panel
+    // Login opens in.
+    await this.openMenu()
+    await expect(
+      this.panel().getByRole("heading", { level: 1, name: /^Welcome to TestMyCode/ }),
+    ).toBeVisible({ timeout: 30_000 })
     await this.openFromMenu(
       "Log in",
       this.panel().getByRole("textbox", { name: "Email or username:" }),
