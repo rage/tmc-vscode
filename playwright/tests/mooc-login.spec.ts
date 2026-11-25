@@ -167,6 +167,10 @@ vsCodeTest.describe(() => {
   )
 
   vsCodeTest("the account shows in the Accounts menu once logged in", async ({ page, webview }) => {
+    vsCodeTest.skip(
+      process.platform === "darwin",
+      "macOS shows the Accounts menu as a native menu, outside the page",
+    )
     const loginScreen = new MoocLoginPage(page, webview)
 
     await loginScreen.gotoFromCoursesView()
