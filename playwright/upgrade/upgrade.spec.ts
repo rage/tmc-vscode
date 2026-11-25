@@ -91,10 +91,11 @@ async function expectKeptBy4x(
   for (const course of courses) {
     await expect(coursesView.row(course)).toBeVisible()
   }
+  // 3.5.5 logged in with a tmc.mooc.fi password, which 4.x keeps as a legacy login.
   await expect(
     page
       .locator('[id="workbench.parts.statusbar"]')
-      .getByRole("button", { name: /logged in with your MOOC\.fi account/ }),
+      .getByRole("button", { name: /logged in with an old tmc\.mooc\.fi login/ }),
   ).toBeVisible()
 
   if (isExerciseChecked) {
@@ -173,17 +174,8 @@ async function runUpgradeScenario(
       expect(globalState).toHaveProperty(["user-data-v3"])
     })
 
-    await test.step("downgrade: 3.5.5 still has it, and adds a course", async () => {
-      await installVsix(profile, await legacyVsix())
-      await withVsCode(profile, "downgrade", testInfo, async ({ page }) => {
-        const legacy = new LegacyTmcPage(page)
-        await expectKeptBy355(legacy, isExerciseChecked)
-        await legacy.addCourse(JAVA_COURSE.title, JAVA_COURSE.name)
-      })
-      expectEditKept(editedFile)
-    })
-
-    await test.step("rollback build: reads the profile 4.x used, and adds a course", async () => {
+    // Straight after 4.x, where users get it: it imports 4.x's data over `user-data-v1` once.
+    await test.step("rollback build: reads the profile 4.x used", async () => {
       expect(
         fs.existsSync(ROLLBACK_VSIX),
         `${ROLLBACK_VSIX} is missing; run bin/packageRollbackVsix.sh`,
@@ -194,7 +186,16 @@ async function runUpgradeScenario(
         await expectKeptBy355(legacy, isExerciseChecked)
       })
       expectEditKept(editedFile)
-      await installVsix(profile, NEXT_VSIX)
+    })
+
+    await test.step("downgrade: 3.5.5 still has it, and adds a course", async () => {
+      await installVsix(profile, await legacyVsix())
+      await withVsCode(profile, "downgrade", testInfo, async ({ page }) => {
+        const legacy = new LegacyTmcPage(page)
+        await expectKeptBy355(legacy, isExerciseChecked)
+        await legacy.addCourse(JAVA_COURSE.title, JAVA_COURSE.name)
+      })
+      expectEditKept(editedFile)
     })
 
     await test.step("re-upgrade: nothing is lost, and the course 3.5.5 added shows", async () => {
