@@ -123,24 +123,34 @@ export interface MigratedUserData extends MigratedData<data.v2.UserData> {
 /**
  * User data in the latest shape this version stores. 4.x user data, which is newer than any
  * `user-data-v1`, wins until it has been imported; after that `user-data-v1` holds the changes
- * made here, until 4.x changes its data again.
+ * made here, until 4.x changes its data again. An import keeps the courses only `user-data-v1`
+ * has: 3.5.x run after 4.x adds courses there without recording an import.
  */
 export default function migrateUserDataToLatest(memento: vscode.Memento): MigratedUserData {
+    const local = migrateLocalUserData(memento);
     const storedV3 = memento.get(data.v3.USER_DATA_KEY);
-    if (storedV3 !== undefined) {
-        const fingerprint = v3_fingerprint(storedV3);
-        if (memento.get(data.v3.IMPORTED_USER_DATA_FINGERPRINT_KEY) !== fingerprint) {
-            if (createIs<data.v3.UserData>()(storedV3)) {
-                return {
-                    data: v2_fromV3(storedV3),
-                    obsoleteKeys: [],
-                    importedV3Fingerprint: fingerprint,
-                };
-            }
-            Logger.warn("Ignored unreadable user data stored by a newer version.");
-        }
+    if (storedV3 === undefined) {
+        return local;
     }
+    const fingerprint = v3_fingerprint(storedV3);
+    if (memento.get(data.v3.IMPORTED_USER_DATA_FINGERPRINT_KEY) === fingerprint) {
+        return local;
+    }
+    if (!createIs<data.v3.UserData>()(storedV3)) {
+        Logger.warn("Ignored unreadable user data stored by a newer version.");
+        return local;
+    }
+    const imported = v2_fromV3(storedV3).courses;
+    const importedIds = new Set(imported.map((course) => course.id));
+    const localOnly = (local.data?.courses ?? []).filter((course) => !importedIds.has(course.id));
+    return {
+        data: { courses: [...imported, ...localOnly] },
+        obsoleteKeys: local.obsoleteKeys,
+        importedV3Fingerprint: fingerprint,
+    };
+}
 
+function migrateLocalUserData(memento: vscode.Memento): MigratedData<data.v2.UserData> {
     const obsoleteKeys: string[] = [];
     const dataV0 = validateData(
         memento.get(data.v0.USER_DATA_KEY),
