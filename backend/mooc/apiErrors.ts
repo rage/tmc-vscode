@@ -8,7 +8,8 @@
 //
 // Transcribed, not validated: the vendored spec's `ApiErrorResponse` has no
 // `required` members and nullable fields, so response validation accepts `{}`
-// for every 4xx. Keep in step with `error.rs`; nothing detects drift.
+// for every 4xx. Keep in step with `error.rs`; apiErrors.test.ts checks only the keys the spec
+// documents.
 //
 // `ControllerErrorType::OAuthError` is absent: it uses the RFC 6749
 // `{error, error_description}` body, see ./oauth.ts.
@@ -41,6 +42,8 @@ export const API_ERRORS = {
   exercise_locked: { type: "forbidden", status: 403 },
   authentication_required_for_exam_exercise: { type: "unauthorized", status: 401 },
   forbidden: { type: "forbidden", status: 403 },
+  no_access: { type: "forbidden", status: 403 },
+  insufficient_scope: { type: "forbidden", status: 403 },
   rate_limited: { type: "rate_limit", status: 429 },
   invalid_course_code: { type: "sisu_error", status: 400 },
   generic_sisu_error: { type: "sisu_error", status: 502 },

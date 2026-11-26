@@ -1,5 +1,7 @@
 import type * as vscode from "vscode"
 
+import type { StoredCourses } from "../config/userdata"
+
 /** The single owner that versions before shared ownership stored; read only as a fallback. */
 const EXERCISES_ACCOUNT_KEY = "exercisesAccountId"
 const EXERCISES_ACCOUNTS_KEY = "exercisesAccountIds"
@@ -9,6 +11,8 @@ const MOVED_ASIDE_KEY = "movedAsideExercises"
 export interface MovedAsideExercises {
   folder: string
   accountIds: string[]
+  /** The courses those accounts had added, which come back with the exercises. */
+  courses?: StoredCourses | undefined
 }
 
 /**

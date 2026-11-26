@@ -4,13 +4,19 @@ import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { MoocDownloadFailure } from "../../../shared/langsSchema"
 import type { ExerciseStatus } from "../../../shared/lib"
 import { ExerciseIdentifier } from "../../../shared/lib"
 import { downloadOrUpdateExercises, downloadsSettled, findKeptCopy } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
-import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../../api/langs"
+import type {
+  ClosedChapterOfExercise,
+  ExerciseDownload,
+  ExerciseDownloadProgress,
+  ExerciseDownloads,
+} from "../../api/langs"
 import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
@@ -55,8 +61,15 @@ const storedCourse = tmcLocalCourse({
 const createDownloadResult = (
   downloaded: ExerciseDownload[],
   skipped: ExerciseDownload[],
-  failed: [ExerciseDownload, string[]][] = [],
-): Result<ExerciseDownloads, Error> => Ok({ downloaded, failed, skipped })
+  failed: [ExerciseDownload, string[], MoocDownloadFailure?][] = [],
+  closedChapters: ClosedChapterOfExercise[] = [],
+): Result<ExerciseDownloads, Error> =>
+  Ok({
+    downloaded,
+    failed: failed.map(([download, reasons, failure]) => [download, reasons, failure ?? "other"]),
+    skipped,
+    closedChapters,
+  })
 
 /** What a fake download is handed: every id it was asked for, whichever backend. */
 type FakeDownload = (
@@ -100,6 +113,7 @@ suite("downloadOrUpdateExercises action", function () {
         langs: tmcMock,
         userData: {
           getCourses: () => [storedCourse],
+          getCourse: () => Ok(storedCourse),
           getExercise: exerciseLookupOver([storedCourse]),
         } as never,
       },
@@ -148,6 +162,7 @@ suite("downloadOrUpdateExercises action", function () {
         ...actionContext().startup,
         userData: {
           getCourses: () => [storedCourse, lostCourse],
+          getCourse: () => Ok(storedCourse),
           getExercise: exerciseLookupOver([storedCourse, lostCourse]),
         } as never,
       },
@@ -274,7 +289,11 @@ suite("downloadOrUpdateExercises action", function () {
 
   test("says in plain words that an exercise package is broken, and logs tmc-langs' reason", async function () {
     const reason = "No project directory found in archive"
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    tmcMockValues.downloadTmcExercises = createDownloadResult(
+      [],
+      [],
+      [[helloWorld, [reason], "extract-failed"]],
+    )
 
     const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 
@@ -288,7 +307,11 @@ suite("downloadOrUpdateExercises action", function () {
   test("blames the server, not the package, for a server error, and logs tmc-langs' reason", async function () {
     const reason =
       "500 Internal Server Error from http://localhost:4001/mooc-archives/hello.tar.zst: fault"
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    tmcMockValues.downloadTmcExercises = createDownloadResult(
+      [],
+      [],
+      [[helloWorld, [reason], "server-error"]],
+    )
 
     const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 
@@ -303,10 +326,15 @@ suite("downloadOrUpdateExercises action", function () {
     // jest-mock-vscode ships no `env` namespace.
     const vscodeModule: object = vscode
     Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
-    const reason = 'Exercise 1 is in chapter 2 "Loops", which opens at 2030-01-01 00:00:00 UTC'
-    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+    const reason = "Exercise e1 is in a chapter that has not opened yet"
+    tmcMockValues.downloadMoocExercises = createDownloadResult(
+      [],
+      [],
+      [[{ id: idOfMoocExercise("e1"), path: "/mooc/e1" }, [reason], "closed-chapter"]],
+      [{ id: idOfMoocExercise("e1"), name: "Loops", opensAt: "2030-01-01T00:00:00Z" }],
+    )
 
-    const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+    const result = await downloadResults(actionContext(), [idOfMoocExercise("e1")], TEST_COURSE_ID)
 
     const [warning] = result.warnings
     expect(warning?.error).toBeInstanceOf(errors.ChapterNotOpenError)
@@ -315,6 +343,50 @@ suite("downloadOrUpdateExercises action", function () {
     )
     expect(warning?.error).toMatchObject({ details: reason })
   })
+
+  test("words a closed chapter the CLI gave no details of as not open yet", async function () {
+    tmcMockValues.downloadMoocExercises = createDownloadResult(
+      [],
+      [],
+      [[{ id: idOfMoocExercise("e1"), path: "/mooc/e1" }, ["closed"], "closed-chapter"]],
+    )
+
+    const result = await downloadResults(actionContext(), [idOfMoocExercise("e1")], TEST_COURSE_ID)
+
+    const [warning] = result.warnings
+    expect(warning?.error?.message).not.toContain("The chapter")
+    expect(warning?.error).toMatchObject({ details: "closed" })
+  })
+
+  test.each([
+    [["browser-only"], "This exercise cannot be done in VS Code"],
+    [["browser-only", "several-editor-tasks"], "These exercises are done on the course page"],
+    [["server-error"], "The server ran into a problem"],
+    [["connection-error"], "Could not reach the server"],
+    [["not-found"], "This exercise is no longer in the course"],
+  ] as const)(
+    "words mooc failures %j as presentationFor words their CLI kind",
+    async function (kinds, sentence) {
+      tmcMockValues.downloadMoocExercises = createDownloadResult(
+        [],
+        [],
+        kinds.map((kind, i) => [
+          { id: idOfMoocExercise(`e${i}`), path: `/mooc/e${i}` },
+          [`failed: ${kind}`],
+          kind,
+        ]),
+      )
+
+      const result = await downloadResults(
+        actionContext(),
+        kinds.map((_kind, i) => idOfMoocExercise(`e${i}`)),
+        TEST_COURSE_ID,
+      )
+
+      const [warning] = result.warnings
+      expect(errors.presentationFor(warning?.error ?? new Error()).message).toContain(sentence)
+    },
+  )
 
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
@@ -849,7 +921,10 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     ...createMockActionContext({
       startup: {
         langs: tmcMock,
-        userData: { getExercise: () => Err(new Error("not stored")) } as never,
+        userData: {
+          getCourse: () => Err(new Error("not stored")),
+          getExercise: () => Err(new Error("not stored")),
+        } as never,
       },
     }),
     // The real Dialog, so the fractions the action reports pass through the

@@ -11,12 +11,12 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import { isSessionLost } from "../errors"
+import { CertificateError, ConnectionError, isSessionLost, ProxyError } from "../errors"
 import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
-import { Logger } from "../utilities"
+import { Logger, PROSE_LOCALE } from "../utilities"
 import { showCourseHomeButton } from "./showCourseHome"
 
 /**
@@ -96,7 +96,14 @@ export async function updateExercises(
       ])
     }
   }
-  const [firstFailure] = failures
+  // Offline is what the Courses view and the course home already say; a toast would repeat it.
+  // A certificate or proxy failure needs its own advice, which they do not give.
+  const [firstFailure] = failures.filter(
+    ({ error }) =>
+      !(error instanceof ConnectionError) ||
+      error instanceof CertificateError ||
+      error instanceof ProxyError,
+  )
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.
     for (const { backend, error } of failures.slice(1)) {
@@ -250,7 +257,7 @@ function allClear(uncheckedCourses: readonly LocalCourseData[]): string {
   if (uncheckedCourses.length === 0) {
     return "All exercises are up to date."
   }
-  const titles = new Intl.ListFormat("en").format(
+  const titles = new Intl.ListFormat(PROSE_LOCALE).format(
     uncheckedCourses.map((course) => LocalCourseData.getCourseTitle(course)),
   )
   const verb = uncheckedCourses.length === 1 ? "is" : "are"

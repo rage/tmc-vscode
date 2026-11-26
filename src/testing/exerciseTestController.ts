@@ -27,7 +27,7 @@ import {
 } from "../errors"
 import { testedLocallyView } from "../panels/submissionView"
 import { submissionViews } from "../ui/submissionViews"
-import { countOf } from "../utilities"
+import { countOf, Logger } from "../utilities"
 import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
@@ -74,7 +74,18 @@ export class ExerciseTestController implements vscode.Disposable {
   public syncExercises(): void {
     const exercises = exercisesOpenInCourseWorkspace(this._actionContext.startup.workspaceManager)
     this._exercisesByItemId.clear()
-    this._controller.items.replace(exercises.map((exercise) => this._itemFor(exercise)))
+    // tmc-langs lists one exercise per folder; were two to share one, their shared item id
+    // would make `replace` throw.
+    const items = new Map<string, vscode.TestItem>()
+    for (const exercise of exercises) {
+      const item = this._itemFor(exercise)
+      if (items.has(item.id)) {
+        Logger.warn(`Two exercises share the folder ${exercise.uri.fsPath}; listing it once.`)
+        continue
+      }
+      items.set(item.id, item)
+    }
+    this._controller.items.replace([...items.values()])
     this._diagnostics.retain(exercises.map((exercise) => exercise.uri))
   }
 
@@ -384,7 +395,11 @@ export class ExerciseTestController implements vscode.Disposable {
     isAllPassed: boolean,
   ): void {
     // Test Results already says that exam mode runs no tests locally.
-    if (outcome.kind === "examMode" || !isAllPassed || outcome.isCourseDisabled) {
+    if (outcome.kind === "examMode" || outcome.isCourseDisabled) {
+      return
+    }
+    if (!isAllPassed) {
+      markResultsAsOlder(exercise)
       return
     }
     const message = `Tests pass on your computer for ${exercise.exerciseSlug}.`
@@ -420,6 +435,24 @@ export class ExerciseTestController implements vscode.Disposable {
         ),
     ])
   }
+}
+
+/** Notes on the exercise's shown submission result that a later local test run failed. */
+function markResultsAsOlder(exercise: WorkspaceExercise): void {
+  const latest = submissionViews.latestFor(exercise.id)
+  if (!latest || !["finished", "failed", "manualReview"].includes(latest.view.phase)) {
+    return
+  }
+  submissionViews.update({
+    panel: latest.panel,
+    view: {
+      ...latest.view,
+      newerLocalRun:
+        "This is your last submission's result. A later test run on your computer failed; " +
+        "Test Results shows it.",
+    },
+    shouldReopen: false,
+  })
 }
 
 /**

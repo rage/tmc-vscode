@@ -1,13 +1,17 @@
-import * as fs from "fs"
-
+import * as fs from "fs-extra"
 import * as vscode from "vscode"
 
-import { bringBackMovedExercises, findAccountSwitch, moveExercisesAside } from "../actions"
+import {
+  bringBackMovedExercises,
+  findAccountSwitch,
+  moveExercisesAside,
+  refreshLocalExercises,
+} from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { NotificationButton } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { submissionViews } from "../ui/submissionViews"
-import { Logger } from "../utilities"
+import { isGoneFromReachableParent, Logger, SerialQueue } from "../utilities"
 
 function openFolderButton(folder: string): NotificationButton {
   return [
@@ -22,7 +26,14 @@ function openFolderButton(folder: string): NotificationButton {
  * exercises aside; otherwise records the account as theirs. Then brings back the account's own
  * exercises that an earlier login moved aside.
  */
-export async function handOverExercises(actionContext: ReadyActionContext): Promise<void> {
+export function handOverExercises(actionContext: ReadyActionContext): Promise<void> {
+  // A login and the account check it triggers must not both offer to move the exercises.
+  return handOverQueue.run(() => handOverOnce(actionContext))
+}
+
+const handOverQueue = new SerialQueue()
+
+async function handOverOnce(actionContext: ReadyActionContext): Promise<void> {
   const accountSwitch = await findAccountSwitch(actionContext)
   if (accountSwitch.err) {
     Logger.warn("Could not tell which account logged in", accountSwitch.val)
@@ -32,10 +43,30 @@ export async function handOverExercises(actionContext: ReadyActionContext): Prom
     return
   }
   const { accountId, isSwitch } = accountSwitch.val
+  checkedAccountId = accountId
   if (isSwitch && !(await offerToMoveAside(actionContext, accountId))) {
     return
   }
   await bringBackOwnExercises(actionContext, accountId)
+}
+
+/** The account {@link handOverExercises} last checked the exercises against in this window. */
+let checkedAccountId: string | undefined
+
+/**
+ * Runs {@link handOverExercises} when `accountId` is not the account last checked, as when
+ * another window logged in as someone else or courses.mooc.fi named the account only later.
+ */
+export function handOverExercisesOnAccountChange(
+  actionContext: ReadyActionContext,
+  accountId: string,
+): Promise<void> {
+  // Checked in the queue, as a check queued before this one may have covered the account.
+  return handOverQueue.run(async () => {
+    if (accountId !== checkedAccountId) {
+      await handOverOnce(actionContext)
+    }
+  })
 }
 
 /**
@@ -80,7 +111,16 @@ async function offerToMoveAside(
   if (moved.err) {
     return false
   }
-  await accountHandover.recordMovedAside({ folder: moved.val, accountIds: previousOwners })
+  // Their courses and progress are theirs too, and must not show to whoever logged in now.
+  const courses = await actionContext.startup.userData.takeAllCourses()
+  if (courses.err) {
+    Logger.warn("Could not set the other account's courses aside", courses.val)
+  }
+  await accountHandover.recordMovedAside({
+    folder: moved.val,
+    accountIds: previousOwners,
+    courses: courses.ok ? courses.val : undefined,
+  })
   await accountHandover.setExercisesAccountIds([accountId])
   void dialog.notification(
     `Moved the other account's exercises to ${moved.val}. They come back when that account ` +
@@ -98,10 +138,17 @@ async function bringBackOwnExercises(
   const { dialog } = actionContext
   const { accountHandover } = actionContext.startup
   const own = accountHandover.movedAside.filter((moved) => moved.accountIds.includes(accountId))
-  for (const { folder } of own.filter((moved) => !fs.existsSync(moved.folder))) {
-    await accountHandover.forgetMovedAside(folder)
+  const states = await Promise.all(
+    own.map(async (moved) => ({
+      moved,
+      isPresent: await fs.pathExists(moved.folder),
+      isGone: await isGoneFromReachableParent(moved.folder),
+    })),
+  )
+  for (const { moved } of states.filter(({ isGone }) => isGone)) {
+    await accountHandover.forgetMovedAside(moved.folder)
   }
-  const newest = own.findLast((moved) => fs.existsSync(moved.folder))
+  const newest = states.findLast(({ isPresent }) => isPresent)?.moved
   if (!newest) {
     return
   }
@@ -120,6 +167,14 @@ async function bringBackOwnExercises(
       openFolderButton(newest.folder),
     )
     return
+  }
+  if (newest.courses) {
+    const restored = await actionContext.startup.userData.restoreCourses(newest.courses)
+    if (restored.err) {
+      Logger.warn("Could not bring back the courses set aside with the exercises", restored.val)
+    }
+    // The exercises came back before their courses, which they are listed under.
+    await refreshLocalExercises(actionContext)
   }
   await accountHandover.forgetMovedAside(newest.folder)
   await accountHandover.setExercisesAccountIds(newest.accountIds)

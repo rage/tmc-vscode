@@ -14,9 +14,13 @@ import {
   createMoocFixtures,
   DEFAULT_MOOC_MOCK_BASE_URL,
   MOCK_DEFAULT_USER_ID,
+  MOCK_USER_EMAIL,
+  MOCK_USER_NAME,
   type Course,
   type CourseWithExercises,
   type ExerciseSlide,
+  type GradingOutcome,
+  type MoocExamFixture,
   type ExerciseTask,
   type MoocExerciseFixture,
   type MoocFixtures,
@@ -129,6 +133,16 @@ interface MoocMockState {
   chapterByExerciseId: Map<string, MockChapter>
   /** Where chapter locking's teacher review has an exercise; fixtures have none. */
   reviewByExerciseId: Map<string, MockReview>
+  /** What a course's review process reports for an exercise; fixtures have none. */
+  reviewProgressByExerciseId: Map<string, MockReviewProgress>
+  /** Exams whose time is up: not served, and their gradings are no longer hidden. */
+  endedExamIds: Set<string>
+  /** Outcomes a test set over the fixtures'; see {@link MoocMockControls.setGradingOutcome}. */
+  gradingOutcomeOverrides: Map<string, GradingOutcome>
+  /** Every request outside the control routes gets its connection destroyed. */
+  areConnectionsDropped: boolean
+  /** Courses whose settings reveal model solutions to every student. */
+  modelSolutionRevealedCourseIds: Set<string>
   uploadsById: Map<string, UploadRecord>
   /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
   uploadBytesByStoredName: Map<string, Buffer>
@@ -145,6 +159,8 @@ interface MoocMockState {
   // Last authenticated request's `Authorization` header and a count, surfaced via
   // `GET /mooc-mock/auth-state`: the mock runs in a separate process from the test.
   lastAuthorization: string | undefined
+  /** The `X-Client-Version` of the last authenticated request, if it sent one. */
+  lastClientVersion: string | undefined
   authenticatedRequestCount: number
   /** This instance's isolated device-flow + issued-token state; see oauth.ts. */
   oauth: MoocOAuthState
@@ -202,6 +218,11 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   removedExerciseIds: new Set(),
   courseAccessById: new Map(),
   reviewByExerciseId: new Map(),
+  reviewProgressByExerciseId: new Map(),
+  endedExamIds: new Set(),
+  gradingOutcomeOverrides: new Map(),
+  areConnectionsDropped: false,
+  modelSolutionRevealedCourseIds: new Set(),
   chapterByExerciseId: new Map(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
@@ -211,6 +232,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   delayNextArchiveMs: undefined,
   checksumsBeforeUpdate: new Map(),
   lastAuthorization: undefined,
+  lastClientVersion: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
   currentUserId: MOCK_DEFAULT_USER_ID,
@@ -232,6 +254,32 @@ const FAULT_ERRORS: Record<number, ApiErrorMessageKey> = {
 
 /** Why {@link MoocMockControls.failNext} refused to arm a fault. */
 type FailNextRejection = "unknown-operation" | "unsupported-status"
+
+/** What the course material's review process reports of an exercise in `ExerciseProgress`. */
+export interface MockReviewProgress {
+  reviewing_stage?: ReviewingStage
+  teacher_review?: {
+    decision: string
+    score_given: number
+    created_at: string
+    justification?: string | null
+  }
+}
+
+export type ReviewingStage =
+  | "peer_review"
+  | "self_review"
+  | "waiting_for_peer_reviews"
+  | "waiting_for_teacher"
+  | "reviewed_and_locked"
+  | "locked"
+  | "not_answered_and_locked"
+
+/** The course fields a test may change; see {@link MoocMockControls.setCourseFields}. */
+export type MockCourseFields = Pick<
+  Course,
+  "language_code" | "moved_to_course_id" | "closed_at" | "successor_course_id"
+> & { is_staff?: boolean }
 
 /** Whether students may reach a course, see {@link MoocMockControls.setCourseAccess}. */
 export type MockCourseAccess = "open" | "forbidden" | "deleted"
@@ -307,6 +355,30 @@ export interface MoocMockControls {
   setExerciseChapter: (exerciseId: string, chapter: MockChapter | undefined) => boolean
   /** Puts a fixture exercise in chapter locking's teacher review, or out with `undefined`. */
   setExerciseReview: (exerciseId: string, review: MockReview | undefined) => boolean
+  /** Sets what the review process reports for an exercise, or clears it; false for an unknown one. */
+  setExerciseReviewProgress: (
+    exerciseId: string,
+    progress: MockReviewProgress | undefined,
+  ) => boolean
+  /**
+   * Makes an exercise's submissions grade with `outcome` instead of its fixture's, or with
+   * `undefined` restores that; false for an unknown exercise.
+   */
+  setGradingOutcome: (exerciseId: string, outcome: GradingOutcome | undefined) => boolean
+  /**
+   * Makes the whole mock, both backends included, drop every connection, as an unreachable
+   * server does; the control routes still answer so a test can end it.
+   */
+  setConnectionsDropped: (dropped: boolean) => void
+  /** Ends an exam's answering time, or restores it; false for an unknown exam. */
+  setExamEnded: (examId: string, ended: boolean) => boolean
+  /** Makes the course's settings reveal model solutions to everyone; false for an unknown course. */
+  setModelSolutionRevealed: (courseId: string, revealed: boolean) => boolean
+  /**
+   * Changes what `GET courses` reports of a fixture course, and whether the student teaches it;
+   * false for an unknown course.
+   */
+  setCourseFields: (courseId: string, fields: MockCourseFields) => boolean
   /** Makes every token act for another account, as when a second student logs in on one computer. */
   setCurrentUser: (userId: string) => void
   /** Points every URL this mock hands out at `baseUrl`. */
@@ -404,6 +476,11 @@ const createMoocMockControls = (
     state.courseAccessById.clear()
     state.chapterByExerciseId.clear()
     state.reviewByExerciseId.clear()
+    state.reviewProgressByExerciseId.clear()
+    state.endedExamIds.clear()
+    state.gradingOutcomeOverrides.clear()
+    state.areConnectionsDropped = false
+    state.modelSolutionRevealedCourseIds.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
@@ -417,6 +494,7 @@ const createMoocMockControls = (
     }
     state.checksumsBeforeUpdate.clear()
     state.lastAuthorization = undefined
+    state.lastClientVersion = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
     state.currentUserId = MOCK_DEFAULT_USER_ID
@@ -426,6 +504,7 @@ const createMoocMockControls = (
     for (const course of state.fixtures.courses) {
       const fixture = byDefault.get(course.course.id)
       course.enrolled = fixture?.enrolled ?? course.enrolled
+      course.staff = fixture?.staff ?? course.staff
       course.course = fixture?.course ?? course.course
     }
   },
@@ -548,6 +627,63 @@ const createMoocMockControls = (
     } else {
       state.chapterByExerciseId.delete(exerciseId)
     }
+    return true
+  },
+  setExerciseReviewProgress: (exerciseId, progress) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (progress) {
+      state.reviewProgressByExerciseId.set(exerciseId, progress)
+    } else {
+      state.reviewProgressByExerciseId.delete(exerciseId)
+    }
+    return true
+  },
+  setGradingOutcome: (exerciseId, outcome) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (outcome) {
+      state.gradingOutcomeOverrides.set(exerciseId, outcome)
+    } else {
+      state.gradingOutcomeOverrides.delete(exerciseId)
+    }
+    return true
+  },
+  setConnectionsDropped: (dropped) => {
+    state.areConnectionsDropped = dropped
+  },
+  setExamEnded: (examId, ended) => {
+    if (!state.fixtures.exams.some((exam) => exam.id === examId)) {
+      return false
+    }
+    if (ended) {
+      state.endedExamIds.add(examId)
+    } else {
+      state.endedExamIds.delete(examId)
+    }
+    return true
+  },
+  setModelSolutionRevealed: (courseId, revealed) => {
+    if (!state.fixtures.courses.some((c) => c.course.id === courseId)) {
+      return false
+    }
+    if (revealed) {
+      state.modelSolutionRevealedCourseIds.add(courseId)
+    } else {
+      state.modelSolutionRevealedCourseIds.delete(courseId)
+    }
+    return true
+  },
+  setCourseFields: (courseId, { is_staff: isStaff, ...fields }) => {
+    const course = state.fixtures.courses.find((c) => c.course.id === courseId)
+    if (!course) {
+      return false
+    }
+    // A copy: the fixture's course object is shared by every mock instance.
+    course.course = { ...course.course, ...fields }
+    course.staff = isStaff ?? course.staff
     return true
   },
   setExerciseReview: (exerciseId, review) => {
@@ -680,6 +816,45 @@ const findCourse = (state: MoocMockState, id: string) =>
     ? undefined
     : state.fixtures.courses.find((c) => c.course.id === id)
 
+/** The exam an exercise belongs to, if any. */
+const examOfExercise = (state: MoocMockState, exerciseId: string): MoocExamFixture | undefined =>
+  state.fixtures.exams.find((exam) =>
+    exam.exercises.some((exercise) => exercise.slide.exercise_id === exerciseId),
+  )
+
+const isExamAnswerable = (state: MoocMockState, exam: MoocExamFixture): boolean =>
+  !state.endedExamIds.has(exam.id)
+
+/** `Exam` as the client API serves it. */
+const examView = (exam: MoocExamFixture) => ({
+  id: exam.id,
+  name: exam.name,
+  started_at: exam.startedAt,
+  answerable_until: exam.answerableUntil,
+})
+
+/**
+ * The host's `answerable_exam_or_not_found`: an exam exercise is served only while its exam can
+ * still be answered.
+ */
+const examRefusal = (state: MoocMockState, exerciseId: string): MockResponse | undefined => {
+  const exam = examOfExercise(state, exerciseId)
+  return exam && !isExamAnswerable(state, exam)
+    ? apiError(
+        "not_found",
+        "This exercise belongs to an exam the user has not started or can no longer answer",
+      )
+    : undefined
+}
+
+/** The course as `GET courses` reports it, with the fields that depend on the student. */
+const courseView = (state: MoocMockState, entry: CourseWithExercises) => ({
+  ...entry.course,
+  url: `${state.baseUrl}/org/test-organization/courses/${entry.course.slug}`,
+  is_enrolled: entry.enrolled,
+  is_staff: entry.staff,
+})
+
 /**
  * How the host refuses the course of `exerciseId`, if it does: a course closed to students
  * 403s (`authorize_access_to_course_material`), and a deleted course takes its exercises along.
@@ -700,7 +875,7 @@ const exerciseCourseRefusal = (
 
 const courseForbiddenError = (): MockResponse =>
   apiError(
-    "forbidden",
+    "no_access",
     "Unauthorized. Please contact course staff if you believe you should have access.",
   )
 
@@ -756,6 +931,10 @@ const isInClosedChapter = (state: MoocMockState, exerciseId: string): boolean =>
  * the exercise's own deadline, else its chapter's.
  */
 const slideInChapter = (state: MoocMockState, slide: ExerciseSlide): ExerciseSlide => {
+  const exam = examOfExercise(state, slide.exercise_id)
+  if (exam) {
+    return { ...slide, deadline: exam.answerableUntil }
+  }
   const chapter = state.chapterByExerciseId.get(slide.exercise_id)
   if (!chapter) {
     return slide
@@ -816,6 +995,7 @@ const isExerciseLocked = (state: MoocMockState, exerciseId: string): boolean => 
 }
 
 const isEnrolled = (state: MoocMockState, exerciseId: string): boolean =>
+  examOfExercise(state, exerciseId) !== undefined ||
   state.courseByExerciseId.get(exerciseId)?.enrolled === true
 
 const notEnrolledError = (): MockResponse =>
@@ -866,15 +1046,20 @@ const foreignSubmissionError = (
   record: SubmissionRecord,
   message: string,
 ): MockResponse | undefined =>
-  record.owner === "caller" ? undefined : apiError("forbidden", message)
+  record.owner === "caller" ? undefined : apiError("no_access", message)
 
 /**
  * The host's reveal rule (`model_solution_should_be_revealed`): full points, or the slide's
- * try limit used up. The try half counts submissions, not gradings, so it fires on the last
- * allowed try however it scores.
+ * try limit used up; staff and courses whose settings reveal solutions get them regardless.
+ * The try half counts submissions, not gradings, so it fires on the last allowed try however it
+ * scores.
  */
 const modelSolutionRevealed = (state: MoocMockState, exercise: MoocExerciseFixture): boolean => {
   const exerciseId = exercise.slide.exercise_id
+  const course = state.courseByExerciseId.get(exerciseId)
+  if (course?.staff || state.modelSolutionRevealedCourseIds.has(course?.course.id ?? "")) {
+    return true
+  }
   const records = callerSubmissionsFor(state, exerciseId)
   const limit = exercise.maxTriesPerSlide
   if (limit !== undefined && records.length >= limit) {
@@ -950,13 +1135,60 @@ const GRADING_OUTCOMES = {
     feedback_text: "Awaiting manual grading",
     feedback_json: null,
   },
+  // services/tmc/src/server/grade.ts: a compile error still grades (and uses a try); the extras
+  // carry `feedback_key`, which the tmc-langs RunResult never has.
+  compileFailed: {
+    grading_progress: "FullyGraded",
+    score_given: 0,
+    feedback_text: "Could not compile the submission",
+    feedback_json: {
+      status: "COMPILE_FAILED",
+      testResults: [],
+      logs: { stdout: "", stderr: "src/main.py:1: SyntaxError: invalid syntax" },
+      feedback_key: "compile_failed",
+      validations: null,
+      valgrind_failed: false,
+    },
+  },
+  // A run that says nothing about the answer is `Failed`, which uses no try.
+  genericError: {
+    grading_progress: "Failed",
+    score_given: 0,
+    feedback_text: "The tests could not be run",
+    feedback_json: {
+      status: "GENERIC_ERROR",
+      testResults: [],
+      logs: { stderr: "sandbox error" },
+      feedback_key: "generic_error",
+      validations: null,
+      valgrind_failed: false,
+    },
+  },
+  timedOut: {
+    grading_progress: "Failed",
+    score_given: 0,
+    feedback_text: "Test timed out",
+    feedback_json: { feedback_key: "timed_out" },
+  },
+  // The service's /grade answer before the sandbox run reports; never leaves this state.
+  pending: {
+    grading_progress: "Pending",
+    score_given: 0,
+    feedback_text: null,
+    feedback_json: null,
+  },
 } as const
 
 const outcomeOf = (
   state: MoocMockState,
   record: SubmissionRecord,
 ): (typeof GRADING_OUTCOMES)[keyof typeof GRADING_OUTCOMES] =>
-  GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
+  GRADING_OUTCOMES[gradingOutcomeKey(state, record.exerciseId)]
+
+const gradingOutcomeKey = (state: MoocMockState, exerciseId: string): GradingOutcome =>
+  state.gradingOutcomeOverrides.get(exerciseId) ??
+  state.fixtures.exerciseById.get(exerciseId)?.gradingOutcome ??
+  "passing"
 
 /**
  * The caller's progress on an exercise: attempted once submitted, completed/scored once a
@@ -992,27 +1224,40 @@ const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => 
     tries_left: limit === undefined ? null : Math.max(limit - records.length, 0),
     pending_teacher_review: pendingReview,
     exercise_locked: isExerciseLocked(state, exerciseId),
+    ...state.reviewProgressByExerciseId.get(exerciseId),
   }
 }
 
 const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown => {
+  const exam = examOfExercise(state, record.exerciseId)
+  if (exam && isExamAnswerable(state, exam)) {
+    return "GradingHidden"
+  }
   // First poll: not graded yet; later polls: the terminal outcome. Poll-count based, not
   // wall-clock, so tests are not flaky.
   if (!isGraded(record)) {
     return "NoGradingYet"
   }
   const now = new Date().toISOString()
-  const outcome = state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"
+  const fixture = state.fixtures.exerciseById.get(record.exerciseId)
+  const outcome = gradingOutcomeKey(state, record.exerciseId)
   const grading = outcomeOf(state, record)
+  const pageUrl = fixture?.slide.page_url ?? null
   return {
     Grading: {
       grading_progress: grading.grading_progress,
       score_given: grading.score_given,
       grading_started_at: now,
-      grading_completed_at: outcome === "pendingManual" ? null : now,
+      grading_completed_at: outcome === "pendingManual" || outcome === "pending" ? null : now,
       feedback_json: grading.feedback_json,
       feedback_text: grading.feedback_text,
-      exercise_progress: exerciseProgress(state, record.exerciseId),
+      // An exam exercise has neither a course progress nor a page.
+      ...(exam
+        ? {}
+        : {
+            exercise_progress: exerciseProgress(state, record.exerciseId),
+            submission_page_url: pageUrl === null ? null : `${pageUrl}#${record.exerciseId}`,
+          }),
     },
   }
 }
@@ -1151,7 +1396,12 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
 
   const operations: Record<string, (c: Context, req: Request) => MockResponse> = {
     // GET /api/v0/exercise-services/client/me
-    getClientCurrentUser: (): MockResponse => ok({ id: state.currentUserId }),
+    getClientCurrentUser: (): MockResponse =>
+      ok(
+        state.currentUserId === MOCK_DEFAULT_USER_ID
+          ? { id: state.currentUserId, name: MOCK_USER_NAME, email: MOCK_USER_EMAIL }
+          : { id: state.currentUserId, email: `${state.currentUserId}@example.com` },
+      ),
 
     // GET /api/v0/exercise-services/client/courses
     getClientCourses: (): MockResponse => {
@@ -1161,8 +1411,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       }
       return ok(
         state.fixtures.courses
-          .filter((c) => c.enrolled && findCourse(state, c.course.id))
-          .map((c) => c.course),
+          .filter((c) => (c.enrolled || c.staff) && findCourse(state, c.course.id))
+          .map((c) => courseView(state, c)),
       )
     },
 
@@ -1173,7 +1423,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      return ok(found.course)
+      if (state.courseAccessById.get(id) === "forbidden") {
+        return courseForbiddenError()
+      }
+      return ok(courseView(state, found))
     },
 
     // GET /api/v0/exercise-services/client/courses/{id}/exercises
@@ -1183,7 +1436,6 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      // Unlike the course and its progress, which any user may view, the exercises are course material.
       if (state.courseAccessById.get(id) === "forbidden") {
         return courseForbiddenError()
       }
@@ -1202,6 +1454,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const found = findCourse(state, id)
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
+      }
+      if (state.courseAccessById.get(id) === "forbidden") {
+        return courseForbiddenError()
       }
       // One entry per exercise, zeroed when untouched, like the real backend; those of a
       // chapter that opens later are under it in `closed_chapters`.
@@ -1233,6 +1488,35 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       })
     },
 
+    // GET /api/v0/exercise-services/client/exams
+    getClientExams: (): MockResponse =>
+      ok(
+        state.fixtures.exams
+          .filter(
+            (exam) =>
+              isExamAnswerable(state, exam) &&
+              exam.exercises.some((e) => clientServableSlide(e.slide).tasks.length > 0),
+          )
+          .map((exam) => examView(exam)),
+      ),
+
+    // GET /api/v0/exercise-services/client/exams/{id}/exercises
+    getClientExamExercises: (c: Context): MockResponse => {
+      const id = String(c.request.params.id)
+      const exam = state.fixtures.exams.find((candidate) => candidate.id === id)
+      if (!exam || !isExamAnswerable(state, exam)) {
+        return apiError(
+          "not_found",
+          "No such exam, or the user has not started it or can no longer answer it",
+        )
+      }
+      return ok(
+        exam.exercises
+          .map((e) => clientServableSlide(slideInChapter(state, e.slide)))
+          .filter((slide) => slide.tasks.length > 0),
+      )
+    },
+
     // GET /api/v0/exercise-services/client/exercises/{id}
     getClientExercise: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
@@ -1241,6 +1525,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // Unknown exercise id: get_by_id yields RecordNotFound -> 404, distinct from the
         // not-enrolled 422 below.
         return apiError("not_found", `no such exercise: ${id}`)
+      }
+      const examRefused = examRefusal(state, id)
+      if (examRefused) {
+        return examRefused
       }
       const courseRefused = exerciseCourseRefusal(state, id)
       if (courseRefused) {
@@ -1255,8 +1543,12 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (closed) {
         return closed
       }
+      // Exams reveal no model solutions.
       const slide = clientServableSlide(
-        slideInChapter(state, revealModelSolutions(state, exercise)),
+        slideInChapter(
+          state,
+          examOfExercise(state, id) ? exercise.slide : revealModelSolutions(state, exercise),
+        ),
       )
       if (slide.tasks.length === 0) {
         // The exercise exists and the student is on its course, but nothing in it can be
@@ -1276,6 +1568,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // The host runs both checks BEFORE reading the multipart stream, so an upload is refused
       // for the reason a submit would be. Stored objects outlive the request, hence the gate.
       // A snapshot is accepted past the deadline and out of tries, so its files are too.
+      const examRefused = examRefusal(state, exerciseId)
+      if (examRefused) {
+        return examRefused
+      }
+      if (examOfExercise(state, exerciseId) && c.request.query.for === "snapshot") {
+        return apiError("not_found", "Exam exercises take no snapshots")
+      }
       const courseRefused = exerciseCourseRefusal(state, exerciseId)
       if (courseRefused) {
         return courseRefused
@@ -1345,6 +1644,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const exercise = findExercise(state, exerciseId)
       if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      const examRefused = examRefusal(state, exerciseId)
+      if (examRefused) {
+        return examRefused
       }
       const courseRefused = exerciseCourseRefusal(state, exerciseId)
       if (courseRefused) {
@@ -1419,6 +1722,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!findExercise(state, exerciseId)) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
+      if (examOfExercise(state, exerciseId)) {
+        return apiError("not_found", "Exam exercises take no snapshots")
+      }
       const courseRefused = exerciseCourseRefusal(state, exerciseId)
       if (courseRefused) {
         return courseRefused
@@ -1487,7 +1793,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // Newest first; `id` is the slide-submission or snapshot id. A graded submission reports
       // the exercise's grading outcome; an ungraded one and every snapshot report nulls.
       const items = [...records].toReversed().map((record) => {
-        const graded = record.kind === "submission" && isGraded(record)
+        const exam = examOfExercise(state, exerciseId)
+        const graded =
+          record.kind === "submission" &&
+          isGraded(record) &&
+          !(exam && isExamAnswerable(state, exam))
         const outcome = outcomeOf(state, record)
         return {
           id: record.slideSubmissionId,
@@ -1837,6 +2147,16 @@ export const registerMoocRoutes = (
     res.send(bytes)
   })
 
+  // First on the app, so it precedes the tmc mock's routes mounted after this one.
+  app.use((req, _res, next) => {
+    const isControl = /^\/(mooc|tmc)-mock\//.test(req.path)
+    if (state.areConnectionsDropped && !isControl) {
+      req.socket.destroy()
+      return
+    }
+    next()
+  })
+
   // The /mooc-mock/* control routes sit on the app, outside the bearer middleware: a test
   // drives them before it holds a token. They parse their own JSON bodies, as the OAuth
   // routes parse form bodies.
@@ -1846,6 +2166,7 @@ export const registerMoocRoutes = (
   app.get("/mooc-mock/auth-state", (_req, res) => {
     res.json({
       lastAuthorization: state.lastAuthorization,
+      lastClientVersion: state.lastClientVersion,
       authenticatedRequestCount: state.authenticatedRequestCount,
     })
   })
@@ -2028,6 +2349,96 @@ export const registerMoocRoutes = (
     res.status(204).end()
   })
 
+  app.post("/mooc-mock/set-exercise-review-progress", json, (req, res) => {
+    const { exercise_id: exerciseId, progress } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      progress?: MockReviewProgress | null
+    }
+    if (typeof exerciseId !== "string" || progress === undefined) {
+      res.status(400).json({ error: "exercise_id must be a string and progress an object or null" })
+      return
+    }
+    if (!controls.setExerciseReviewProgress(exerciseId, progress ?? undefined)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-connections-dropped", json, (req, res) => {
+    const { dropped } = (req.body ?? {}) as { dropped?: unknown }
+    if (typeof dropped !== "boolean") {
+      res.status(400).json({ error: "dropped must be a boolean" })
+      return
+    }
+    controls.setConnectionsDropped(dropped)
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-grading-outcome", json, (req, res) => {
+    const { exercise_id: exerciseId, outcome } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      outcome?: unknown
+    }
+    const outcomes: unknown[] = [...Object.keys(GRADING_OUTCOMES), null]
+    if (typeof exerciseId !== "string" || !outcomes.includes(outcome)) {
+      res.status(400).json({
+        error: "exercise_id must be a string and outcome one of " + JSON.stringify(outcomes),
+      })
+      return
+    }
+    if (!controls.setGradingOutcome(exerciseId, (outcome as GradingOutcome | null) ?? undefined)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-exam-ended", json, (req, res) => {
+    const { exam_id: examId, ended } = (req.body ?? {}) as { exam_id?: unknown; ended?: unknown }
+    if (typeof examId !== "string" || typeof ended !== "boolean") {
+      res.status(400).json({ error: "exam_id must be a string and ended a boolean" })
+      return
+    }
+    if (!controls.setExamEnded(examId, ended)) {
+      res.status(404).json({ error: `no such exam: ${examId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-model-solution-revealed", json, (req, res) => {
+    const { course_id: courseId, revealed } = (req.body ?? {}) as {
+      course_id?: unknown
+      revealed?: unknown
+    }
+    if (typeof courseId !== "string" || typeof revealed !== "boolean") {
+      res.status(400).json({ error: "course_id must be a string and revealed a boolean" })
+      return
+    }
+    if (!controls.setModelSolutionRevealed(courseId, revealed)) {
+      res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-course-fields", json, (req, res) => {
+    const { course_id: courseId, fields } = (req.body ?? {}) as {
+      course_id?: unknown
+      fields?: MockCourseFields
+    }
+    if (typeof courseId !== "string" || typeof fields !== "object" || fields === null) {
+      res.status(400).json({ error: "course_id must be a string and fields an object" })
+      return
+    }
+    if (!controls.setCourseFields(courseId, fields)) {
+      res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
   app.post("/mooc-mock/set-exercise-review", json, (req, res) => {
     const { exercise_id: exerciseId, review } = (req.body ?? {}) as {
       exercise_id?: unknown
@@ -2146,13 +2557,14 @@ export const registerMoocRoutes = (
         send(
           res,
           apiError(
-            "forbidden",
+            "insufficient_scope",
             "The access token does not grant the required exercise-services scope.",
           ),
         )
         return
       }
       state.lastAuthorization = header
+      state.lastClientVersion = req.headers[CLIENT_VERSION_HEADER] as string | undefined
       state.authenticatedRequestCount += 1
       next()
     })

@@ -63,9 +63,11 @@ const InitializationFailureSchema = z.object({
  * openIssueReporter.
  */
 export const RunnableCommandSchema = z.enum([
+  "tmc.changeTmcDataPath",
   "tmc.enrollOnCourse",
   "tmc.logs",
   "tmc.myCourses",
+  "tmc.openTroubleshooting",
   "tmc.showAiUseProblem",
   "tmc.showMoocLogin",
   "tmc.trustCourseWorkspace",
@@ -116,6 +118,8 @@ export const ErrorHelpPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ErrorHelp"),
   topic: HelpTopicSchema,
+  /** The folder the TestMyCode tools are installed in, as the student's file manager shows it. */
+  cliFolder: z.string().optional(),
 })
 
 export type ErrorHelpPanel = z.infer<typeof ErrorHelpPanelSchema>
@@ -264,6 +268,10 @@ export const CatalogCourseSchema = z.object({
   name: z.string(),
   organization: z.string(),
   description: z.string().optional(),
+  /** The course's language, such as "fi-FI", to tell its language versions apart. */
+  languageCode: z.string().optional(),
+  /** The student teaches or assists on the course, which is listed without an enrollment. */
+  isStaff: z.boolean().optional(),
   isAdded: z.boolean(),
 })
 
@@ -376,6 +384,8 @@ export const SubmissionViewSchema = z.object({
   triesLeft: z.number().optional(),
   /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
   isLoggedOut: z.boolean().optional(),
+  /** A test run on the student's computer since this submission did not pass, as a sentence. */
+  newerLocalRun: z.string().optional(),
   /** ms timestamp of the run a `testedLocally` view shows, which tells one run from the next. */
   localPassAt: z.number().optional(),
 })
@@ -576,6 +586,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     requestId: z.number(),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
+  // Stops the upload of the submission the named panel shows.
+  z.object({
+    type: z.literal("cancelSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+  }),
   // Runs an exercise command on the exercise the named panel shows.
   z.object({
     type: z.literal("exerciseAction"),
@@ -598,6 +613,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("showErrorDetails"),
     detailsId: z.string(),
+  }),
+  // Opens the CLI folder the named help screen shows in the file manager.
+  z.object({
+    type: z.literal("revealCliFolder"),
+    sourcePanel: targetPanelSchema("ErrorHelp"),
   }),
   // The latest log lines, for the help screen.
   z.object({

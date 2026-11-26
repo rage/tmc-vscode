@@ -85,8 +85,40 @@ export function combineMoocApiExerciseData(
           }
         : {}),
       ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
+      ...(slide.unsupported ? { browserOnly: true } : {}),
+      ...instructionsOf(slide),
+      ...(slide.tasks.some((task) => task.model_solution_spec !== null)
+        ? { hasModelSolution: true }
+        : {}),
+      ...reviewOf(exerciseProgress),
     }
   })
+}
+
+/** The plain text of the slide's task instructions, one paragraph per block. */
+function instructionsOf(slide: TmcExerciseSlide): Pick<MoocLocalCourseExercise, "instructions"> {
+  const paragraphs = slide.tasks.flatMap((task) => task.instructions_text ?? [])
+  return paragraphs.length > 0 ? { instructions: paragraphs } : {}
+}
+
+function reviewOf(
+  progress: ExerciseProgress | undefined,
+): Pick<MoocLocalCourseExercise, "reviewingStage" | "teacherReview"> {
+  const stage = progress?.reviewing_stage
+  const review = progress?.teacher_review
+  return {
+    ...(stage ? { reviewingStage: stage } : {}),
+    ...(review
+      ? {
+          teacherReview: {
+            decision: review.decision,
+            justification: review.justification,
+            scoreGiven: review.score_given,
+            createdAt: review.created_at,
+          },
+        }
+      : {}),
+  }
 }
 
 function storedPoints(
@@ -280,5 +312,44 @@ export function toStoredMoocCourse(
     newExercises: previous?.newExercises ?? [],
     notifyAfter: previous?.notifyAfter ?? 0,
     ...(closedChapters.length > 0 ? { closedChapters } : {}),
+    ...(course.url ? { url: course.url } : {}),
+    ...(course.language_code ? { languageCode: course.language_code } : {}),
+    ...(course.language_group_id ? { languageGroupId: course.language_group_id } : {}),
+    ...(course.closed_at ? { closedAt: course.closed_at } : {}),
+    ...(course.successor_course_id ? { successorCourseId: course.successor_course_id } : {}),
+    ...(course.is_staff ? { isStaff: true } : {}),
+    ...(previous?.examAnswerableUntil ? { examAnswerableUntil: previous.examAnswerableUntil } : {}),
+  }
+}
+
+/**
+ * The stored form of a started courses.mooc.fi exam, kept as a course of its exercises whose
+ * deadline is when the exam's answers close.
+ *
+ * @param exam The stored exam, or the one being added: its id, name and closing time.
+ */
+export function toStoredMoocExam(
+  exam: Pick<MoocLocalCourseData, "id" | "name" | "title" | "organization"> &
+    Partial<MoocLocalCourseData> & { examAnswerableUntil: string },
+  slides: TmcExerciseSlide[],
+): MoocLocalCourseData {
+  const previousExercises = exam.exercises ?? []
+  const exercises = combineMoocApiExerciseData(
+    slides.map((slide) => ({ ...slide, deadline: slide.deadline ?? exam.examAnswerableUntil })),
+    { course_id: exam.id, exercises: [], closed_chapters: [] },
+    previousExercises,
+  )
+  return {
+    id: exam.id,
+    name: exam.name,
+    title: exam.title,
+    description: null,
+    organization: exam.organization,
+    aiPolicy: exam.aiPolicy ?? "not_set",
+    exercises,
+    ...sumCoursePoints(exercises),
+    newExercises: exam.newExercises ?? [],
+    notifyAfter: exam.notifyAfter ?? 0,
+    examAnswerableUntil: exam.examAnswerableUntil,
   }
 }

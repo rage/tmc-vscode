@@ -42,9 +42,10 @@
     "release": "./bin/publishRelease.sh",
     "setup-ultimate": "git clean -X -d -f && git submodule update --init && pnpm install && pnpm --dir backend run setup",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --reporter=default --reporter=json --outputFile.json=coverage/vitest-results.json",
     "test:watch": "vitest",
     "test:integration": "node ./bin/runIntegrationTests.js",
+    "test:real": "cross-env TMC_E2E_REAL=1 xvfb-maybe -a -- playwright test -c playwright.real.config.ts",
     "test:upgrade": "playwright test -c playwright.upgrade.config.ts",
     "ci:test": "pnpm run test && pnpm run test:integration",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json && pnpm run check:svelte",
@@ -52,7 +53,9 @@
     "update-submodules": "git submodule foreach git pull origin master",
     "vendor:langs-openapi": "bash bin/updateLangsOpenapi.sh",
     "vendor:langs-schema": "bash bin/updateLangsSchema.sh",
+    "vendor:langs-checksums": "node --import tsx ./bin/updateLangsChecksums.ts",
     "vscode:prepublish": "cross-env NODE_ENV=production pnpm run build",
+    "vscode:uninstall": "node ./dist/uninstall.js",
     "watch": "node esbuild.mjs --watch",
     "webview:build": "pnpm --dir webview-ui run build",
     "webview:start": "pnpm --dir webview-ui run dev"
@@ -245,7 +248,8 @@
       {
         "command": "tmc.showMoocLogin",
         "title": "Log In",
-        "category": "TestMyCode"
+        "category": "TestMyCode",
+        "icon": "$(sign-in)"
       },
       {
         "command": "tmc.showExerciseActions",
@@ -298,6 +302,11 @@
       {
         "command": "tmc.logs",
         "title": "Show Logs",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.openTroubleshooting",
+        "title": "Troubleshooting",
         "category": "TestMyCode"
       },
       {
@@ -646,6 +655,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "tmc.showMoocLogin",
+          "group": "navigation@0",
+          "when": "view == tmcView && test-my-code:Initialized && !test-my-code:LoggedIn"
+        },
         {
           "command": "tmc.trustCourseWorkspace",
           "group": "navigation@0",

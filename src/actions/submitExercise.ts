@@ -21,6 +21,7 @@ import {
   toError,
   unwrap,
 } from "../../shared/lib"
+import type { AuthState } from "../api/authState"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -32,8 +33,13 @@ import {
   ChapterNotOpenError,
   NotEnrolledError,
   DeadlinePassedError,
+  ExerciseNotFoundError,
+  ForbiddenError,
+  InvalidRequestError,
   isSubmitRefusal,
+  NotFoundError,
   OutOfTriesError,
+  UnexpectedResponseError,
 } from "../errors"
 import { exerciseSubmissionPanel } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
@@ -60,6 +66,7 @@ import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles } from "./keptCopies"
+import { pendingGradings } from "./pendingGradings"
 import { storedExerciseOf } from "./storedExercise"
 import type { ReadyActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
@@ -92,6 +99,8 @@ interface Submission {
   availablePoints: number
   /** A mooc exercise's course material page, as the stored course last named it. */
   materialPageUrl?: string | undefined
+  /** The courses.mooc.fi account submitting, when the session names one. */
+  accountId?: string | undefined
 }
 
 /** Collects what a backend reports while it works on a submission, and shows it in the panel. */
@@ -163,6 +172,21 @@ interface UnfinishedGrading extends Submission {
 // Keyed by panel id so a webview names only its own panel.
 const unfinishedGradings = new Map<number, UnfinishedGrading>()
 
+/** Stops the upload a results panel shows, by panel id, while it runs. */
+const uploadCancels = new Map<number, () => void>()
+
+/** Stops the upload of the submission results panel `panelId` shows; nothing if none runs. */
+export function cancelSubmissionUpload(panelId: number): void {
+  uploadCancels.get(panelId)?.()
+}
+
+const CANCELLED_VIEW: SubmissionView = {
+  ...submitFailedView({ message: "The submission was cancelled." }),
+  headline: "Submission cancelled",
+  tone: "info",
+  explanation: "If it reached the server before you cancelled, it is graded and shows in History.",
+}
+
 /** Drops what earlier submissions of `panel`'s exercise left pending. */
 function forgetEarlierSubmissions(panel: ExerciseSubmissionPanel): void {
   for (const pending of [unfinishedGradings, pendingFeedback]) {
@@ -210,9 +234,21 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
 function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
   return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
-    const submitted = await langs.submitMoocExercise(exerciseId, submission.exercise.uri.fsPath)
+    let isCancelled = false
+    // An upload reported as failed or cancelled may still have reached the server.
+    void pendingGradings.delete(submission.exerciseId)
+    const submitted = await langs.submitMoocExercise(
+      exerciseId,
+      submission.exercise.uri.fsPath,
+      (interrupt) =>
+        uploadCancels.set(submission.panel.id, () => {
+          isCancelled = true
+          interrupt()
+        }),
+    )
+    uploadCancels.delete(submission.panel.id)
     if (submitted.err) {
-      return submitted
+      return isCancelled ? Ok({ recorded: undefined, view: CANCELLED_VIEW }) : submitted
     }
     const exercisePageUrl = submitted.val.exercise_page_url ?? submission.materialPageUrl
     reporter.received(exercisePageUrl)
@@ -222,8 +258,68 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
       taskSubmissionId: submitted.val.task_submission_id,
       exercisePageUrl,
     }
+    // VS Code may close before the grading ends.
+    await rememberPending(grading)
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
+}
+
+/**
+ * Whether `error` is a refusal that waiting longer for the grading cannot change. A lost session
+ * is not: the wait can go on after a new login.
+ */
+function isTerminalGradingFailure(error: Error): boolean {
+  return (
+    error instanceof NotFoundError ||
+    error instanceof ExerciseNotFoundError ||
+    error instanceof ForbiddenError ||
+    error instanceof InvalidRequestError ||
+    error instanceof UnexpectedResponseError
+  )
+}
+
+async function rememberPending(grading: UnfinishedGrading): Promise<void> {
+  await pendingGradings.set(grading.exerciseId, {
+    taskSubmissionId: grading.taskSubmissionId,
+    exercisePageUrl: grading.exercisePageUrl,
+    accountId: grading.accountId,
+  })
+}
+
+/** The courses.mooc.fi account `authState` is logged in as, when the session names one. */
+export function moocAccountIdOf(authState: AuthState): string | undefined {
+  const { session } = authState
+  return session?.kind === "mooc" ? session.account?.id : undefined
+}
+
+/**
+ * Offers the results screen `panel` the grading of `exercise`'s latest submission by `accountId`
+ * that a reload stopped waiting for, if there is one, as a grading still in progress.
+ *
+ * @returns Whether there was one.
+ */
+export function resumePendingGrading(
+  exercise: WorkspaceExercise,
+  courseId: CourseIdentifier,
+  availablePoints: number,
+  panel: ExerciseSubmissionPanel,
+  accountId: string | undefined,
+): boolean {
+  const pending = pendingGradings.get(exercise.id, accountId)
+  if (!pending) {
+    return false
+  }
+  unfinishedGradings.set(panel.id, {
+    panel,
+    exercise,
+    exerciseId: exercise.id,
+    courseId,
+    availablePoints,
+    taskSubmissionId: pending.taskSubmissionId,
+    exercisePageUrl: pending.exercisePageUrl,
+    accountId,
+  })
+  return true
 }
 
 function gradingJobLabel(exercise: WorkspaceExercise): string {
@@ -246,11 +342,19 @@ async function waitForMoocGrading(
   )
   if (waited.err) {
     Logger.error("Failed to wait for the grading of a submission", waited.val)
-    unfinishedGradings.set(panel.id, grading)
+    // Waiting longer cannot change a refusal, only a server that did not answer.
+    const isWorthWaiting = !isTerminalGradingFailure(waited.val)
+    if (isWorthWaiting) {
+      unfinishedGradings.set(panel.id, grading)
+      await rememberPending(grading)
+    } else {
+      await pendingGradings.delete(grading.exerciseId)
+    }
     return {
       recorded: undefined,
       view: {
         ...gradingUnavailableView(toWebviewError(waited.val)),
+        canKeepWaiting: isWorthWaiting,
         submissionUrl: grading.exercisePageUrl,
       },
     }
@@ -259,10 +363,15 @@ async function waitForMoocGrading(
   const progress = status.status === "grading" ? status.grading.exercise_progress : null
   const view = {
     ...moocGradingView(status, grading.availablePoints),
-    submissionUrl: grading.exercisePageUrl,
+    submissionUrl:
+      (status.status === "grading" ? status.grading.submission_page_url : null) ??
+      grading.exercisePageUrl,
   }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
+    await rememberPending(grading)
+  } else {
+    await pendingGradings.delete(grading.exerciseId)
   }
   return {
     recorded: progress?.standing
@@ -374,7 +483,8 @@ async function readyToSubmit(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
   }
-  const refusal = submitRefusalOf(courseExercise, new Date())
+  // courses.mooc.fi refuses with a typed reason itself, and stored data can be out of date.
+  const refusal = course.kind === "mooc" ? undefined : submitRefusalOf(courseExercise, new Date())
   if (refusal) {
     return Err(refusalError(refusal, courseExercise))
   }
@@ -441,9 +551,10 @@ async function storedExerciseWithAccess(
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: another operation in flight on
  * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
+ * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. A tmc exercise the
  * stored data says the backend would refuse is the error {@link refusalError} names, and one
- * hidden until its chapter opens a `ChapterNotOpenError`.
+ * hidden until its chapter opens a `ChapterNotOpenError`; courses.mooc.fi's own refusal shows in
+ * the panel.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
@@ -479,6 +590,7 @@ export async function submitExercise(
         courseId,
         availablePoints: unwrap(courseExercise).availablePoints,
         materialPageUrl: courseExercise.kind === "mooc" ? courseExercise.data.pageUrl : undefined,
+        accountId: moocAccountIdOf(actionContext.authState),
       }
       forgetEarlierSubmissions(submission.panel)
       submissionViews.open(submission.panel)

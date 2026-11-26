@@ -1,12 +1,8 @@
-import * as path from "path"
-
-import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import * as vscode from "vscode"
 
-import { FileSystemError } from "../errors"
-import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
+import { ProjectsRestoreConflictError } from "../errors"
+import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -15,14 +11,14 @@ import type { ReadyActionContext } from "./types"
  * is logged in now downloads their own and cannot submit another student's work as theirs.
  * Nothing is deleted; unsaved editor changes are saved first and the editors closed.
  *
- * @returns The folder the exercises are now in; `Err`, moving nothing, when an editor could not
- *   be saved or stayed open.
+ * @returns The folder the exercises are now in; `Err`, with the exercises left in place, when an
+ *   editor could not be saved or stayed open, or an entry could not be moved.
  */
 export async function moveExercisesAside(
   actionContext: ReadyActionContext,
   now: Date = new Date(),
 ): Promise<Result<string, Error>> {
-  const { keptCopies, resources } = actionContext.startup
+  const { keptCopies, langs, resources } = actionContext.startup
   const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
     return Err(new Error("The exercises folder is not known."))
@@ -32,20 +28,13 @@ export async function moveExercisesAside(
     .replaceAll(":", "-")
     .replace(/\.\d+Z$/, "")
   const target = `${projectsDirectory}-moved-${stamp}`
-  // An editor left open would write its file back into the emptied exercises folder on save.
-  const folder = { uri: vscode.Uri.file(projectsDirectory) }
-  const saved = await saveExerciseDocuments(folder)
-  if (saved.err) {
-    return saved
+  const released = await releaseExerciseEditors(projectsDirectory)
+  if (released.err) {
+    return released
   }
-  if (!(await closeExerciseEditors(folder))) {
-    return Err(new Error("Some of the exercises' editors are still open."))
-  }
-  try {
-    await fs.move(projectsDirectory, target)
-    await fs.ensureDir(projectsDirectory)
-  } catch (e) {
-    return Err(new FileSystemError(e, `Failed to move ${projectsDirectory} to ${target}.`))
+  const setAside = await langs.setProjectsAside(target)
+  if (setAside.err) {
+    return setAside
   }
   // The fingerprints and paste links describe the moved files and the previous account.
   await keptCopies.clear()
@@ -60,29 +49,20 @@ export async function moveExercisesAside(
  * Moves exercises moved aside by {@link moveExercisesAside} back into the exercises folder.
  *
  * @returns `false`, moving nothing, when the exercises folder is not empty: merging two sets of
- *   exercises could overwrite one with the other.
+ *   exercises would credit one account with the other's.
  */
 export async function bringBackMovedExercises(
   actionContext: ReadyActionContext,
   folder: string,
 ): Promise<Result<boolean, Error>> {
-  const projectsDirectory = actionContext.startup.resources.projectsDirectory
+  const { langs, resources } = actionContext.startup
+  const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
     return Err(new Error("The exercises folder is not known."))
   }
-  try {
-    const entries = await fs.readdir(projectsDirectory).catch(() => [])
-    if (entries.length > 0) {
-      return Ok(false)
-    }
-    // Fills the folder rather than replacing it: every tmc-langs call recreates a missing one.
-    await fs.ensureDir(projectsDirectory)
-    for (const entry of await fs.readdir(folder)) {
-      await fs.move(path.join(folder, entry), path.join(projectsDirectory, entry))
-    }
-    await fs.rmdir(folder)
-  } catch (e) {
-    return Err(new FileSystemError(e, `Failed to move ${folder} back to ${projectsDirectory}.`))
+  const restored = await langs.restoreProjects(folder)
+  if (restored.err) {
+    return restored.val instanceof ProjectsRestoreConflictError ? Ok(false) : restored
   }
   const refreshed = await refreshLocalExercises(actionContext)
   return refreshed.err ? refreshed : Ok(true)

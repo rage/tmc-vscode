@@ -9,7 +9,7 @@ const oncopy = vi.fn()
 const props = { sourcePanel, oncopy } as const
 
 async function paste(): Promise<HTMLElement> {
-  const send = await screen.findByRole("button", { name: "Send to Pastebin" })
+  const send = await screen.findByRole("button", { name: "Get a Link" })
   send.click()
   return send
 }
@@ -65,9 +65,9 @@ suite("PasteHelpBox component", () => {
     expect(await screen.findByText(/paste service is down/)).toBeInTheDocument()
   })
 
-  test("names the pastebin, not the backend's host", async () => {
+  test("says who can open the link, not the backend's host", async () => {
     render(PasteHelpBox, { props })
-    expect(await screen.findByText(/Send your code to/)).not.toHaveTextContent(/mooc\.fi/)
+    expect(await screen.findByText(/Get a link to your code/)).not.toHaveTextContent(/mooc\.fi/)
   })
 
   test("a paste in flight cannot be started again", async () => {
@@ -75,7 +75,7 @@ suite("PasteHelpBox component", () => {
 
     const send = await paste()
     await vi.waitFor(() => expect(send).toHaveAttribute("disabled"))
-    expect(screen.getByText("Sending to the pastebin…")).toBeInTheDocument()
+    expect(screen.getByText("Getting a link…")).toBeInTheDocument()
 
     replyToRequest("pasteExercise", {
       ok: true,
@@ -100,7 +100,7 @@ suite("PasteHelpBox component", () => {
 
   test("does not call a paste a submission", async () => {
     render(PasteHelpBox, { props })
-    expect(await screen.findByText(/Send your code to/)).not.toHaveTextContent(/submit|grad/i)
+    expect(await screen.findByText(/Get a link to your code/)).not.toHaveTextContent(/submit|grad/i)
   })
 
   test("says when the link is the last one, as the code is unchanged since", async () => {

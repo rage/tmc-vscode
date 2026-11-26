@@ -33,15 +33,62 @@ export default class Storage {
   private readonly _memento: vscode.Memento
   // Unset by a write that may have failed half-way, so the next one resyncs the mirror.
   private _isLegacyMirrorSynced = false
+  /** A read found courses this version cannot parse, which writes must keep. */
+  private _hasUnreadableCourses = false
+  /** The stored course list last read or written, by identity, and what this version reads of it. */
+  private _lastUserData: { stored: unknown; readable: storage.UserData } | undefined
 
   /** @param memento The extension's `globalState`, behind its `SerializedMemento`. */
   public constructor(memento: vscode.Memento) {
     this._memento = memento
   }
 
-  /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
+  /**
+   * The stored courses this version can read. A course it cannot, such as one a newer version
+   * wrote, is left out here and kept as stored by {@link updateUserData}.
+   *
+   * @throws {CorruptStoredDataError} if the value is not a course list at all.
+   */
   public getUserData(): storage.UserData | undefined {
-    return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
+    const stored = this._memento.get<unknown>(storage.USER_DATA_KEY)
+    if (stored === undefined) {
+      return undefined
+    }
+    // Every write and window focus reads; parsing is only needed once another window wrote.
+    if (this._lastUserData?.stored === stored) {
+      return this._lastUserData.readable
+    }
+    const lists = storedCourseLists(stored)
+    if (!lists) {
+      return this._readValidated(storage.USER_DATA_KEY, storage.userDataSchema)
+    }
+    const readable = {
+      courses: parseReadable(lists.courses, storage.tmcLocalCourseDataSchema),
+      mooc_courses: parseReadable(lists.mooc_courses, storage.moocLocalCourseDataSchema),
+    }
+    const skipped =
+      lists.courses.length +
+      lists.mooc_courses.length -
+      readable.courses.length -
+      readable.mooc_courses.length
+    if (skipped > 0) {
+      this._hasUnreadableCourses = true
+      Logger.error(`${skipped} stored courses could not be read; they are kept as they are.`)
+    }
+    // The stored value's other keys too: a newer version may have added some.
+    const userData = { ...(stored as object), ...readable } as storage.UserData
+    this._lastUserData = { stored, readable: userData }
+    return userData
+  }
+
+  /** Whether any course may be stored, readable by this version or not. */
+  public hasStoredCourses(): boolean {
+    const stored = this._memento.get<unknown>(storage.USER_DATA_KEY)
+    if (stored === undefined) {
+      return false
+    }
+    const lists = storedCourseLists(stored)
+    return lists === undefined || lists.courses.length + lists.mooc_courses.length > 0
   }
 
   /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
@@ -56,17 +103,25 @@ export default class Storage {
    * mirror needs no work.
    */
   public async updateUserData(
-    userData: storage.UserData | undefined,
+    written: storage.UserData | undefined,
     { isMoocOnlyChange = false }: { isMoocOnlyChange?: boolean } = {},
   ): Promise<void> {
     const memento = this._memento
+    const userData =
+      written && this._hasUnreadableCourses
+        ? withUnreadableCourses(written, memento.get<unknown>(storage.USER_DATA_KEY))
+        : written
+    this._lastUserData = undefined
     if (isMoocOnlyChange && this._isLegacyMirrorSynced) {
       await memento.update(storage.USER_DATA_KEY, userData)
-      return
+    } else {
+      this._isLegacyMirrorSynced = false
+      await writeUserData(memento, userData)
+      this._isLegacyMirrorSynced = true
     }
-    this._isLegacyMirrorSynced = false
-    await writeUserData(memento, userData)
-    this._isLegacyMirrorSynced = true
+    if (written && userData) {
+      this._lastUserData = { stored: userData, readable: written }
+    }
   }
 
   /** The recorded migration runs as text, for logs and error details. */
@@ -258,4 +313,54 @@ function getActiveOldWorkspaceName(memento: vscode.Memento): string | undefined 
     path.join("..", "..")
     ? last(workspaceFile?.fsPath.split(path.sep))
     : undefined
+}
+
+/** The two course lists of a stored user data value, unchecked; `undefined` if it has none. */
+function storedCourseLists(
+  stored: unknown,
+): { courses: unknown[]; mooc_courses: unknown[] } | undefined {
+  if (typeof stored !== "object" || stored === null) {
+    return undefined
+  }
+  const { courses, mooc_courses } = stored as { courses?: unknown; mooc_courses?: unknown }
+  return Array.isArray(courses) && Array.isArray(mooc_courses)
+    ? { courses, mooc_courses }
+    : undefined
+}
+
+function isReadable(course: unknown, schema: z.ZodType): boolean {
+  return schema.safeParse(course).success
+}
+
+/** The parsed courses of `list` that `schema` accepts, with its defaults and fallbacks applied. */
+function parseReadable<T>(list: unknown[], schema: z.ZodType<T>): T[] {
+  return list.flatMap((course) => {
+    const parsed = schema.safeParse(course)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+/** `written` with the stored courses this version could not read put back as they were. */
+function withUnreadableCourses(written: storage.UserData, stored: unknown): storage.UserData {
+  const lists = storedCourseLists(stored)
+  if (!lists) {
+    return written
+  }
+  const unreadable = <T>(list: unknown[], schema: z.ZodType, kept: { id: T }[]): unknown[] => {
+    const keptIds = new Set(kept.map((course) => course.id))
+    return list.filter(
+      (course) =>
+        !isReadable(course, schema) && !keptIds.has((course as { id?: T } | null)?.id as T),
+    )
+  }
+  return {
+    courses: [
+      ...written.courses,
+      ...unreadable(lists.courses, storage.tmcLocalCourseDataSchema, written.courses),
+    ],
+    mooc_courses: [
+      ...written.mooc_courses,
+      ...unreadable(lists.mooc_courses, storage.moocLocalCourseDataSchema, written.mooc_courses),
+    ],
+  } as storage.UserData
 }

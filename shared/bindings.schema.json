@@ -646,9 +646,14 @@
       "description": "How courses.mooc.fi refused one course. The values are the CLI error kinds the same response\nfails a single-course command with.",
       "oneOf": [
         {
-          "description": "A 403: the course is hidden or closed to the user, or the session lacks the\n`exercise-services` scope, which courses.mooc.fi answers the same way.",
+          "description": "A 403 `insufficient_scope`: the session lacks the `exercise-services` scope.",
           "type": "string",
           "const": "insufficient-scope"
+        },
+        {
+          "description": "Any other 403: the user may not view the course, e.g. a draft.",
+          "type": "string",
+          "const": "forbidden"
         },
         {
           "description": "A 404: the course does not exist, or not for this user.",
@@ -677,6 +682,29 @@
                 },
                 "kind": {
                   "$ref": "#/$defs/Kind"
+                },
+                "path": {
+                  "description": "The file or folder a file-system error concerns.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "request_id": {
+                  "description": "The id courses.mooc.fi logged the failed request under, for support.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "retry_after_secs": {
+                  "description": "How long the server asked to wait before trying again, in seconds.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint64",
+                  "minimum": 0
                 },
                 "trace": {
                   "type": "array",
@@ -787,6 +815,25 @@
             "output-data-kind": {
               "type": "string",
               "const": "refresh-result"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RepositoryExercise"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "repository-exercises"
             }
           },
           "required": [
@@ -1321,6 +1368,25 @@
             "output-data": {
               "type": "array",
               "items": {
+                "$ref": "#/$defs/MoocExam"
+              }
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-exams"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "type": "array",
+              "items": {
                 "$ref": "#/$defs/TmcExerciseSlide"
               }
             },
@@ -1470,6 +1536,13 @@
     "DownloadOrUpdateMoocCourseExercisesResult": {
       "type": "object",
       "properties": {
+        "closed_chapters": {
+          "description": "The chapter of each `failed` entry whose failure is `closed-chapter`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MoocExerciseClosedChapter"
+          }
+        },
         "downloaded": {
           "type": "array",
           "items": {
@@ -1477,14 +1550,15 @@
           }
         },
         "failed": {
+          "description": "Each failure with its error chain, outermost first, and why it failed.",
           "type": [
             "array",
             "null"
           ],
           "items": {
             "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
+            "maxItems": 3,
+            "minItems": 3,
             "prefixItems": [
               {
                 "$ref": "#/$defs/MoocExerciseDownload"
@@ -1494,6 +1568,9 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              {
+                "$ref": "#/$defs/MoocDownloadFailure"
               }
             ]
           }
@@ -1520,14 +1597,15 @@
           }
         },
         "failed": {
+          "description": "Each failure with its error chain, outermost first, and why it failed.",
           "type": [
             "array",
             "null"
           ],
           "items": {
             "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
+            "maxItems": 3,
+            "minItems": 3,
             "prefixItems": [
               {
                 "$ref": "#/$defs/TmcExerciseDownload"
@@ -1537,6 +1615,9 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              {
+                "$ref": "#/$defs/TmcDownloadFailure"
               }
             ]
           }
@@ -1822,6 +1903,13 @@
           },
           "uniqueItems": true
         },
+        "plugin": {
+          "description": "The language plugin that recognised the exercise: `python3`, `apache-maven`,\n`apache-ant`, `csharp`, `make`, `r` or `No-Tests`. Absent only from CLIs older than this\nfield.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "student_file_paths": {
           "description": "Student folders or files which are copied from submission.",
           "type": "array",
@@ -1829,6 +1917,15 @@
             "type": "string"
           },
           "uniqueItems": true
+        },
+        "tests_timeout_ms": {
+          "description": "How long the exercise's tests may run: its `.tmcproject.yml`'s `tests_timeout_ms`, else\n[`DEFAULT_TESTS_TIMEOUT`]. Absent only from CLIs older than this field.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "required": [
@@ -1905,6 +2002,18 @@
           ],
           "default": null
         },
+        "reviewing_stage": {
+          "description": "Where the answer is in the exercise's peer, self or teacher review, which happens in the\ncourse material. `None` while the user can still answer, and from a host that predates\nthe field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewingStage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "score_given": {
           "description": "Points awarded to the user; `0.0` when the user has no state for the\nexercise. Can be fractional (partial credit).",
           "type": "number",
@@ -1926,6 +2035,18 @@
             }
           ]
         },
+        "teacher_review": {
+          "description": "A teacher's grading that overrides the automatic score. `None` when there is none to show.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeacherReview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tries_left": {
           "description": "How many of `max_tries` are left on the slide the user answers; `None` when unlimited.",
           "type": [
@@ -1946,7 +2067,9 @@
         "max_tries",
         "tries_left",
         "pending_teacher_review",
-        "exercise_locked"
+        "exercise_locked",
+        "reviewing_stage",
+        "teacher_review"
       ]
     },
     "ExerciseSlideSubmissionListItem": {
@@ -2025,6 +2148,11 @@
           "description": "Below full points (0 included), the try limit used up and no review pending, so the score\nis final.",
           "type": "string",
           "const": "OutOfTries"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "Unrecognized"
         }
       ]
     },
@@ -2162,6 +2290,32 @@
             "status",
             "grading"
           ]
+        },
+        {
+          "description": "The submission belongs to an exam the user can still answer; its grading shows only\nafter that.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "grading-hidden"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "description": "A status newer than this client.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "unrecognized"
+            }
+          },
+          "required": [
+            "status"
+          ]
         }
       ]
     },
@@ -2247,6 +2401,13 @@
           ],
           "format": "float"
         },
+        "submission_page_url": {
+          "description": "The exercise in the course material, where the latest submission and its grading show.\n`None` for an exam exercise, and from a host that predates the field.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "test_results": {
           "description": "The test run the grading was based on. `None` until grading has produced one, or when the\nexercise service reported something else.",
           "anyOf": [
@@ -2266,7 +2427,8 @@
         "grading_completed_at",
         "feedback_text",
         "exercise_progress",
-        "test_results"
+        "test_results",
+        "submission_page_url"
       ]
     },
     "GradingProgress": {
@@ -2295,6 +2457,11 @@
           "description": "The grading process is completed; the score value, if any, represents the current Final Grade;",
           "type": "string",
           "const": "FullyGraded"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "Unrecognized"
         }
       ]
     },
@@ -2384,7 +2551,7 @@
           "const": "generic"
         },
         {
-          "description": "tmc.mooc.fi answered 403: the user may not see what was asked for.",
+          "description": "The server answered 403: the user may not see what was asked for, such as a draft\ncourse (courses.mooc.fi's `no_access`, or a 403 without a more specific key).",
           "type": "string",
           "const": "forbidden"
         },
@@ -2444,7 +2611,7 @@
           "const": "server-error"
         },
         {
-          "description": "courses.mooc.fi answered 403, typically because the access token lacks the\n`exercise-services` scope. Unlike tmc.mooc.fi's `Forbidden`, says nothing about the course.",
+          "description": "courses.mooc.fi answered 403 `insufficient_scope`: the access token lacks the\n`exercise-services` scope. Says nothing about the course.",
           "type": "string",
           "const": "insufficient-scope"
         },
@@ -2487,6 +2654,116 @@
           "description": "The exercise takes no more submissions from the user, whatever its chapter's locking\nstatus says (backend `message_key: \"exercise_locked\"`, HTTP 403).",
           "type": "string",
           "const": "exercise-locked"
+        },
+        {
+          "description": "The server refused the request as invalid (a 4xx with no more specific kind); retrying\nthe same request cannot help.",
+          "type": "string",
+          "const": "invalid-request"
+        },
+        {
+          "description": "The server answered with something this version cannot read, e.g. a captive portal's\nlogin page.",
+          "type": "string",
+          "const": "unexpected-response"
+        },
+        {
+          "description": "No answer before the timeout; the server may be slow rather than unreachable.",
+          "type": "string",
+          "const": "connection-timeout"
+        },
+        {
+          "description": "TLS failed, typically an untrusted certificate from a network security product or a\nwrong system clock.",
+          "type": "string",
+          "const": "certificate-error"
+        },
+        {
+          "description": "A proxy refused the connection or asked for credentials.",
+          "type": "string",
+          "const": "proxy-error"
+        },
+        {
+          "description": "courses.mooc.fi's login service refused this client itself (e.g. `invalid_client`); the\nuser logging in again cannot fix it.",
+          "type": "string",
+          "const": "login-client-rejected"
+        },
+        {
+          "description": "tmc.mooc.fi answered 401 to the courses.mooc.fi login, which courses.mooc.fi still\naccepts.",
+          "type": "string",
+          "const": "tmc-login-not-accepted"
+        },
+        {
+          "description": "tmc.mooc.fi could not confirm the courses.mooc.fi login with courses.mooc.fi right now.",
+          "type": "string",
+          "const": "tmc-login-unconfirmed"
+        },
+        {
+          "description": "A local settings, course or credentials file could not be read.",
+          "type": "string",
+          "const": "local-config-corrupt"
+        },
+        {
+          "description": "An archive is over a size or entry limit.",
+          "type": "string",
+          "const": "archive-too-large"
+        },
+        {
+          "description": "The exercise cannot be worked on in the editor: it has no editor task, several, or one of\nanother exercise service.",
+          "type": "string",
+          "const": "unsupported-exercise"
+        },
+        {
+          "description": "Another program holds a file the command needs (`path`).",
+          "type": "string",
+          "const": "file-in-use"
+        },
+        {
+          "description": "The OS denied access to `path`.",
+          "type": "string",
+          "const": "permission-denied"
+        },
+        {
+          "description": "`path` is longer than the file system allows.",
+          "type": "string",
+          "const": "path-too-long"
+        },
+        {
+          "description": "The disk or the user's quota is full, or the file system is read-only.",
+          "type": "string",
+          "const": "disk-full"
+        },
+        {
+          "description": "A program needed to build or test the exercise is not installed or not found.",
+          "type": "string",
+          "const": "toolchain-missing"
+        },
+        {
+          "description": "A freshly built program was blocked or removed, typically by antivirus software.",
+          "type": "string",
+          "const": "executable-blocked"
+        },
+        {
+          "description": "The exercises folder (`path`) is missing, e.g. on a drive that is not connected; it was\nnot recreated.",
+          "type": "string",
+          "const": "projects-dir-unreachable"
+        },
+        {
+          "description": "The folder given to move the exercises folder, or its contents, to or from is the\nexercises folder itself.",
+          "type": "string",
+          "const": "projects-dir-move-to-itself"
+        },
+        {
+          "description": "The folder given to move the exercises folder, or its contents, to or from is inside the\nexercises folder, or contains it.",
+          "type": "string",
+          "const": "projects-dir-move-into-itself"
+        },
+        {
+          "description": "`settings restore-projects` found the exercises folder holding something other than OS\nmetadata files, such as `path`; nothing was moved.",
+          "type": "string",
+          "const": "projects-restore-conflict"
+        },
+        {
+          "description": "Setting the projects aside or restoring them failed part way and could not be undone:\nsome entries are still in the folder they were being moved to (`path`), the rest where\nthey were.",
+          "type": "string",
+          "const": "projects-split"
         }
       ]
     },
@@ -2530,7 +2807,7 @@
           "format": "uuid"
         },
         "course-slug": {
-          "description": "The course's on-disk directory name. Mooc courses have no server-side\nslug; this is the kebab-cased course name, deduplicated locally.",
+          "description": "The course's on-disk directory name, derived from the course name and unique among the\nlocal courses. Not the course's server-side `slug`.",
           "type": "string"
         },
         "exercise-id": {
@@ -2640,6 +2917,15 @@
           "$ref": "#/$defs/CourseAiPolicy",
           "default": "not_set"
         },
+        "closed_at": {
+          "description": "When the course run ends or ended; it takes no new students from then on.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
         "description": {
           "type": [
             "string",
@@ -2650,6 +2936,45 @@
           "type": "string",
           "format": "uuid"
         },
+        "is_enrolled": {
+          "description": "`Some(false)` for a course the user only teaches: submits to it fail with the\n`not-enrolled` error kind. `None` from a host that predates the field.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "is_staff": {
+          "description": "Staff get exercises of unopened chapters and model solutions whatever their progress.",
+          "type": "boolean",
+          "default": false
+        },
+        "language_code": {
+          "description": "IETF BCP 47 tag such as `fi-FI`. `None` from a host that predates the field.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "language_group_id": {
+          "description": "Shared by every language version of the course; each version is a separate course with\nits own exercises.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "moved_to_course_id": {
+          "description": "The language version the user moved to from this course, if they did.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
         "name": {
           "type": "string"
         },
@@ -2658,6 +2983,23 @@
         },
         "slug": {
           "type": "string"
+        },
+        "successor_course_id": {
+          "description": "The course that continues this one after it closed, if its teacher named one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "url": {
+          "description": "The course material's front page. `None` from a host that predates the field.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2666,20 +3008,46 @@
         "name",
         "description",
         "organization_name",
-        "ai_policy"
+        "ai_policy",
+        "url",
+        "language_code",
+        "language_group_id",
+        "moved_to_course_id",
+        "closed_at",
+        "successor_course_id",
+        "is_enrolled",
+        "is_staff"
       ]
     },
     "MoocCurrentUser": {
       "description": "The courses.mooc.fi account a token acts for; a changed `id` after login means the\nstudent switched accounts.",
       "type": "object",
       "properties": {
+        "email": {
+          "description": "`None` from a host that predates the field.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "id": {
           "type": "string",
           "format": "uuid"
+        },
+        "name": {
+          "description": "For showing which account is logged in. `None` when the user gave none, and from a host\nthat predates the field.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "required": [
-        "id"
+        "id",
+        "name",
+        "email"
       ]
     },
     "MoocDeviceLogin": {
@@ -2720,6 +3088,105 @@
         "user_code",
         "expires_in",
         "interval"
+      ]
+    },
+    "MoocDownloadFailure": {
+      "description": "Why a mooc exercise could not be downloaded.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "server-error",
+            "connection-error",
+            "other"
+          ]
+        },
+        {
+          "description": "Not among the exercises of the course, the exam or any enrolled course.",
+          "type": "string",
+          "const": "not-found"
+        },
+        {
+          "description": "Its chapter has not opened yet.",
+          "type": "string",
+          "const": "closed-chapter"
+        },
+        {
+          "description": "It is answered in the browser and has no project to download.",
+          "type": "string",
+          "const": "browser-only"
+        },
+        {
+          "description": "Its slide has more than one editor task; it is answered in the course material.",
+          "type": "string",
+          "const": "several-editor-tasks"
+        },
+        {
+          "description": "courses.mooc.fi's file store has no files for it.",
+          "type": "string",
+          "const": "file-missing"
+        },
+        {
+          "description": "The download could not be unpacked or written into the exercise folder.",
+          "type": "string",
+          "const": "extract-failed"
+        }
+      ]
+    },
+    "MoocExam": {
+      "description": "An exam the user has started and can still answer.",
+      "type": "object",
+      "properties": {
+        "answerable_until": {
+          "description": "Answers are accepted until then: the end of the user's time or of the exam, whichever\ncomes first.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "started_at",
+        "answerable_until"
+      ]
+    },
+    "MoocExerciseClosedChapter": {
+      "description": "The chapter that has not opened yet and holds a requested mooc exercise.",
+      "type": "object",
+      "properties": {
+        "chapter-name": {
+          "type": "string"
+        },
+        "chapter-number": {
+          "description": "The chapter's position in the course, from 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "exercise-id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "opens-at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "exercise-id",
+        "chapter-name",
+        "chapter-number",
+        "opens-at"
       ]
     },
     "MoocExerciseDownload": {
@@ -3069,6 +3536,49 @@
         "tmcproject-yml"
       ]
     },
+    "RepositoryExercise": {
+      "description": "An exercise found by [`prepare_exercise_repository`].",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The exercise directory's name.",
+          "type": "string"
+        },
+        "part": {
+          "description": "The directories between the repository root and the exercise directory, joined with `-`.\nTogether with `name`, the name `refresh-course` gives the exercise.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The exercise directory.",
+          "type": "string"
+        },
+        "plugin": {
+          "description": "The language plugin that recognised the exercise, as `get-exercise-packaging-configuration`\nnames it.",
+          "type": "string"
+        },
+        "tests_timeout_ms": {
+          "description": "How long the exercise's tests may run, with the repository's root config merged in.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "written_files": {
+          "description": "The files this command wrote into the exercise directory, relative to it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "part",
+        "name",
+        "plugin",
+        "tests_timeout_ms",
+        "written_files"
+      ]
+    },
     "Review": {
       "description": "get /api/v8/core/courses/{course_id}/reviews",
       "type": "object",
@@ -3137,6 +3647,52 @@
         "update_url",
         "created_at",
         "updated_at"
+      ]
+    },
+    "ReviewingStage": {
+      "description": "Where an answer is in an exercise's review process. No stage takes new answers.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "waiting_for_teacher"
+          ]
+        },
+        {
+          "description": "The user must give peer reviews in the course material.",
+          "type": "string",
+          "const": "peer_review"
+        },
+        {
+          "description": "The user must review their own answer in the course material.",
+          "type": "string",
+          "const": "self_review"
+        },
+        {
+          "description": "The user has given their reviews and waits for others to review their answer.",
+          "type": "string",
+          "const": "waiting_for_peer_reviews"
+        },
+        {
+          "description": "Reviews are done and points awarded; the answer is final.",
+          "type": "string",
+          "const": "reviewed_and_locked"
+        },
+        {
+          "description": "The answer was locked with its chapter before any review.",
+          "type": "string",
+          "const": "locked"
+        },
+        {
+          "description": "The chapter was locked before the user answered.",
+          "type": "string",
+          "const": "not_answered_and_locked"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "RunResult": {
@@ -3876,6 +4432,11 @@
           "description": "An ungraded snapshot stored before local changes were discarded, by `--save-old-state`.",
           "type": "string",
           "const": "backup"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "unrecognized"
         }
       ]
     },
@@ -3887,6 +4448,61 @@
         "ok",
         "error",
         "hidden"
+      ]
+    },
+    "TeacherDecision": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "zero_points",
+            "custom_points",
+            "suspected_plagiarism",
+            "unauthorized_ai_use",
+            "bad_answer",
+            "other"
+          ]
+        },
+        {
+          "description": "The answer was rejected and the exercise reset, so the user can answer again.",
+          "type": "string",
+          "const": "reject_and_reset"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "TeacherReview": {
+      "description": "A teacher's grading of the user's answer.",
+      "type": "object",
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decision": {
+          "$ref": "#/$defs/TeacherDecision"
+        },
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "score_given": {
+          "description": "Replaces the automatic score.",
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "required": [
+        "decision",
+        "score_given",
+        "justification",
+        "created_at"
       ]
     },
     "TestCase": {
@@ -3997,6 +4613,29 @@
         "projects_dir"
       ]
     },
+    "TmcDownloadFailure": {
+      "description": "Why a TMC exercise could not be downloaded.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "server-error",
+            "connection-error",
+            "other"
+          ]
+        },
+        {
+          "description": "tmc.mooc.fi has no such exercise, or not for this user.",
+          "type": "string",
+          "const": "not-found"
+        },
+        {
+          "description": "The download could not be unpacked or written into the exercise folder.",
+          "type": "string",
+          "const": "extract-failed"
+        }
+      ]
+    },
     "TmcExerciseDownload": {
       "type": "object",
       "properties": {
@@ -4037,7 +4676,7 @@
           ]
         },
         "course_id": {
-          "description": "Lets a client locate the exercise's course without a separate lookup.",
+          "description": "Lets a client locate the exercise's course without a separate lookup. The nil UUID for an\nexam exercise, which `exam_id` names instead.",
           "type": "string",
           "format": "uuid"
         },
@@ -4048,6 +4687,15 @@
             "null"
           ],
           "format": "date-time"
+        },
+        "exam_id": {
+          "description": "`None` for a course exercise.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
         },
         "exercise_id": {
           "type": "string",
@@ -4076,12 +4724,24 @@
           "items": {
             "$ref": "#/$defs/TmcExerciseTask"
           }
+        },
+        "unsupported": {
+          "description": "Why the exercise cannot be downloaded to work on in an editor: `browser-only` or\n`several-editor-tasks`, the failure `download-or-update-course-exercises` would report.\nAbsent when it can be downloaded, and from CLIs older than this field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MoocDownloadFailure"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "slide_id",
         "exercise_id",
         "course_id",
+        "exam_id",
         "exercise_name",
         "exercise_order_number",
         "deadline",
@@ -4099,6 +4759,17 @@
             "string",
             "null"
           ]
+        },
+        "exercise_service_slug": {
+          "description": "The exercise service that owns the task. Specs are read only for [`TMC_SERVICE_SLUG`];\nany other service's task has neither spec.",
+          "type": "string"
+        },
+        "instructions_text": {
+          "description": "The plain text of `assignment`, one entry per block that has text, nested blocks after\ntheir parent. Absent when it has none, and from CLIs older than this field.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "model_solution_spec": {
           "anyOf": [
@@ -4135,7 +4806,8 @@
         "assignment",
         "public_spec",
         "model_solution_spec",
-        "checksum"
+        "checksum",
+        "exercise_service_slug"
       ]
     },
     "TmcProjectYml": {

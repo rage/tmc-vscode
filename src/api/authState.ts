@@ -5,6 +5,7 @@ import * as vscode from "vscode"
 import type { BackendKind } from "../../shared/lib"
 import { Logger } from "../utilities"
 import type Langs from "./langs"
+import type { Session } from "./langs"
 
 /**
  * The extension's single answer to "is the user logged in". Consumers read it here instead of
@@ -13,6 +14,8 @@ import type Langs from "./langs"
 export interface AuthState {
   /** Whether the user has a session; see `Langs.isAuthenticated`. */
   readonly loggedIn: boolean
+  /** The session the last check found; `undefined` without one or before any check. */
+  readonly session: Session | undefined
   /**
    * Asks the CLI whether the user has a session and records the answer. A failed check keeps
    * the previous answer. Calls made while a check runs share it.
@@ -41,6 +44,8 @@ export interface AuthState {
 /** Builds the {@link AuthState} for one activation; it alone sets `test-my-code:LoggedIn`. */
 export function createAuthState(langs: Result<Langs, Error>): AuthState {
   let loggedIn = false
+  let session: Session | undefined
+  let appliedAccountKey: string | undefined
   let isSessionExpired = false
   let applied: boolean | undefined
   let appliedExpiry = false
@@ -54,12 +59,17 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
     }
   }
 
+  const accountKey = (): string | undefined =>
+    session && JSON.stringify(session.kind === "mooc" ? (session.account ?? null) : "tmc")
+
   const apply = async (): Promise<void> => {
     if (loggedIn !== applied) {
       applied = loggedIn
+      appliedAccountKey = accountKey()
       await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
       notify()
-    } else if (isSessionExpired !== appliedExpiry) {
+    } else if (isSessionExpired !== appliedExpiry || accountKey() !== appliedAccountKey) {
+      appliedAccountKey = accountKey()
       notify()
     }
   }
@@ -70,17 +80,21 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
       await apply()
       return Ok(false)
     }
-    const checked = await langs.val.isAuthenticated(options)
+    const checked = await langs.val.getSession(options)
     if (checked.ok) {
-      loggedIn = checked.val
+      session = checked.val
+      loggedIn = session !== undefined
     }
     await apply()
-    return checked
+    return checked.map((found) => found !== undefined)
   }
 
   return {
     get loggedIn(): boolean {
       return loggedIn
+    },
+    get session(): Session | undefined {
+      return session
     },
     refresh(options): Promise<Result<boolean, Error>> {
       checking ??= check(options).finally(() => {
@@ -92,6 +106,8 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
       loggedIn = value
       if (value) {
         isSessionExpired = false
+      } else {
+        session = undefined
       }
       await apply()
     },

@@ -29,6 +29,7 @@ export interface TMCMockValues {
   listSettings: Result<Record<string, unknown>, Error>
   migrateExercise: Result<void, Error>
   moveProjectsDirectory: Result<void, Error>
+  checkMoveProjectsDirectory: Result<void, Error>
   setSettingClosedExercises: Result<void, Error>
   tmcExerciseUpdates: Result<LocalExerciseUpdates, Error>
   moocExerciseUpdates: Result<LocalExerciseUpdates, Error>
@@ -36,7 +37,12 @@ export interface TMCMockValues {
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 
-const NO_DOWNLOADS: ExerciseDownloads = { downloaded: [], skipped: [], failed: [] }
+const NO_DOWNLOADS: ExerciseDownloads = {
+  downloaded: [],
+  skipped: [],
+  failed: [],
+  closedChapters: [],
+}
 
 export function createTMCMock(): [Langs, TMCMockValues] {
   const values: TMCMockValues = {
@@ -52,6 +58,7 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     }),
     migrateExercise: Ok.EMPTY,
     moveProjectsDirectory: Ok.EMPTY,
+    checkMoveProjectsDirectory: Ok.EMPTY,
     setSettingClosedExercises: Ok.EMPTY,
     tmcExerciseUpdates: Ok(tmcExerciseUpdates),
     moocExerciseUpdates: Ok(moocExerciseUpdates),
@@ -78,6 +85,7 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     listSettings: error,
     migrateExercise: error,
     moveProjectsDirectory: error,
+    checkMoveProjectsDirectory: error,
     setSettingClosedExercises: error,
     tmcExerciseUpdates: error,
     moocExerciseUpdates: error,
@@ -105,6 +113,7 @@ function setupMockValues(values: TMCMockValues): Langs {
     ),
     migrateExercise: vi.fn(async () => values.migrateExercise),
     moveProjectsDirectory: vi.fn(async () => values.moveProjectsDirectory),
+    checkMoveProjectsDirectory: vi.fn(async () => values.checkMoveProjectsDirectory),
     checkExerciseUpdates: vi.fn(async (backend: BackendKind) =>
       backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
     ),

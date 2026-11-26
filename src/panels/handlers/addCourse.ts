@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { MoocExam } from "../../../shared/langsSchema"
 import type {
   AddCoursePanel,
   CatalogCourse,
@@ -16,7 +17,7 @@ import { withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL } from "../../config/constants"
 import { AuthorizationError } from "../../errors"
 import type { LoginOptions } from "../../ui/loginScreens"
-import { Logger, openWebLink } from "../../utilities"
+import { Logger, openWebLink, proseDateTime } from "../../utilities"
 import { showNextWalkthroughStep, walkthroughProgressOf } from "../../window/walkthrough"
 import type { HandlerMap, PanelHost } from "../router"
 
@@ -29,7 +30,11 @@ export const addCourseHandlers = {
       if (!panel) {
         return Err(NOT_SHOWN)
       }
-      const listing = await actions.listEnrolledMoocCourses(actionContext)
+      // listMoocExams gates itself on the setting and login, so it need not wait for the listing.
+      const [listing, exams] = await Promise.all([
+        actions.listEnrolledMoocCourses(actionContext),
+        actions.listMoocExams(actionContext),
+      ])
       if (listing === actions.MOOC_DISABLED) {
         return Ok({ kind: "disabled" })
       }
@@ -40,7 +45,17 @@ export const addCourseHandlers = {
         Logger.warn("Failed to list the courses.mooc.fi courses", listing.val)
         return listing
       }
-      const items = listing.val.map((course) =>
+      const examItems = exams.map((exam) =>
+        catalogCourse(actionContext, panel, {
+          id: makeMoocKind({ moocCourseId: exam.id }),
+          organizationSlug: "",
+          name: exam.name,
+          organization: "Exam",
+          description: examClosingNote(exam),
+          exam,
+        }),
+      )
+      const courseItems = listing.val.map((course) =>
         catalogCourse(actionContext, panel, {
           // The mooc arm of `addNewCourse` takes the organization from the course it fetches.
           id: makeMoocKind({ moocCourseId: course.id }),
@@ -48,9 +63,11 @@ export const addCourseHandlers = {
           name: course.name,
           organization: course.organization_name,
           description: course.description,
+          ...(course.language_code ? { languageCode: course.language_code } : {}),
+          ...(course.is_staff ? { isStaff: true } : {}),
         }),
       )
-      return Ok({ kind: "listed", items })
+      return Ok({ kind: "listed", items: [...examItems, ...courseItems] })
     },
   },
   requestTmcOrganizations: {
@@ -127,10 +144,14 @@ export const addCourseHandlers = {
         return Ok(undefined)
       }
       // Silent: the card that asked shows the failure.
+      const { exam } = listed
       const added = await withOperation(
         actionContext.dialog,
         { failure: "Failed to add course.", silent: true },
-        () => actions.addNewCourse(actionContext, listed.organizationSlug, listed.id),
+        () =>
+          exam
+            ? actions.addMoocExam(actionContext, exam)
+            : actions.addNewCourse(actionContext, listed.organizationSlug, listed.id),
       )
       if (added.err) {
         return added
@@ -169,6 +190,8 @@ interface ListedCourse {
   id: CourseIdentifier
   /** The tmc organization it was listed under; empty for a mooc course. */
   organizationSlug: string
+  /** Set when the listed course is a started courses.mooc.fi exam. */
+  exam?: MoocExam | undefined
 }
 
 /** What a panel has listed: its courses by key, and its organizations' names by slug. */
@@ -201,15 +224,27 @@ function catalogOf(panelId: number): Catalog {
 function catalogCourse(
   { startup }: ReadyActionContext,
   panel: AddCoursePanel,
-  course: ListedCourse & { name: string; organization: string; description: string | null },
+  course: ListedCourse & {
+    name: string
+    organization: string
+    description: string | null
+    languageCode?: string
+    isStaff?: boolean
+  },
 ): CatalogCourse {
   const key = CourseIdentifier.key(course.id)
-  catalogOf(panel.id).courses.set(key, { id: course.id, organizationSlug: course.organizationSlug })
+  catalogOf(panel.id).courses.set(key, {
+    id: course.id,
+    organizationSlug: course.organizationSlug,
+    exam: course.exam,
+  })
   return {
     key,
     name: course.name,
     organization: course.organization,
     ...optionalDescription(course.description),
+    ...(course.languageCode ? { languageCode: course.languageCode } : {}),
+    ...(course.isStaff ? { isStaff: true } : {}),
     isAdded: startup.userData.getCourse(course.id).ok,
   }
 }
@@ -223,4 +258,9 @@ function optionalDescription(text: string | null): { description?: string } {
 function shownAddCourse(host: PanelHost, id: number): AddCoursePanel | undefined {
   const route = host.route
   return route?.type === "AddCourse" && route.id === id ? route : undefined
+}
+
+function examClosingNote(exam: MoocExam): string {
+  const closesAt = proseDateTime(exam.answerable_until)
+  return closesAt ? `Answers close ${closesAt}.` : ""
 }

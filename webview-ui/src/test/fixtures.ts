@@ -86,6 +86,7 @@ export function moocGrading(overrides: Partial<MoocGrading> = {}): ExerciseTaskS
       feedback_text: null,
       exercise_progress: null,
       test_results: null,
+      submission_page_url: null,
       ...overrides,
     },
   }

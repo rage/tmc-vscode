@@ -22,12 +22,12 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import { isSamePath, Logger } from "../utilities"
+import { fileProblemOf, isSamePath, Logger, SerialQueue } from "../utilities"
 import { missingAiOffSettings } from "./aiRestriction"
 import { languageExtensionForLanguageId } from "./languageExtensions"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
-export type WorkspaceFileProblem = "unsaved" | "readOnly"
+export type WorkspaceFileProblem = "unsaved" | "readOnly" | "inUse" | "protected"
 
 /** `WorkspaceConfiguration.inspect`'s answer, with the value that wins among them. */
 export type SettingInspection = NonNullable<
@@ -100,18 +100,6 @@ async function updateWorkspaceFoldersAndWait(
   }
 }
 
-/** Runs tasks one at a time, each once every earlier one has settled. */
-class SerialQueue {
-  private _tail: Promise<unknown> = Promise.resolve()
-
-  /** Settles as `task` does; a rejection does not stop the tasks queued after it. */
-  public run<T>(task: () => T | Thenable<T>): Promise<T> {
-    const result = this._tail.then(task)
-    this._tail = result.catch(() => undefined)
-    return result
-  }
-}
-
 /**
  * Creates a course's `.code-workspace` file at `workspaceFilePath`, leaving an
  * existing one untouched.
@@ -129,6 +117,37 @@ export async function ensureCourseWorkspaceFile(workspaceFilePath: string): Prom
       throw e
     }
   }
+}
+
+/** Writes `text` to `file` through a temporary file, so a crash cannot leave it half written. */
+async function writeFileAtomically(file: string, text: string): Promise<void> {
+  const temporary = `${file}.${process.pid}.tmp`
+  await fs.writeFile(temporary, text)
+  try {
+    await fs.rename(temporary, file)
+  } catch (e) {
+    await fs.remove(temporary).catch(() => undefined)
+    throw e
+  }
+}
+
+/**
+ * The text of the workspace file at `file`, which VS Code could not open if it did not parse: such
+ * a file is moved aside, and a fresh one written in its place.
+ */
+async function readRepairedWorkspaceFile(file: string): Promise<string> {
+  const text = await fs.readFile(file, "utf-8")
+  const errors: jsonc.ParseError[] = []
+  const parsed: unknown = jsonc.parse(text, errors, { allowTrailingComma: true })
+  if (errors.length === 0 && _.isPlainObject(parsed)) {
+    return text
+  }
+  const aside = `${file}.damaged-${Date.now()}`
+  Logger.warn(`The workspace file ${file} did not parse; moved it to ${aside} and made a new one.`)
+  await fs.move(file, aside)
+  const fresh = JSON.stringify(WORKSPACE_SETTINGS)
+  await writeFileAtomically(file, fresh)
+  return fresh
 }
 
 /**
@@ -438,7 +457,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const edits = jsonc.modify(text, ["extensions", "recommendations"], recommendations, {
           formattingOptions: { insertSpaces: true, tabSize: 2 },
         })
-        await fs.writeFile(pathToWorkspace, jsonc.applyEdits(text, edits))
+        await writeFileAtomically(pathToWorkspace, jsonc.applyEdits(text, edits))
       })
     } catch (e) {
       // Called from the document-open handler, where a recommendation the
@@ -471,9 +490,19 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: BackendKind,
     isAiOff: boolean,
   ): Promise<string[]> {
+    return this._workspaceFileWrites.run(() =>
+      this._prepareWorkspaceFile(courseSlug, backend, isAiOff),
+    )
+  }
+
+  private async _prepareWorkspaceFile(
+    courseSlug: string,
+    backend: BackendKind,
+    isAiOff: boolean,
+  ): Promise<string[]> {
     const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
     await ensureCourseWorkspaceFile(workspaceFile)
-    const text = await fs.readFile(workspaceFile, "utf-8")
+    const text = await readRepairedWorkspaceFile(workspaceFile)
     const folders = [
       { path: WORKSPACE_ROOT_FOLDER_NAME },
       ...this._openExerciseFolders(courseSlug, backend).map((uri) => ({ path: uri.fsPath })),
@@ -494,7 +523,7 @@ export default class WorkspaceManager implements vscode.Disposable {
       )
     }
     if (prepared !== text) {
-      await fs.writeFile(workspaceFile, prepared)
+      await writeFileAtomically(workspaceFile, prepared)
     }
     return Object.keys(aiOff)
   }
@@ -685,9 +714,20 @@ export default class WorkspaceManager implements vscode.Disposable {
     try {
       await fs.access(uri.fsPath, fs.constants.W_OK)
     } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code
-      if (code === "EACCES" || code === "EPERM") {
+      if (fileProblemOf(e) === "denied") {
         return "readOnly"
+      }
+    }
+    // A writable-looking file can still be held open or guarded by folder protection on Windows.
+    try {
+      const handle = await fs.promises.open(uri.fsPath, "r+")
+      await handle.close()
+    } catch (e) {
+      switch (fileProblemOf(e)) {
+        case "inUse":
+          return "inUse"
+        case "denied":
+          return "protected"
       }
     }
     // VS Code refuses every extension write to a settings file with unsaved changes.

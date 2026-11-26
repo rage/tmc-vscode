@@ -116,12 +116,23 @@ export function redactPersonalInfo(
   isWindows = process.platform === "win32",
   extensionStorage = redactedExtensionStorage,
 ): string {
-  let redacted = text
+  // A path in a file URI is percent-encoded, which would hide the name from the patterns below.
+  let redacted = text.replaceAll(/file:\/\/[^\s"'<>]+/g, (uri) => {
+    try {
+      return decodeURIComponent(uri)
+    } catch {
+      return uri
+    }
+  })
   // First, as it may lie in the home.
   if (extensionStorage !== undefined) {
     redacted = replaceDirectory(redacted, extensionStorage, "<extension storage>", isWindows)
   }
   redacted = replaceDirectory(redacted, home, isWindows ? "%USERPROFILE%" : "~", isWindows)
+  if (isWindows) {
+    // The 8.3 short form of a profile folder, such as C:\Users\JOHNSM~1, still names the user.
+    redacted = redacted.replaceAll(/[a-z]:[\\/]+Users[\\/]+[^\\/\s~]{1,6}~\d+/gi, "%USERPROFILE%")
+  }
   // A name this short would match inside ordinary words.
   if (username && username.length >= 3) {
     const userPattern = new RegExp(
@@ -152,14 +163,15 @@ function replaceDirectory(
   return text.replace(pattern, replacement)
 }
 
-function currentUsername(): string | undefined {
+// Once: on a directory-service machine every lookup can go through NSS.
+const currentUsername = _.once((): string | undefined => {
   try {
     return os.userInfo().username
   } catch {
     // A directory-service account may have no passwd entry.
     return env["USER"] ?? env["USERNAME"]
   }
-}
+})
 
 export class Logger {
   public static output: OutputChannel | undefined
@@ -302,7 +314,8 @@ export class Logger {
     if ((toOutput && this.output !== undefined) || isTailed) {
       const line = `${this._timestamp} [${level}] ${this._toLoggableParams(params)}`
       if (toOutput) {
-        this.output?.appendLine(line)
+        // Students are told to attach this log to public bug reports.
+        this.output?.appendLine(redactPersonalInfo(redactSecrets(line)))
       }
       if (isTailed) {
         this._appendToTail(line)

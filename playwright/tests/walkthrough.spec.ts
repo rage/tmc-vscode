@@ -23,7 +23,7 @@ vsCodeTest("a fresh install opens the walkthrough", async ({ page, webview }) =>
 
   await tmcPage.openMenu()
 
-  await expect(page.getByText("Get Started with TestMyCode").first()).toBeVisible()
+  await tmcPage.expectWalkthroughShown()
 })
 
 // The fixture's stored session exists before VS Code first shows the walkthrough.
@@ -118,6 +118,7 @@ vsCodeTest(
         await coursesView.goto()
         await expect(coursesView.row(course)).toBeVisible({ timeout: 30_000 })
         await coursesView.runPaletteCommand("TestMyCode: Get Started")
+        await coursesView.expectWalkthroughShown()
         for (const step of ["Run Tests", "Submit"]) {
           await expect(
             walkthroughStep(page, step).locator(".codicon-getting-started-step-checked"),

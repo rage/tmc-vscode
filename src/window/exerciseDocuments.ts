@@ -118,3 +118,20 @@ export async function closeExerciseEditors(exercise: ExerciseFolder): Promise<bo
   const tabs = exerciseTabs(exercise).map(({ tab }) => tab)
   return tabs.length === 0 || (await vscode.window.tabGroups.close(tabs))
 }
+
+/**
+ * Saves the unsaved documents inside `folder`, then closes its editors, before its files move
+ * away: an editor left open would write its file back into the old place on save.
+ *
+ * @returns `Err` when a document could not be saved or an editor stayed open.
+ */
+export async function releaseExerciseEditors(folder: string): Promise<Result<void, Error>> {
+  const exercise = { uri: vscode.Uri.file(folder) }
+  const saved = await saveExerciseDocuments(exercise)
+  if (saved.err) {
+    return saved
+  }
+  return (await closeExerciseEditors(exercise))
+    ? Ok.EMPTY
+    : Err(new Error("Close the exercises' editors, then try again."))
+}

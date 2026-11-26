@@ -32,7 +32,7 @@ import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
-import { Logger } from "../utilities"
+import { cliFolder, Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { messageHandlers } from "./handlers"
@@ -567,7 +567,7 @@ export class TmcPanel {
     this._stopAwaitingReady()
     this._panel.dispose()
     if (isLeavingScreen) {
-      this._leaveLoginScreen()
+      this._leaveLoginScreen(true)
     }
 
     if (this._isMain) {
@@ -591,6 +591,7 @@ export class TmcPanel {
     const isVisible = (): boolean => !this._isDisposed && this._panel.visible
     return {
       name: this._webviewName,
+      cliFolder: cliFolder(extensionContext),
       get route() {
         return currentRoute()
       },
@@ -664,16 +665,16 @@ export class TmcPanel {
   }
 
   /** Tells the login this panel shows, if any, that its screen is gone. */
-  private _leaveLoginScreen(): void {
+  private _leaveLoginScreen(isClosed: boolean): void {
     if (this._route?.type === "Login") {
-      loginScreens.leave(this._route.id)
+      loginScreens.leave(this._route.id, isClosed)
     }
   }
 
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
     if (this._route?.id !== route.id) {
-      this._leaveLoginScreen()
+      this._leaveLoginScreen(false)
     }
     this._route = route
     this._recordShown()
@@ -923,14 +924,19 @@ function restoredRoute(
     }
     case "ErrorHelp":
       if (route.kind === "operation") {
-        return route.detailsId === undefined ? undefined : errorDetailsPanel(route.detailsId)
+        return route.detailsId === undefined
+          ? undefined
+          : errorDetailsPanel(route.detailsId, cliFolder(extensionContext))
       }
       // A startup help reopened after a healthy start would list another start's failures.
       return route.kind === "startup" && isReady(actionContext)
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
     case "AddCourse":
-      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
+      // Picking a course belongs to the window it was opened from, not a course's workspace.
+      return isReady(actionContext) && !actionContext.startup.workspaceManager.activeCourse
+        ? { id: nextPanelId(), type: route.type }
+        : undefined
     case undefined:
       return undefined
     default:

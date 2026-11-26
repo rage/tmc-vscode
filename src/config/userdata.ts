@@ -22,7 +22,7 @@ import type { MoocStoredStanding } from "../utilities/apiData"
 import { Logger } from "../utilities/logger"
 
 interface StoredCourse<Id> {
-  exercises: { id: Id }[]
+  exercises: { id: Id; browserOnly?: boolean | undefined }[]
   newExercises: Id[]
   offeredNewExercises?: Id[] | undefined
   notifyAfter: number
@@ -56,9 +56,17 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
       .flat()
       .map((exercise) => exercise.id),
   )
-  const arrived = [...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId))
+  // Done on the course page, so there is nothing to download or announce.
+  const browserOnlyIds = new Set(
+    refreshed.exercises.filter((exercise) => exercise.browserOnly).map((exercise) => exercise.id),
+  )
+  const arrived = [...refreshedIds].filter(
+    (exerciseId) => !storedIds.has(exerciseId) && !browserOnlyIds.has(exerciseId),
+  )
   refreshed.newExercises = _.uniq([
-    ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
+    ...stored.newExercises.filter(
+      (exerciseId) => refreshedIds.has(exerciseId) && !browserOnlyIds.has(exerciseId),
+    ),
     ...arrived,
   ])
   const isNew = new Set(refreshed.newExercises)
@@ -66,6 +74,44 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
   refreshed.notifyAfter = arrived.length > 0 ? 0 : stored.notifyAfter
   courses.set(id, refreshed)
   return true
+}
+
+/**
+ * Applies to `courses` the stored courses another window added, and drops those it removed:
+ * stored ones absent from `known`, and known ones no longer stored. With `isRefreshingOthers`,
+ * every course still in both takes its stored copy where it differs.
+ */
+function mergeCourses<Id, Course extends { id: Id }>(
+  courses: Map<Id, Course>,
+  stored: Course[],
+  known: Set<Id>,
+  isRefreshingOthers: boolean,
+): boolean {
+  let isChanged = false
+  const storedIds = new Set(stored.map((course) => course.id))
+  for (const course of stored) {
+    const current = courses.get(course.id)
+    if (
+      current === undefined
+        ? !known.has(course.id)
+        : isRefreshingOthers && !_.isEqual(current, course)
+    ) {
+      courses.set(course.id, course)
+      isChanged = true
+    }
+  }
+  for (const id of known) {
+    if (!storedIds.has(id) && courses.delete(id)) {
+      isChanged = true
+    }
+  }
+  return isChanged
+}
+
+/** Every stored course, as {@link UserData.takeAllCourses} hands them over. */
+export interface StoredCourses {
+  courses: TmcLocalCourseData[]
+  mooc_courses: MoocLocalCourseData[]
 }
 
 /** A stored exercise and the stored course holding it. */
@@ -106,6 +152,9 @@ export class UserData {
   /** Tail of the serialized write chain; see {@link _enqueueWrite}. */
   private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
   private _storage: Storage
+  /** The course ids as this window last read or wrote the store, to tell others' changes apart. */
+  private _storedTmcIds = new Set<number>()
+  private _storedMoocIds = new Set<string>()
   private readonly _coursesChanged = new vscode.EventEmitter<CourseIdentifier | undefined>()
 
   /**
@@ -120,17 +169,13 @@ export class UserData {
     if (persistentData) {
       this._tmcCourses = new Map(persistentData.courses.map((x) => [x.id, x]))
       this._moocCourses = new Map(persistentData.mooc_courses.map((x) => [x.id, x]))
-
-      for (const course of this.getCourses()) {
-        for (const exercise of LocalCourseData.getExercises(course)) {
-          this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
-        }
-      }
+      this._rebuildPassed()
     } else {
       this._tmcCourses = new Map()
       this._moocCourses = new Map()
     }
     this._storage = storage
+    this._rememberStoredIds()
   }
 
   public getCourses(): LocalCourseData[] {
@@ -477,6 +522,35 @@ export class UserData {
   }
 
   /**
+   * Removes every course and returns them, for another account's login to start without them;
+   * {@link restoreCourses} puts them back.
+   */
+  public async takeAllCourses(): Promise<Result<StoredCourses, Error>> {
+    const taken = this._snapshot()
+    this._tmcCourses.clear()
+    this._moocCourses.clear()
+    this._passedExercises.clear()
+    const written = await this._updatePersistentData()
+    return written.map(() => taken)
+  }
+
+  /** Adds back the courses {@link takeAllCourses} returned, except ones added since. */
+  public async restoreCourses(taken: StoredCourses): Promise<Result<void, Error>> {
+    for (const course of taken.courses) {
+      if (!this._tmcCourses.has(course.id)) {
+        this._tmcCourses.set(course.id, course)
+      }
+    }
+    for (const course of taken.mooc_courses) {
+      if (!this._moocCourses.has(course.id)) {
+        this._moocCourses.set(course.id, course)
+      }
+    }
+    this._rebuildPassed()
+    return this._updatePersistentData()
+  }
+
+  /**
    * Forgets every course, in memory and in storage.
    *
    * Runs after any write already queued, so none of them can put the wiped data back.
@@ -503,12 +577,86 @@ export class UserData {
     changedCourse?: CourseIdentifier,
   ): Promise<Result<void, Error>> {
     this._coursesChanged.fire(changedCourse)
-    const snapshot = {
+    const isMoocOnlyChange = changedCourse?.kind === "mooc"
+    return this._enqueueWrite(async () => {
+      // Another window may have written since; its additions and removals must survive ours.
+      if (this._mergeStored()) {
+        this._coursesChanged.fire(undefined)
+      }
+      await this._storage.updateUserData(this._snapshot(), { isMoocOnlyChange })
+      this._rememberStoredIds()
+    })
+  }
+
+  /**
+   * Takes in the courses other windows added or removed since this one last read or wrote the
+   * store; a course this window changed keeps this window's copy. Returns whether any changed.
+   *
+   * @param isRefreshingOthers Also take the stored copy of every other course, for when no
+   * write of this window's is queued to be overwritten by it.
+   */
+  private _mergeStored(isRefreshingOthers = false): boolean {
+    let stored: ReturnType<Storage["getUserData"]>
+    try {
+      stored = this._storage.getUserData()
+    } catch (e) {
+      Logger.warn("Could not reread the stored courses", e)
+      return false
+    }
+    const tmc = mergeCourses(
+      this._tmcCourses,
+      stored?.courses ?? [],
+      this._storedTmcIds,
+      isRefreshingOthers,
+    )
+    const mooc = mergeCourses(
+      this._moocCourses,
+      stored?.mooc_courses ?? [],
+      this._storedMoocIds,
+      isRefreshingOthers,
+    )
+    if (tmc || mooc) {
+      this._rebuildPassed()
+    }
+    this._rememberStoredIds()
+    return tmc || mooc
+  }
+
+  private _snapshot(): StoredCourses {
+    return {
       courses: Array.from(this._tmcCourses.values()),
       mooc_courses: Array.from(this._moocCourses.values()),
     }
-    const isMoocOnlyChange = changedCourse?.kind === "mooc"
-    return this._enqueueWrite(() => this._storage.updateUserData(snapshot, { isMoocOnlyChange }))
+  }
+
+  private _rebuildPassed(): void {
+    this._passedExercises.clear()
+    for (const course of this.getCourses()) {
+      for (const exercise of LocalCourseData.getExercises(course)) {
+        this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
+      }
+    }
+  }
+
+  private _rememberStoredIds(): void {
+    this._storedTmcIds = new Set(this._tmcCourses.keys())
+    this._storedMoocIds = new Set(this._moocCourses.keys())
+  }
+
+  /**
+   * Picks up what other windows stored, such as a course added there. For when this window
+   * comes to the foreground.
+   */
+  public async reloadFromStorage(): Promise<void> {
+    // Writes queued meanwhile too: their changes are not stored yet, so merging would revert them.
+    let awaited: Promise<unknown>
+    do {
+      awaited = this._pendingWrite
+      await awaited
+    } while (awaited !== this._pendingWrite)
+    if (this._mergeStored(true)) {
+      this._coursesChanged.fire(undefined)
+    }
   }
 
   /**

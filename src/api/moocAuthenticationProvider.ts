@@ -5,20 +5,22 @@ import { backendName } from "../../shared/lib"
 /** Must match the `authentication` contribution's `id` in package.json. */
 export const MOOC_AUTHENTICATION_PROVIDER_ID = "courses-mooc-fi"
 
-// VS Code stores which extensions may use an account under its label; renaming it drops them.
 const SITE = backendName("mooc")
 
-const SESSION: vscode.AuthenticationSession = {
-  id: SITE,
-  // The CLI owns the real tokens and never hands them out; this one authorizes nothing.
-  accessToken: "",
-  account: { id: SITE, label: SITE },
-  scopes: [],
+/**
+ * The session the Accounts menu shows, labelled with the account's name once courses.mooc.fi
+ * has named it. The CLI owns the real tokens and never hands them out; this one authorizes nothing.
+ */
+function sessionFor(accountLabel: string | undefined): vscode.AuthenticationSession {
+  const label = accountLabel ? `${accountLabel} (${SITE})` : SITE
+  return { id: label, accessToken: "", account: { id: label, label }, scopes: [] }
 }
 
 /** What the provider drives: the extension's own login state, login and logout. */
 export interface MoocAccountActions {
   isLoggedIn: () => boolean
+  /** The account's name and email as the student would recognise them, once known. */
+  accountLabel: () => string | undefined
   /** Runs the device-flow login, reporting its own failures; resolves whether it succeeded. */
   login: () => Promise<boolean>
   /** Logs out without asking: VS Code has already confirmed the sign-out. */
@@ -38,11 +40,15 @@ export class MoocAuthenticationProvider
   private readonly _onDidChangeSessions =
     new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>()
   public readonly onDidChangeSessions = this._onDidChangeSessions.event
+  /** The session the Accounts menu was last told about; `undefined` while logged out. */
+  private _shown: vscode.AuthenticationSession | undefined
 
-  public constructor(private readonly _account: MoocAccountActions) {}
+  public constructor(private readonly _account: MoocAccountActions) {
+    this._shown = _account.isLoggedIn() ? sessionFor(_account.accountLabel()) : undefined
+  }
 
   public async getSessions(scopes?: readonly string[]): Promise<vscode.AuthenticationSession[]> {
-    return this._account.isLoggedIn() && !scopes?.length ? [SESSION] : []
+    return this._shown && !scopes?.length ? [this._shown] : []
   }
 
   public async createSession(scopes: readonly string[]): Promise<vscode.AuthenticationSession> {
@@ -52,20 +58,30 @@ export class MoocAuthenticationProvider
     if (!(await this._account.login())) {
       throw new Error("You did not log in.")
     }
-    return SESSION
+    this.setLoggedIn(true)
+    return this._shown ?? sessionFor(undefined)
   }
 
   public async removeSession(): Promise<void> {
     await this._account.logout()
   }
 
-  /** Call whenever the courses.mooc.fi login state changes, so the Accounts menu follows it. */
+  /**
+   * Call whenever the login state or the account's name changes, so the Accounts menu follows it.
+   * A renamed account replaces the old entry, as VS Code lists each label as its own account.
+   */
   public setLoggedIn(isLoggedIn: boolean): void {
-    this._onDidChangeSessions.fire(
-      isLoggedIn
-        ? { added: [SESSION], removed: [], changed: [] }
-        : { added: [], removed: [SESSION], changed: [] },
-    )
+    const next = isLoggedIn ? sessionFor(this._account.accountLabel()) : undefined
+    const previous = this._shown
+    if (next?.id === previous?.id) {
+      return
+    }
+    this._shown = next
+    this._onDidChangeSessions.fire({
+      added: next ? [next] : [],
+      removed: previous ? [previous] : [],
+      changed: [],
+    })
   }
 
   public dispose(): void {

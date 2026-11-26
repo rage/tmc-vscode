@@ -6,10 +6,19 @@ import {
   formatNearRelativeTime,
   formatTimestamp,
   parseDate,
+  proseDate,
+  proseDateTime,
 } from "../../utilities/dateDeadline"
 
 const absolute = (date: Date, locale: string): string =>
-  new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date)
+  new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date)
 
 suite("Date utils", () => {
   const CURRENT_TIME = new Date(2020, 3, 1)
@@ -55,7 +64,7 @@ suite("Date utils", () => {
     test("renders a distant deadline in the given language, without a hint", () => {
       const date = new Date("2026-09-01T12:00:00Z")
       expect(formatDeadline(date, NOW, "fi")).toBe(absolute(date, "fi"))
-      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/GMT|\(/)
+      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/\(/)
     })
 
     test("adds a relative hint within a week, either side of now", () => {
@@ -87,6 +96,15 @@ suite("Date utils", () => {
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
       expect(formatDateTime(date, "en-US")).toBe(absolute(date, "en-US"))
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
+    })
+  })
+
+  suite("prose dates", () => {
+    test("give a time to act by its zone, and a past event its day alone", () => {
+      const timestamp = "2026-09-01T12:00:00Z"
+      expect(proseDateTime(timestamp)).toBe(`on ${absolute(new Date(timestamp), "en")}`)
+      expect(proseDate(timestamp)).toBe("on Sep 1, 2026")
+      expect(proseDate("whenever")).toBeUndefined()
     })
   })
 

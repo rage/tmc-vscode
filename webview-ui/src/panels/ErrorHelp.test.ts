@@ -197,3 +197,39 @@ suite("ErrorHelp panel with no failure", () => {
     expect(screen.getByText("Try an exception for /tmp/cli.")).toBeInTheDocument()
   })
 })
+
+suite("ErrorHelp panel CLI folder", () => {
+  const panel = {
+    ...errorHelpPanel({ kind: "general", hint: "Try this." }),
+    cliFolder: "C:\\Users\\s\\AppData\\Local\\cli",
+  }
+
+  test("shows the real folder with Copy and Reveal", async () => {
+    render(ErrorHelp, { props: { panel } })
+
+    expect(screen.getByRole("group", { name: "TestMyCode tools folder" })).toHaveTextContent(
+      "C:\\Users\\s\\AppData\\Local\\cli",
+    )
+    postedMessages.mockClear()
+
+    await fireEvent.click(screen.getByText("Reveal in File Explorer"))
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "revealCliFolder",
+      sourcePanel: { id: panel.id, type: "ErrorHelp" },
+    })
+
+    await fireEvent.click(screen.getByText("Copy"))
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "copyToClipboard",
+        text: "C:\\Users\\s\\AppData\\Local\\cli",
+      }),
+    )
+  })
+
+  test("shows no folder section when the host sent none", () => {
+    render(ErrorHelp, { props: { panel: errorHelpPanel({ kind: "general", hint: "Try this." }) } })
+
+    expect(screen.queryByText("Reveal in File Explorer")).toBeNull()
+  })
+})

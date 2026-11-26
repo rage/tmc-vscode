@@ -206,6 +206,17 @@ suite("CoursesTree", function () {
     expect(view.message).toBe("")
   })
 
+  test("names the site of two added courses that share a title", function () {
+    courses = [tmcCourse({ title: "Programming" }), moocCourse({ title: "Programming" })]
+    tree.setSource(source())
+
+    const descriptions = tree
+      .getChildren()
+      .map((item) => String((item as vscode.TreeItem).description ?? ""))
+    expect(descriptions[0]).toContain("tmc.mooc.fi")
+    expect(descriptions[1]).toContain("courses.mooc.fi")
+  })
+
   test("the fresh-install welcome says what the logged-out view says", function () {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
@@ -527,7 +538,7 @@ suite("CoursesTree", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Closed)]
       const item = onlyExercise({ passed: true, awardedPoints: 1 })
 
-      expect(icon(item)).toEqual(["pass-filled", "testing.iconPassed"])
+      expect(icon(item)).toEqual(["pass-filled", "charts.green"])
       expect(item.contextValue).toBe("exercise.closed.passed.hasModelSolution")
       expect(item.description).toBe("closed · 1/1 points")
     })

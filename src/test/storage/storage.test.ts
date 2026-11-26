@@ -29,12 +29,47 @@ suite("Storage reads", function () {
     expect(storage.getUserData()).toEqual(stored)
   })
 
+  test("skips a course it cannot read and keeps it as stored on the next write", async function () {
+    const unreadable = { id: "from-a-newer-version", kind: "something new" }
+    await context.globalState.update(v3.USER_DATA_KEY, {
+      ...userData.v3_0_0,
+      mooc_courses: [...userData.v3_0_0.mooc_courses, unreadable],
+    })
+
+    const read = storage.getUserData()
+    expect(read?.mooc_courses).toEqual(userData.v3_0_0.mooc_courses)
+
+    await storage.updateUserData({ courses: [], mooc_courses: [] })
+    expect(context.globalState.get<v3.UserData>(v3.USER_DATA_KEY)?.mooc_courses).toEqual([
+      unreadable,
+    ])
+  })
+
   test("reads back what was written", async function () {
     await storage.updateUserData(userData.v3_0_0)
     await storage.updateSessionState(sessionState.v2_0_0)
 
     expect(storage.getUserData()).toEqual(userData.v3_0_0)
     expect(storage.getSessionState()).toEqual(sessionState.v2_0_0)
+  })
+
+  test("parses the stored courses again only once another window wrote them", async function () {
+    await storage.updateUserData(userData.v3_0_0)
+    const parse = vi.spyOn(v3.moocLocalCourseDataSchema, "safeParse")
+    expect(storage.getUserData()).toEqual(userData.v3_0_0)
+    expect(parse).not.toHaveBeenCalled()
+
+    const unreadable = { id: "from-a-newer-version", kind: "something new" }
+    await context.globalState.update(v3.USER_DATA_KEY, {
+      ...userData.v3_0_0,
+      mooc_courses: [unreadable],
+    })
+    const error = vi.spyOn(Logger, "error")
+    expect(storage.getUserData()?.mooc_courses).toEqual([])
+    expect(storage.getUserData()?.mooc_courses).toEqual([])
+    expect(error).toHaveBeenCalledOnce()
+    parse.mockRestore()
+    error.mockRestore()
   })
 
   test("does not report a course catalogue it cannot read as an empty one", async function () {

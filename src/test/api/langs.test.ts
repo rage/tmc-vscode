@@ -9,7 +9,22 @@ import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Langs, { decodeLangsStdout } from "../../api/langs"
 import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config/constants"
 import {
+  ArchiveTooLargeError,
   AuthorizationError,
+  CertificateError,
+  ConnectionTimeoutError,
+  ExecutableBlockedError,
+  FileAccessError,
+  InvalidRequestError,
+  LegacyTmcLoginEndedError,
+  LocalConfigCorruptError,
+  LoginClientRejectedError,
+  ProjectsDirUnreachableError,
+  ProxyError,
+  TmcLoginUnconfirmedError,
+  ToolchainMissingError,
+  UnexpectedResponseError,
+  UnsupportedExerciseError,
   ChapterLockedError,
   ExerciseLockedError,
   ChapterNotOpenError,
@@ -24,6 +39,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   isSessionLost,
+  presentationFor,
   ObsoleteClientError,
   OutOfTriesError,
   RateLimitedError,
@@ -41,7 +57,7 @@ import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/i
 // Records each invocation's argv and short-circuits before spawning.
 function spyOnSpawn(langs: Langs): { args: string[] }[] {
   const calls: { args: string[] }[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
     calls.push(commandArgs as { args: string[] })
     return Err(new Error("stopped before spawning a real process"))
@@ -56,7 +72,7 @@ function stubSpawn(
   stderr = "",
 ): { args: string[] }[] {
   const calls: { args: string[] }[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
     const args = (commandArgs as { args: string[] }).args
     const index = calls.length
@@ -169,6 +185,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "check-exercise-updates",
     ])
   })
@@ -177,7 +195,14 @@ suite("Langs class arg building", function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
     await langs.getEnrolledMoocCourses()
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "courses",
+    ])
   })
 
   test("setSetting passes the value base64-encoded", async function () {
@@ -233,6 +258,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "get-exercise-submissions",
       "--exercise-id",
       "ex-uuid",
@@ -249,7 +276,16 @@ suite("Langs class arg building", function () {
     const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-combined-course-data", combined)))
     const result = await langs.getMoocCourseData(uuid(1))
     expect(calls.map((x) => x.args)).toEqual([
-      ["mooc", "--client-name", "test-client", "course-data", "--course-id", uuid(1)],
+      [
+        "mooc",
+        "--client-name",
+        "test-client",
+        "--client-version",
+        "1.0.0",
+        "course-data",
+        "--course-id",
+        uuid(1),
+      ],
     ])
     expect(result.unwrap()).toEqual(combined)
   })
@@ -262,6 +298,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "paste",
       "--exercise-id",
       "ex-uuid",
@@ -278,6 +316,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "submit",
       "--dont-block",
       "--exercise-id",
@@ -305,8 +345,11 @@ suite("Langs class arg building", function () {
     stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
-    expect((result.val as Error).message).toBe("This exercise is no longer in the course.")
-    expect((result.val as ExerciseNotFoundError).details).toContain(line)
+    expect((result.val as Error).message).toBe(line)
+    expect(presentationFor(result.val as Error).message).toBe(
+      "This exercise is no longer in the course. Refresh the courses to see its exercises.",
+    )
+    expect((result.val as ExerciseNotFoundError).details ?? "").not.toContain(line)
   })
 
   test("waitForMoocGrading polls the task submission's grading", async function () {
@@ -317,6 +360,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "wait-for-grading",
       "--submission-id",
       TASK_SUBMISSION_ID,
@@ -335,6 +380,7 @@ suite("Langs class arg building", function () {
         feedback_text: "All tests passed",
         exercise_progress: null,
         test_results: null,
+        submission_page_url: null,
       },
     }
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
@@ -351,7 +397,7 @@ suite("Langs class arg building", function () {
 
   test("waitForMoocGrading forwards progress updates", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as {
         onStdout?: (data: unknown) => void
@@ -424,6 +470,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-old-submission",
       "--submission-id",
       "sub-uuid",
@@ -480,6 +528,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-or-update-course-exercises",
       "--exercise-id",
       "exercise-uuid",
@@ -496,6 +546,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "download-or-update-course-exercises",
       "--course-id",
       "course-uuid",
@@ -532,6 +584,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "reset-exercise",
       "--exercise-id",
       "ex-uuid",
@@ -548,6 +602,8 @@ suite("Langs class arg building", function () {
       "mooc",
       "--client-name",
       "test-client",
+      "--client-version",
+      "1.0.0",
       "reset-exercise",
       "--save-old-state",
       "--exercise-id",
@@ -559,7 +615,7 @@ suite("Langs class arg building", function () {
 
   test("downloadMoocExercises forwards per-exercise progress updates", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -592,7 +648,7 @@ suite("Langs class arg building", function () {
 
   test("moveProjectsDirectory forwards the CLI's completion fraction unscaled", async function () {
     const langs = newLangs()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -611,18 +667,63 @@ suite("Langs class arg building", function () {
     expect(updates).toEqual([{ fraction: 0.25, message: "Moving exercises" }])
   })
 
+  test("checkMoveProjectsDirectory runs the move command with --check", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    expect((await langs.checkMoveProjectsDirectory("/new/dir")).ok).toBe(true)
+    expect(calls[0]?.args).toEqual([
+      "settings",
+      "--client-name",
+      "test-client",
+      "move-projects-dir",
+      "--check",
+      "/new/dir",
+    ])
+  })
+
+  test("downloadMoocExercises names the chapter of an exercise in a closed one", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-exercise-download", {
+          downloaded: [],
+          skipped: [],
+          closed_chapters: [
+            {
+              "exercise-id": uuid(1),
+              "chapter-name": "Loops",
+              "chapter-number": 2,
+              "opens-at": "2030-01-01T00:00:00Z",
+            },
+          ],
+        }),
+      ),
+    )
+    const result = await langs.downloadMoocExercises(["ex-uuid"], undefined, () => {})
+    expect(result.unwrap().closedChapters).toEqual([
+      { id: idOfMoocExercise(uuid(1)), name: "Loops", opensAt: "2030-01-01T00:00:00Z" },
+    ])
+  })
+
   test("authenticate builds the `mooc login` command", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
     langs.authenticate(() => {})
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "login"])
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "--client-version",
+      "1.0.0",
+      "login",
+    ])
   })
 
   // The device flow can take minutes; the CLI reports the code's expiry itself.
   test("authenticate outlasts the device code", async function () {
     const langs = newLangs()
     let captured: { processTimeout?: number } | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       captured = commandArgs as { processTimeout?: number }
       return Err(new Error("stopped before spawning a real process"))
@@ -640,7 +741,7 @@ suite("Langs class arg building", function () {
       expires_in: 900,
       interval: 5,
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const { onStdout } = commandArgs as { onStdout?: (data: unknown) => void }
       onStdout?.({
@@ -771,7 +872,7 @@ suite("Langs cross-backend independence", function () {
         dataOutput("tmc-exercise-download", {
           downloaded: [exercise],
           skipped: [],
-          failed: [[{ ...exercise, id: 2, path: "/p/f" }, ["no space left"]]],
+          failed: [[{ ...exercise, id: 2, path: "/p/f" }, ["no space left"], "other"]],
         }),
       ),
     )
@@ -779,7 +880,8 @@ suite("Langs cross-backend independence", function () {
     expect(result.unwrap()).toEqual({
       downloaded: [{ id: idOfTmcExercise(1), path: "/p/e" }],
       skipped: [],
-      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"]]],
+      failed: [[{ id: idOfTmcExercise(2), path: "/p/f" }, ["no space left"], "other"]],
+      closedChapters: [],
     })
   })
 
@@ -914,7 +1016,7 @@ suite("Langs error-kind mapping", function () {
     langs.on("logout", onLogout)
     stubSpawn(langs, () => Ok(errorOutput(kind, "422 from https://courses.mooc.fi/…")))
     const result = await langs.getEnrolledMoocCourses()
-    expect((result.val as Error).message).toContain(message)
+    expect(presentationFor(result.val as Error).message).toContain(message)
     expect(isSessionLost(result.val as Error)).toBe(false)
     expect(onLogout).not.toHaveBeenCalled()
   })
@@ -942,12 +1044,12 @@ suite("Langs error-kind mapping", function () {
     },
   )
 
-  test("a cause the CLI lists twice in a row appears once in the details", async function () {
+  test("the details list each cause once, leaving out the message itself", async function () {
     const langs = newLangs()
     const trace = ["Caused by: outer", "Caused by: inner", "Caused by: inner"]
     stubSpawn(langs, () => Ok(errorOutput("generic", "outer", trace)))
     const result = await langs.getEnrolledMoocCourses()
-    expect((result.val as RuntimeError).details).toBe("Caused by: outer\nCaused by: inner")
+    expect((result.val as RuntimeError).details).toBe("Caused by: inner")
   })
 
   test("an error the CLI reports no HTTP status for has none", async function () {
@@ -959,7 +1061,16 @@ suite("Langs error-kind mapping", function () {
 
   test("an error kind carries the CLI's message and no remediation of its own", async function () {
     // `presentationFor` owns the user-facing sentences.
-    for (const kind of ["forbidden", "not-enrolled", "upload-expired", "obsolete-client"]) {
+    for (const kind of [
+      "forbidden",
+      "not-enrolled",
+      "upload-expired",
+      "obsolete-client",
+      "deadline-passed",
+      "rate-limited",
+      "file-in-use",
+      "toolchain-missing",
+    ]) {
       const langs = newLangs()
       stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get course")))
       const result = await langs.getEnrolledMoocCourses()
@@ -1042,19 +1153,100 @@ suite("Langs error-kind mapping", function () {
     expect(courseCalls).toBe(2)
   })
 
-  test("a tmc command's not-logged-in is tmc.mooc.fi not accepting the login", async function () {
+  test("tmc.mooc.fi refusing the courses.mooc.fi login is no lost session", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput("tmc-login-not-accepted")))
+
+    const tmc = await langs.getTmcOrganizations()
+    expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
+    expect(onLogout).not.toHaveBeenCalled()
+  })
+
+  test("a refused legacy tmc.mooc.fi login is not reported as logged out", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+
+    const tmc = await langs.getTmcOrganizations()
+    expect(tmc.val).toBeInstanceOf(LegacyTmcLoginEndedError)
+    expect(onLogout).not.toHaveBeenCalled()
+  })
+
+  test("a 429 names the wait, and only a paste blames Get Help", async function () {
+    const langs = newLangs()
+    const limited = cliOutput({
+      "output-kind": "output-data",
+      status: "finished",
+      message: "boom",
+      result: "error",
+      data: {
+        "output-data-kind": "error",
+        "output-data": {
+          kind: "rate-limited",
+          trace: [],
+          retry_after_secs: 90,
+          request_id: "req-1",
+        },
+      },
+    })
+    stubSpawn(langs, () => Ok(limited))
+
+    const courses = await langs.getEnrolledMoocCourses()
+    expect(courses.val).toBeInstanceOf(RateLimitedError)
+    expect((courses.val as Error).message).toBe("boom")
+    expect(presentationFor(courses.val as Error).message).toBe(
+      "The server is receiving too many requests from your network. Try again in 90 seconds.",
+    )
+    expect((courses.val as RateLimitedError).details).toContain("request id: req-1")
+
+    const paste = await langs.paste(idOfMoocExercise("ex"), "/ex")
+    expect(presentationFor(paste.val as Error).message).toBe(
+      "You have used Get Help on this exercise too often. Try again in 90 seconds.",
+    )
+  })
+
+  test("a not-logged-in from either backend ends the session", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
     langs.on("logout", onLogout)
     stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
 
     const tmc = await langs.getTmcOrganizations()
-    expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
+    expect(tmc.val).toBeInstanceOf(AuthorizationError)
+    expect(tmc.val).not.toBeInstanceOf(TmcLoginNotAcceptedError)
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, tmc.val)
+  })
 
-    const mooc = await langs.getEnrolledMoocCourses()
-    expect(mooc.val).toBeInstanceOf(AuthorizationError)
-    expect(mooc.val).not.toBeInstanceOf(TmcLoginNotAcceptedError)
+  test.each([
+    ["connection-timeout", ConnectionTimeoutError],
+    ["certificate-error", CertificateError],
+    ["proxy-error", ProxyError],
+    ["login-client-rejected", LoginClientRejectedError],
+    ["tmc-login-unconfirmed", TmcLoginUnconfirmedError],
+    ["unexpected-response", UnexpectedResponseError],
+    ["invalid-request", InvalidRequestError],
+    ["local-config-corrupt", LocalConfigCorruptError],
+    ["archive-too-large", ArchiveTooLargeError],
+    ["unsupported-exercise", UnsupportedExerciseError],
+    ["toolchain-missing", ToolchainMissingError],
+    ["executable-blocked", ExecutableBlockedError],
+    ["projects-dir-unreachable", ProjectsDirUnreachableError],
+    ["file-in-use", FileAccessError],
+    ["permission-denied", FileAccessError],
+    ["path-too-long", FileAccessError],
+    ["disk-full", FileAccessError],
+  ] as const)("%s maps to its own error, never a lost session", async (kind, errorClass) => {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput(kind)))
+
+    const result = await langs.getEnrolledMoocCourses()
+    expect(result.val).toBeInstanceOf(errorClass)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 
   test("deauthenticate removes both credentials and fires the logout event as expected", async function () {
@@ -1068,7 +1260,7 @@ suite("Langs error-kind mapping", function () {
     expect(result.ok).toBe(true)
     expect(calls.map((x) => x.args)).toEqual([
       ["tmc", "--client-name", "test-client", "--client-version", "1.0.0", "logout"],
-      ["mooc", "--client-name", "test-client", "logout"],
+      ["mooc", "--client-name", "test-client", "--client-version", "1.0.0", "logout"],
     ])
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
   })
@@ -1077,7 +1269,7 @@ suite("Langs error-kind mapping", function () {
     const langs = newLangs()
     let isTmcLogoutDone = false
     let wasTmcLogoutDoneAtMoocLogout: boolean | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
       const isTmc = (commandArgs as { args: string[] }).args[0] === "tmc"
       if (!isTmc) {
@@ -1109,13 +1301,33 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
+  test("a logout whose revocation failed is done once no login remains", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, (i) =>
+      Ok(
+        i === 0
+          ? nullOutput()
+          : i === 1
+            ? errorOutput("connection-error")
+            : nullOutput("not logged in", "not-logged-in"),
+      ),
+    )
+
+    const result = await langs.deauthenticate()
+
+    expect(result.ok).toBe(true)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
   test("isAuthenticated is true on stored courses.mooc.fi credentials without asking tmc", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () => Ok(nullOutput("currently logged in", "logged-in")))
 
     expect((await langs.isAuthenticated()).val).toBe(true)
     expect(calls.map((c) => c.args)).toEqual([
-      ["mooc", "--client-name", "test-client", "logged-in"],
+      ["mooc", "--client-name", "test-client", "--client-version", "1.0.0", "logged-in"],
     ])
   })
 
@@ -1123,7 +1335,10 @@ suite("Langs error-kind mapping", function () {
     const langs = newLangs()
     const withAccount = {
       ...nullOutput("currently logged in", "logged-in"),
-      data: { "output-data-kind": "mooc-current-user", "output-data": { id: uuid(7) } },
+      data: {
+        "output-data-kind": "mooc-current-user",
+        "output-data": { id: uuid(7), name: null, email: null },
+      },
     } satisfies OutputData
     stubSpawn(langs, (i) =>
       Ok(i === 0 ? withAccount : nullOutput("currently logged in", "logged-in")),
@@ -1233,16 +1448,18 @@ suite("Langs response cache", function () {
           unchecked_courses: [
             { course_id: uuid(1), kind: "insufficient-scope" },
             { course_id: uuid(2), kind: "not-found" },
+            { course_id: uuid(3), kind: "forbidden" },
           ],
         }),
       ),
     )
     const result = await langs.checkExerciseUpdates("mooc")
-    const [hidden, deleted] = result.unwrap().uncheckedCourses ?? []
+    const [hidden, deleted, closed] = result.unwrap().uncheckedCourses ?? []
     expect(hidden?.courseId).toEqual(idOfMoocCourse(uuid(1)))
     expect(hidden?.refusal).toBeInstanceOf(InsufficientScopeError)
     expect(deleted?.courseId).toEqual(idOfMoocCourse(uuid(2)))
     expect(deleted?.refusal).toBeInstanceOf(NotFoundError)
+    expect(closed?.refusal).toBeInstanceOf(ForbiddenError)
   })
 
   test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {
@@ -1382,7 +1599,7 @@ function stubSpawnWithStderr(
   result: Result<OutputData, BaseError>,
   stderr: string,
 ): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation(() =>
     Ok({
       interrupt: (): void => {},

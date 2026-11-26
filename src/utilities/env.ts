@@ -2,6 +2,7 @@
 export type SupportedPlatform =
   | "linux32"
   | "linux64"
+  | "linuxmusl64"
   | "linuxarm"
   | "linuxarm64"
   | "macos64"
@@ -21,11 +22,25 @@ const allPlatforms: SupportedPlatform[] = [
   "macosarm64",
   "windows32",
   "windows64",
+  "linuxmusl64",
 ]
 
 /** Filenames of every published build, for the release-time existence check. */
 export function getAllLangsCLIs(version: string): string[] {
   return allPlatforms.map((x) => getLangsCLIForPlatform(x, version))
+}
+
+/**
+ * Whether the running Linux uses musl instead of glibc, as on Alpine. Only musl lacks
+ * `glibcVersionRuntime` in the diagnostic report.
+ */
+function isMusl(): boolean {
+  try {
+    const report = process.report?.getReport() as { header?: { glibcVersionRuntime?: string } }
+    return report.header?.glibcVersionRuntime === undefined
+  } catch {
+    return false
+  }
 }
 
 /** The build target for the running process, or `"unsupported"`. */
@@ -34,7 +49,7 @@ export function getPlatform(): Platform {
   const arch = process.arch
   if (platform === "linux") {
     if (arch === "x64") {
-      return "linux64"
+      return isMusl() ? "linuxmusl64" : "linux64"
     } else if (arch === "arm64") {
       return "linuxarm64"
     } else if (arch === "arm") {
@@ -69,6 +84,8 @@ export function getLangsCLIForPlatform(platform: Platform, version: string): str
       return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`
     case "linux64":
       return `tmc-langs-cli-x86_64-unknown-linux-gnu-${version}`
+    case "linuxmusl64":
+      return `tmc-langs-cli-x86_64-unknown-linux-musl-${version}`
     case "linuxarm":
       return `tmc-langs-cli-armv7-unknown-linux-gnueabihf-${version}`
     case "linuxarm64":

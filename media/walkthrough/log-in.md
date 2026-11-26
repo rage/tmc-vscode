@@ -1,6 +1,6 @@
 # Log In
 
-One MOOC.fi account works for every TestMyCode course.
+One MOOC.fi account works for every TestMyCode course. Used tmc.mooc.fi before? Log in with the same email and password. If they are not accepted, use Forgot password on the MOOC.fi page.
 
 1. Select **Log In**. TestMyCode shows a login code.
 2. Select **Open MOOC.fi**. The MOOC.fi website opens in your browser, where you log in if you are not already. VS Code may first ask whether to open the site: choose **Configure Trusted Domains** and trust the site, and it stops asking for this and every later link to it.

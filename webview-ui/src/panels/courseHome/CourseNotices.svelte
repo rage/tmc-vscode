@@ -25,6 +25,7 @@
 <script lang="ts">
   import Button from "../../components/Button.svelte"
   import ToolbarButton from "../../components/ToolbarButton.svelte"
+  import { dismissKeepingFocus } from "../../utilities/a11y.svelte"
 
   interface Props {
     notices: CourseNotice[]
@@ -57,11 +58,13 @@
             </div>
           {/if}
           {#if notice.ondismiss}
+            {@const dismiss = notice.ondismiss}
             <span class="dismiss">
               <ToolbarButton
                 icon="close"
                 label={notice.dismissLabel ?? "Dismiss"}
-                onclick={notice.ondismiss}
+                data-dismiss=""
+                onclick={(event) => void dismissKeepingFocus(event.currentTarget, dismiss)}
               />
             </span>
           {/if}

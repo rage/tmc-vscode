@@ -16,6 +16,7 @@
     "playwright-report",
     "test-results",
     "test-artifacts",
+    "playwright/real",
     "test-resources",
     "submodules",
     "shared/generated",

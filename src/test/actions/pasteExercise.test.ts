@@ -64,7 +64,7 @@ function contextWith(pasteResult: unknown): {
 function pasteBody(actionContext: ReadyActionContext) {
   return (exercise: WorkspaceExercise) =>
     pasteExercise(actionContext, exercise.id).then((result) =>
-      result.ok ? result : failure("Failed to send the exercise to the pastebin.", result.val),
+      result.ok ? result : failure("Failed to get a link to the exercise.", result.val),
     )
 }
 

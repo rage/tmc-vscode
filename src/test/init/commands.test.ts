@@ -56,6 +56,7 @@ const expectedCommands = [
   "tmc.settings",
   "tmc.openNextExercise",
   "tmc.openTMCExercisesFolder",
+  "tmc.openTroubleshooting",
   "tmc.pasteExercise",
   "tmc.resetExercise",
   "tmc.showAccountMenu",
@@ -84,6 +85,7 @@ const expectedCommands = [
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
+  "tmc.openTroubleshooting",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
@@ -94,6 +96,7 @@ const expectedDegradedCommands = [
 const expectedServiceFreeCommands = [
   "tmc.settings",
   "tmc.logs",
+  "tmc.openTroubleshooting",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
 ]
@@ -124,7 +127,7 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
     ids.push(id)
     handlers.set(id, handler)
     return { dispose: vi.fn() }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
   }) as any)
   const context = {
     subscriptions: [],
@@ -311,20 +314,22 @@ suite("registerCommands", function () {
     ])
   })
 
-  test("tmc.showAddCourse opens the add-course screen in the main panel", async function () {
-    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+  test.each(["tmc.showAddCourse", "tmc.addNewCourse"])(
+    "%s opens the add-course screen in the main panel",
+    async function (commandId) {
+      const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
+      const { handlers, context, actionContext } = registerAndCollect()
 
-    await handlers.get("tmc.showAddCourse")?.()
+      await handlers.get(commandId)?.()
 
-    expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
-      id: expect.any(Number),
-      type: "AddCourse",
-    })
-  })
+      expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
+        id: expect.any(Number),
+        type: "AddCourse",
+      })
+    },
+  )
 
-  // The palette keeps the quick pick as the keyboard fast path; every button opens the screen.
-  test("only the palette adds a course through the quick pick", function () {
+  test("the palette names its Add Course, and every button opens the screen", function () {
     const { menus, viewsWelcome = [], walkthroughs = [] } = packageJson().contributes
     const menuCommands = Object.entries(menus).flatMap(([menu, entries]) =>
       entries.flatMap((entry) => (entry.command ? [{ menu, entry }] : [])),
@@ -626,7 +631,7 @@ suite("walkthrough", function () {
       (step) => step.media.markdown ?? [],
     )
     const texts = media.map((file) => fs.readFileSync(path.join(root, file), "utf8"))
-    expect(texts.some((text) => text.includes("Data collected by the extension"))).toBe(true)
+    expect(texts.some((text) => text.includes("What the extension sends"))).toBe(true)
   })
 
   test("the step that opens a course workspace says to trust it and each new exercise", function () {
@@ -763,7 +768,6 @@ suite("registered command handlers", function () {
   // `test/commands/refreshEverything.test.ts`; the command-set test above pins the id.
 
   test.each([
-    ["tmc.addNewCourse", "addNewCourse"],
     ["tmc.changeTmcDataPath", "changeTmcDataPath"],
     ["tmc.logout", "logout"],
     ["tmc.switchWorkspace", "switchWorkspace"],

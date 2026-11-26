@@ -16,6 +16,7 @@ export interface SettingsMockValues {
   updateExercisesAutomatically: boolean
   newExercises: NewExerciseHandling
   javaHome: string
+  cliPath: string
   logLevel: LogLevel
   "experimental.coursesMoocFi": boolean
 }
@@ -37,6 +38,7 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     updateExercisesAutomatically: false,
     newExercises: "ask",
     javaHome: "",
+    cliPath: "",
     logLevel: LogLevel.Errors,
     "experimental.coursesMoocFi": false,
   }
@@ -50,6 +52,8 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     getAutomaticallyUpdateExercises: vi.fn(() => values.updateExercisesAutomatically),
     getNewExerciseHandling: vi.fn(() => values.newExercises),
     getJavaHome: vi.fn(() => values.javaHome),
+    getCliPath: vi.fn(() => values.cliPath),
+    getHttpProxy: vi.fn(() => ({ proxy: "", noProxy: [] as string[] })),
     getLogLevel: vi.fn(() => values.logLevel),
     isCoursesMoocFiEnabled: vi.fn(() => values["experimental.coursesMoocFi"]),
     dispose: vi.fn(),

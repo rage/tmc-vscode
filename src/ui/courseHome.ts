@@ -2,7 +2,13 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { CourseHomeView, DeadlineText } from "../../shared/lib"
+import type { ReviewingStage, TeacherDecision } from "../../shared/generated/langs"
+import type {
+  CourseHomeExercise,
+  CourseHomeView,
+  DeadlineText,
+  SharedMoocCourseExercise,
+} from "../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -18,10 +24,15 @@ import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
 import { installSentence, missingLanguageExtensions } from "../api/languageExtensions"
 import {
+  countOf,
   findNextDateAfter,
   formatDateTime,
   formatDeadlineBriefly,
   formatNearRelativeTime,
+  parseDate,
+  PROSE_LOCALE,
+  proseDate,
+  proseDateTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
 import { lastExerciseReached } from "./lastExerciseReached"
@@ -99,7 +110,7 @@ export function buildCourseHomeView(
     return stored
   }
   const course = stored.val
-  const locale = vscode.env.language
+  const locale = PROSE_LOCALE
   const parts = courseView(actionContext, course, now)
   const exercises = parts.flatMap((part) => part.exercises)
   const deadlineText = (date: Date | null): DeadlineText | undefined =>
@@ -122,7 +133,8 @@ export function buildCourseHomeView(
     backend: course.kind,
     title: course.data.title,
     organization: course.data.organization,
-    description: course.data.description || null,
+    ...courseRunFields(course),
+    description: examNote(course) ?? (course.data.description || null),
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
@@ -218,6 +230,7 @@ export function buildCourseHomeView(
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
         const { materialUrl, pendingReview, solutionUrl, submitRefusal, triesLeft } = ex
+        const isInReview = submitRefusal !== undefined && isLockedForReview(ex.mooc, submitRefusal)
         return {
           id: ex.id,
           name: ex.name,
@@ -228,8 +241,12 @@ export function buildCourseHomeView(
           ...(submitRefusal
             ? {
                 submitRefusal: {
-                  label: SUBMIT_REFUSAL_LABELS[submitRefusal],
-                  sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                  label: isInReview ? "in review" : SUBMIT_REFUSAL_LABELS[submitRefusal],
+                  sentence: isInReview
+                    ? ex.mooc?.reviewingStage
+                      ? REVIEWING_STAGE_NOTES[ex.mooc.reviewingStage]
+                      : ""
+                    : submitRefusalSentence(submitRefusal, ex.slug, part.name),
                   icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
                 },
               }
@@ -250,8 +267,112 @@ export function buildCourseHomeView(
           isUpdateable: ex.isUpdateable,
           ...(materialUrl ? { materialUrl } : {}),
           ...(solutionUrl ? { solutionUrl } : {}),
+          ...reviewFields(ex.mooc, isInReview),
+          ...(ex.mooc?.instructions ? { instructions: ex.mooc.instructions } : {}),
         }
       }),
     })),
   })
+}
+
+/** What a mooc course's language, run and the student's role add to its course home. */
+function courseRunFields(
+  course: LocalCourseData,
+): Pick<CourseHomeView, "languageCode" | "endedNote" | "successor" | "isStaff"> {
+  if (course.kind !== "mooc") {
+    return {}
+  }
+  const { languageCode, closedAt, successorCourseId, isStaff } = course.data
+  const endedAt = closedAt ? parseDate(closedAt) : null
+  const endedOn =
+    closedAt && endedAt && endedAt.getTime() <= Date.now() ? proseDate(closedAt) : undefined
+  return {
+    ...(languageCode ? { languageCode } : {}),
+    ...(endedOn ? { endedNote: `This course ended ${endedOn}.` } : {}),
+    ...(successorCourseId ? { successor: { courseId: successorCourseId } } : {}),
+    ...(isStaff ? { isStaff: true } : {}),
+  }
+}
+
+const REVIEWING_STAGE_NOTES: Record<ReviewingStage, string> = {
+  peer_review: "Give peer reviews on the course page to finish this exercise.",
+  self_review: "Review your own answer on the course page to finish this exercise.",
+  waiting_for_peer_reviews: "Your answer is waiting for other students to review it.",
+  waiting_for_teacher: "Your answer is waiting for a teacher to review it.",
+  reviewed_and_locked: "Your answer has been reviewed. The exercise takes no more answers.",
+  locked: "The exercise takes no more answers.",
+  not_answered_and_locked: "The exercise closed without an answer from you.",
+  unrecognized: "",
+}
+
+const TEACHER_DECISIONS: Record<TeacherDecision, string> = {
+  zero_points: "no points",
+  custom_points: "points given by the teacher",
+  suspected_plagiarism: "suspected plagiarism",
+  unauthorized_ai_use: "unauthorized AI use",
+  bad_answer: "the answer was not accepted",
+  other: "other",
+  reject_and_reset: "rejected; answer again",
+  unrecognized: "",
+}
+
+/** A mooc exercise's review stage and a teacher's review, as the course home words them. */
+function reviewFields(
+  exercise: SharedMoocCourseExercise | undefined,
+  isStageShownAsRefusal: boolean,
+): Pick<CourseHomeExercise, "reviewNote" | "teacherReview"> {
+  const note =
+    exercise?.reviewingStage && !isStageShownAsRefusal
+      ? REVIEWING_STAGE_NOTES[exercise.reviewingStage]
+      : undefined
+  const review = exercise?.teacherReview
+  const reviewedOn = review ? proseDate(review.createdAt) : undefined
+  const decision = review ? TEACHER_DECISIONS[review.decision] : undefined
+  return {
+    ...(note ? { reviewNote: note } : {}),
+    ...(review
+      ? {
+          teacherReview: {
+            sentence:
+              `A teacher reviewed your answer${reviewedOn ? ` ${reviewedOn}` : ""}` +
+              `: ${countOf(review.scoreGiven, "point")}` +
+              `${decision ? `, ${decision}` : ""}.`,
+            justification: review.justification,
+          },
+        }
+      : {}),
+  }
+}
+
+/** When a stored exam's answers close or closed, as its course home's description. */
+function examNote(course: LocalCourseData): string | undefined {
+  if (course.kind !== "mooc" || !course.data.examAnswerableUntil) {
+    return undefined
+  }
+  const closesAt = course.data.examAnswerableUntil
+  if (LocalCourseData.isClosedExam(course, Date.now())) {
+    const closedOn = proseDate(closesAt)
+    return closedOn ? `An exam. It ended ${closedOn}.` : undefined
+  }
+  const closesOn = proseDateTime(closesAt)
+  return closesOn ? `An exam. Its answers close ${closesOn}; results show after that.` : undefined
+}
+
+const STAGES_IN_REVIEW = new Set<ReviewingStage>([
+  "peer_review",
+  "self_review",
+  "waiting_for_peer_reviews",
+  "waiting_for_teacher",
+])
+
+/** A review in progress, not a teacher, is what stops more answers to the exercise. */
+function isLockedForReview(
+  exercise: SharedMoocCourseExercise | undefined,
+  refusal: string,
+): boolean {
+  return (
+    refusal === "exerciseLocked" &&
+    exercise?.reviewingStage !== undefined &&
+    STAGES_IN_REVIEW.has(exercise.reviewingStage)
+  )
 }

@@ -9,6 +9,7 @@ import { FileSystemError } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import { failedUpdates } from "../ui/failedUpdates"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
+import { fileProblemOf } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -102,7 +103,7 @@ async function readEntries(directory: string): Promise<string[] | undefined> {
   try {
     return await fs.readdir(directory)
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+    if (fileProblemOf(e) === "missing") {
       return undefined
     }
     throw e

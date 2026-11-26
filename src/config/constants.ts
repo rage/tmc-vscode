@@ -9,20 +9,29 @@ declare const __TMC_BACKEND_URL__: string
 declare const __TMC_LANGS_CONFIG_DIR__: string | null
 declare const __TMC_LANGS_DL_URL__: string
 declare const __TMC_LANGS_VERSION__: string
+declare const __TMC_LANGS_CHECKSUMS__: Record<string, string> | null
 declare const __MOOC_BACKEND_URL__: string
 declare const __EXTENSION_VERSION__: string
+declare const __TMC_LANGS_MOOC_TRUST_LOCALHOST__: boolean
 
 export const DEBUG_MODE = __DEBUG_MODE__
 export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
 export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined
 export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__
 export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__
+/** SHA-256 of every CLI build of {@link TMC_LANGS_VERSION}; `null` in the profiles that serve a local build. */
+export const TMC_LANGS_CHECKSUMS = __TMC_LANGS_CHECKSUMS__
 export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
+/** Whether the CLI may send the login to a dev host such as project-331.local. */
+export const TRUST_DEV_MOOC_HOST = __TMC_LANGS_MOOC_TRUST_LOCALHOST__
 
 /** This build's `package.json` version, inlined so it needs no extension-registry lookup. */
 export const EXTENSION_VERSION = __EXTENSION_VERSION__
 
 export const CLIENT_NAME = "vscode_plugin"
+
+export const TROUBLESHOOTING_URL =
+  "https://github.com/rage/tmc-vscode/blob/master/docs/troubleshooting.md"
 export const EXTENSION_ID = "moocfi.test-my-code"
 export const OUTPUT_CHANNEL_NAME = "TestMyCode"
 
@@ -58,6 +67,15 @@ export const NEW_EXERCISES_REMINDER_DELAY = 30 * 60 * 1000
 
 /** How long after an unprompted refresh the window regaining focus refreshes again. */
 export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
+
+/** Above the CLI's 30 s connect timeout, so a slow network is not taken for a failure. */
+export const STARTUP_AUTH_CHECK_TIMEOUT = 45 * 1000
+
+/** How long after a startup login check that could not answer to ask again. */
+export const DEFERRED_AUTH_CHECK_DELAY = 60 * 1000
+
+/** How often focusing the window may recheck the login another window may have changed. */
+export const FOCUS_AUTH_CHECK_INTERVAL = 30 * 1000
 
 /**
  * How long after the open course was last checked the window regaining focus checks it again.

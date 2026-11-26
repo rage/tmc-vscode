@@ -12,11 +12,12 @@ import {
   NotFoundError,
   ServerError,
   TmcLoginNotAcceptedError,
+  TmcLoginUnconfirmedError,
 } from "../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { downloadFailures } from "../ui/downloadFailures"
 import { Logger } from "../utilities"
-import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
+import { toStoredMoocCourse, toStoredMoocExam, toStoredTmcCourse } from "../utilities/apiData"
 import { recordCourseAccessLoss } from "./courseAccess"
 import type { ReadyActionContext } from "./types"
 
@@ -42,10 +43,18 @@ export async function fetchStoredCourse(
       (await langs.getTmcCourseData(tmc.courseId, options)).map((data) =>
         makeTmcKind(toStoredTmcCourse(data, tmc.organization, tmc.previous)),
       ),
-    async (mooc) =>
-      (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
+    async (mooc) => {
+      const previous = mooc.previous
+      const examAnswerableUntil = previous?.examAnswerableUntil
+      if (previous && examAnswerableUntil) {
+        return (await langs.getMoocExamExercises(mooc.courseId)).map((slides) =>
+          makeMoocKind(toStoredMoocExam({ ...previous, examAnswerableUntil }, slides)),
+        )
+      }
+      return (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
         makeMoocKind(toStoredMoocCourse(data, mooc.previous)),
-      ),
+      )
+    },
   )
 }
 
@@ -123,6 +132,10 @@ export async function updateCourse(
     return storedCourse
   }
   const courseData = storedCourse.val
+  if (LocalCourseData.isClosedExam(courseData, Date.now())) {
+    // courses.mooc.fi stops serving an exam once its answers close; the stored copy is final.
+    return Ok({ isUpdated: false, warnings: [] })
+  }
   const [updateResult, enrollments] = await Promise.all([
     fetchStoredCourse(
       langs,
@@ -153,7 +166,11 @@ export async function updateCourse(
         warnings: sessionRefusalWarnings(actionContext, courseId.kind, error),
       })
     }
-    if (error instanceof ConnectionError || error instanceof ServerError) {
+    if (
+      error instanceof ConnectionError ||
+      error instanceof ServerError ||
+      error instanceof TmcLoginUnconfirmedError
+    ) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       actionContext.coursesTree.setBackendReachable(courseId.kind, false)
       return Ok({ isUpdated: false, warnings: [] })

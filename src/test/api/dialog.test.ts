@@ -24,7 +24,7 @@ suite("Dialog.selectItem", function () {
   function stubPick(choose: (picks: vscode.QuickPickItem[]) => unknown): void {
     showQuickPick = vi
       .spyOn(vscode.window, "showQuickPick")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       .mockImplementation((async (items: vscode.QuickPickItem[]) => choose(items)) as any)
   }
 

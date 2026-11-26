@@ -11,7 +11,7 @@ import type { StoredExercise } from "../config/userdata"
 export function modelSolutionUrl({ exercise, course }: StoredExercise): string | undefined {
   // courses.mooc.fi shows the model solution on the exercise's own material page.
   if (exercise.kind === "mooc") {
-    return undefined
+    return exercise.data.hasModelSolution ? exercise.data.pageUrl : undefined
   }
   if (!exercise.data.passed || (course.kind === "tmc" && course.data.perhapsExamMode)) {
     return undefined

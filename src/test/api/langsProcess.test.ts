@@ -3,6 +3,7 @@ import { vi } from "vitest"
 import Langs from "../../api/langs"
 import { CLI_PROCESS_TIMEOUT, TEST_PROCESS_TIMEOUT } from "../../config/constants"
 import {
+  CliCrashedError,
   EmptyLangsResponseError,
   LangsResponseSchemaError,
   SpawnError,
@@ -16,6 +17,7 @@ type FakeListener = (...args: unknown[]) => void
 interface FakeStream {
   on: (event: string, listener: FakeListener) => FakeStream
   setEncoding: (encoding: BufferEncoding) => FakeStream
+  destroy: () => void
   emit: (event: string, ...args: unknown[]) => void
 }
 
@@ -46,6 +48,7 @@ vi.mock("child_process", () => {
         decoder = new TextDecoder(encoding)
         return stream
       },
+      destroy: (): void => {},
       emit: (event, ...args) => {
         let params = args
         if (event === "data" && decoder && Buffer.isBuffer(args[0])) {
@@ -74,14 +77,17 @@ vi.mock("child_process", () => {
       spawnedProcesses.push(langsProcess)
       return langsProcess
     },
+    execFile: (
+      _command: string,
+      args: string[],
+      _options: unknown,
+      callback: (error: Error | null) => void,
+    ): void => {
+      killedPids.push(Number(args[1]))
+      callback(null)
+    },
   }
 })
-
-vi.mock("tree-kill", () => ({
-  default: (pid: number): void => {
-    killedPids.push(pid)
-  },
-}))
 
 // Process groups the runner signalled. `process.kill` is stubbed rather than let through:
 // the fake pids below name no real process, so a real signal could land on an unrelated
@@ -90,7 +96,7 @@ const killedProcessGroups: number[] = []
 
 /**
  * Pids whose whole tree the runner killed, by whichever mechanism the platform uses:
- * one signal to the child's own process group on POSIX, a `tree-kill` walk on Windows.
+ * one signal to the child's own process group on POSIX, a `taskkill /T` on Windows.
  */
 function killedProcessTrees(): number[] {
   return process.platform === "win32" ? killedPids : killedProcessGroups
@@ -230,6 +236,7 @@ suite("Langs CLI process failures", function () {
     const result = await pending
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain(panicMessage)
+    expect(result.val).toBeInstanceOf(CliCrashedError)
   })
 
   test("a panic on a command expecting no data is reported the same way", async function () {
@@ -317,6 +324,48 @@ suite("Langs CLI process output", function () {
     expect(await pending).toEqual(expect.objectContaining({ val: true }))
   })
 
+  test("the result settles after a grace period when a descendant holds stdout open past exit", async function () {
+    vi.useFakeTimers()
+    try {
+      const captured = captureLogs()
+      const langs = newLangs()
+      const pending = langs.isAuthenticated()
+      const langsProcess = lastProcess()
+      writeStdout(langsProcess, loggedInLine())
+      langsProcess.emit("exit", 0)
+
+      await vi.advanceTimersByTimeAsync(2000)
+      let settled = false
+      void pending.then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(await pending).toEqual(expect.objectContaining({ val: true }))
+      expect(loggedText(captured)).toContain("stayed open")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("the grace period is not started when stdout already ended", async function () {
+    vi.useFakeTimers()
+    try {
+      const captured = captureLogs()
+      const langs = newLangs()
+      const pending = langs.isAuthenticated()
+      const langsProcess = lastProcess()
+      writeStdout(langsProcess, loggedInLine())
+      endProcess(langsProcess, "end-first")
+      await pending
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(loggedText(captured)).not.toContain("stayed open")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("the result settles when the stdout end precedes exit", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
@@ -341,13 +390,63 @@ suite("Langs CLI process output", function () {
     expect((result.val as Error).message).toContain(message)
   })
 
-  test("a process that writes nothing reports an empty response", async function () {
+  test("a process that writes nothing reports an empty response with how it ended", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
-    endProcess(lastProcess())
+    const langsProcess = lastProcess()
+    langsProcess.emit("exit", 139)
+    langsProcess.stdout.emit("end")
 
     const result = await pending
     expect(result.val).toBeInstanceOf(EmptyLangsResponseError)
+    expect((result.val as EmptyLangsResponseError).exitCode).toBe(139)
+  })
+
+  test("a spawn that fails as busy is tried once more, and the second run's answer counts", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const pending = langs.isAuthenticated()
+      const first = lastProcess()
+      first.emit("error", Object.assign(new Error("spawn EBUSY"), { code: "EBUSY" }))
+      await vi.advanceTimersByTimeAsync(600)
+
+      const second = lastProcess()
+      expect(second).not.toBe(first)
+      writeStdout(second, loggedInLine())
+      endProcess(second)
+
+      expect(await pending).toEqual(expect.objectContaining({ val: true }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a spawn that stays busy is reported after the one retry", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const pending = langs.isAuthenticated()
+      lastProcess().emit("error", Object.assign(new Error("spawn EBUSY"), { code: "EBUSY" }))
+      await vi.advanceTimersByTimeAsync(600)
+      lastProcess().emit("error", Object.assign(new Error("spawn EBUSY"), { code: "EBUSY" }))
+
+      const result = await pending
+      expect(result.val).toBeInstanceOf(SpawnError)
+      expect(spawnedProcesses.filter((x) => x.pid >= 1000).length).toBeGreaterThanOrEqual(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a spawn that fails with anything but busy is not retried", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const before = spawnedProcesses.length
+    lastProcess().emit("error", Object.assign(new Error("spawn EACCES"), { code: "EACCES" }))
+
+    expect((await pending).val).toBeInstanceOf(SpawnError)
+    expect(spawnedProcesses.length).toBe(before)
   })
 
   test("what a tool wrote to stdout outside the CLI's JSON reaches the error details", async function () {

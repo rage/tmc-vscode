@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import {
   closeExerciseEditors,
+  releaseExerciseEditors,
   revertExerciseDocuments,
   saveExerciseDocuments,
 } from "../../window/exerciseDocuments"
@@ -187,5 +188,36 @@ suite("closeExerciseEditors", function () {
     close.mockResolvedValue(false)
 
     expect(await closeExerciseEditors(exercise)).toBe(false)
+  })
+})
+
+suite("releaseExerciseEditors", function () {
+  test("saves the folder's documents before closing its editors", async function () {
+    const inside = document("/projects/course/exercise/src/main.py", true)
+    openDocuments(inside)
+    const close = openTabs([{ input: { uri: insideUri } }])
+
+    const result = await releaseExerciseEditors(exercise.uri.fsPath)
+
+    expect(result.ok).toBe(true)
+    expect(inside.save).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  test("closes nothing when a document could not be saved", async function () {
+    openDocuments(document("/projects/course/exercise/src/main.py", true, false))
+    const close = openTabs([{ input: { uri: insideUri } }])
+
+    const result = await releaseExerciseEditors(exercise.uri.fsPath)
+
+    expect(result.err).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  test("errs when an editor stayed open", async function () {
+    const close = openTabs([{ input: { uri: insideUri } }])
+    close.mockResolvedValue(false)
+
+    expect((await releaseExerciseEditors(exercise.uri.fsPath)).err).toBe(true)
   })
 })

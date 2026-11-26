@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SvelteSet } from "svelte/reactivity"
+
   import type {
     CourseHomeExercise,
     CourseHomeExerciseAction,
@@ -11,6 +13,8 @@
 
   interface Props {
     part: CourseHomePart
+    /** BCP 47 tag of the language of the part's and exercises' names. */
+    lang?: string | undefined
     /** This window is the course's workspace, where an opened exercise is a folder of it. */
     isWorkspaceOpen: boolean
     /** Whether a download can succeed now: logged in, and the backend reachable. */
@@ -25,6 +29,7 @@
   /** One part of the course: a header with its progress, and a row per exercise. */
   let {
     part,
+    lang,
     isWorkspaceOpen,
     canDownload,
     isExpanded,
@@ -34,6 +39,14 @@
   }: Props = $props()
 
   const headingId = $props.id()
+  // Rows whose exact deadline is shown under them.
+  const expandedDeadlines = new SvelteSet<string>()
+
+  function toggleDeadline(key: string) {
+    if (!expandedDeadlines.delete(key)) {
+      expandedDeadlines.add(key)
+    }
+  }
   const passedCount = $derived(part.exercises.filter((ex) => ex.passed).length)
 
   const STATE_LABELS: Record<Exclude<CourseHomeExercise["status"], "opened">, string> = {
@@ -44,6 +57,7 @@
     downloadFailed: "Download failed",
     expired: "Deadline passed",
     removed: "Removed",
+    browserOnly: "On the course page",
   }
 
   function stateLabel(exercise: CourseHomeExercise): string {
@@ -143,7 +157,7 @@
         onclick={ontoggle}
       >
         <vscode-icon name={isExpanded ? "chevron-down" : "chevron-right"}></vscode-icon>
-        {part.name}
+        <span {lang}>{part.name}</span>
       </button>
     </h2>
     <span class="muted part-progress">{passedCount}/{part.exercises.length} passed</span>
@@ -160,6 +174,9 @@
         {@const icon = statusIcon(exercise)}
         {@const actions = menuActions(exercise)}
         {@const refusal = shownRefusal(exercise)}
+        {@const rowKey = ExerciseIdentifier.key(exercise.id)}
+        {@const dueDeadline = exercise.deadline && isDue(exercise) ? exercise.deadline : undefined}
+        {@const reason = exercise.pendingReview ?? refusal}
         {@const tries =
           !refusal && !exercise.passed && exercise.triesLeft !== undefined
             ? triesLeftText(exercise.triesLeft)
@@ -176,11 +193,12 @@
           <span class="name">
             {#if isDownloadable(exercise) && !canDownload}
               <!-- Opening it would download it, which the notices say cannot happen now. -->
-              <span class="name-text" title={exercise.name}>{exercise.name}</span>
+              <span class="name-text" {lang} title={exercise.name}>{exercise.name}</span>
             {:else}
               <button
                 type="button"
                 class="name-text name-button"
+                {lang}
                 title={exercise.name}
                 disabled={exercise.status === "downloading"}
                 onclick={() => onaction(exercise, "open")}
@@ -192,29 +210,31 @@
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
-            {#if exercise.pendingReview}
-              <span title={exercise.pendingReview.sentence}>{exercise.pendingReview.label}</span>
-            {:else if refusal}
-              <span title={refusal.sentence}>{refusal.label}</span>
-            {:else if exercise.deadline && isDue(exercise)}
-              <time
-                datetime={exercise.deadline.at}
-                title="{exercise.isSoftDeadline ? 'Soft deadline' : 'Deadline'}: {exercise.deadline
-                  .absolute}"
+            {#if reason}
+              <span>{reason.label}</span>
+            {:else if dueDeadline}
+              <button
+                type="button"
+                class="deadline-toggle"
+                aria-expanded={expandedDeadlines.has(rowKey)}
+                aria-controls="{headingId}-{rowKey}-detail"
+                onclick={() => toggleDeadline(rowKey)}
               >
-                {exercise.isSoftDeadline ? "soft deadline" : "due"}
-                {exercise.deadline.brief}
-              </time>
+                <time datetime={dueDeadline.at}>
+                  {exercise.isSoftDeadline ? "soft deadline" : "due"}
+                  {dueDeadline.brief}
+                </time>
+              </button>
             {/if}
             {#if tries}
               <span>{tries}</span>
             {/if}
           </span>
-          <span
-            class="points"
-            aria-label={points(exercise) ? `${points(exercise)} points` : undefined}
-            >{points(exercise)}</span
-          >
+          <span class="points">
+            {points(exercise)}{#if points(exercise)}<span class="visually-hidden">
+                points</span
+              >{/if}
+          </span>
           <span class="row-actions">
             {#if isDownloadable(exercise) && canDownload}
               <ToolbarButton
@@ -233,6 +253,35 @@
               <ActionMenu label="More Actions for {exercise.name}" {actions} />
             {/if}
           </span>
+          {#if reason}
+            <!-- The icon's hidden label already says it to a screen reader. -->
+            <span class="detail muted" aria-hidden="true">{reason.sentence}</span>
+          {:else if dueDeadline && expandedDeadlines.has(rowKey)}
+            <span class="detail muted" id="{headingId}-{rowKey}-detail">
+              {exercise.isSoftDeadline ? "Soft deadline" : "Deadline"}: {dueDeadline.absolute}
+            </span>
+          {/if}
+          {#if exercise.reviewNote || exercise.teacherReview || exercise.instructions}
+            <div class="row-notes">
+              {#if exercise.reviewNote}
+                <p>{exercise.reviewNote}</p>
+              {/if}
+              {#if exercise.teacherReview}
+                <p>{exercise.teacherReview.sentence}</p>
+                {#if exercise.teacherReview.justification}
+                  <blockquote>{exercise.teacherReview.justification}</blockquote>
+                {/if}
+              {/if}
+              {#if exercise.instructions}
+                <details>
+                  <summary>Instructions</summary>
+                  {#each exercise.instructions as paragraph, i (i)}
+                    <p class="instructions">{paragraph}</p>
+                  {/each}
+                </details>
+              {/if}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -305,6 +354,16 @@
   .row:hover {
     background: var(--tmc-list-hover);
   }
+  .row-notes {
+    grid-column: 2 / -1;
+  }
+  .row-notes p,
+  .row-notes blockquote {
+    margin: var(--tmc-space-1) 0;
+  }
+  .instructions {
+    white-space: pre-wrap;
+  }
   .icon {
     display: inline-flex;
   }
@@ -366,6 +425,22 @@
     min-width: 0;
     overflow-wrap: break-word;
   }
+  .deadline-toggle {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    text-decoration: underline dotted;
+    cursor: pointer;
+  }
+  /* A sentence under the row, wrapped, for what the columns have no room for. */
+  .detail {
+    grid-row: 2;
+    grid-column: 2 / -1;
+    overflow-wrap: break-word;
+  }
   .points {
     text-align: end;
     font-variant-numeric: tabular-nums;
@@ -401,6 +476,9 @@
       flex-direction: row;
       flex-wrap: wrap;
       column-gap: var(--tmc-space-1);
+    }
+    .detail {
+      grid-row: 3;
     }
     .deadline > * + *::before {
       content: "· ";

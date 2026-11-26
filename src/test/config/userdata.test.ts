@@ -1,6 +1,6 @@
 import { vi } from "vitest"
 
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import { getExerciseIncludingClosedChapters, UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
 import Storage from "../../storage"
@@ -893,5 +893,38 @@ suite("getExerciseIncludingClosedChapters", function () {
       "mooc_hidden",
     )
     expect(getExerciseIncludingClosedChapters(userData, idOfMoocExercise("missing")).err).toBe(true)
+  })
+})
+
+suite("UserData across windows", function () {
+  test("a write keeps a course another window added and drops one it removed", async function () {
+    const [first, store] = await makeUserData({
+      courses: [tmcCourse({ id: 1, name: "kept" }), tmcCourse({ id: 2, name: "removed" })],
+      mooc_courses: [],
+    })
+    const second = new UserData(store)
+
+    await second.addCourse(makeMoocKind(moocCourse({ id: "added-elsewhere" })))
+    await second.deleteCourse(idOfTmcCourse(2))
+    await first.addCourse(makeTmcKind(tmcCourse({ id: 3, name: "mine" })))
+
+    const ids = first.getCourses().map((course) => LocalCourseData.getCourseId(course))
+    expect(ids).toEqual([idOfTmcCourse(1), idOfTmcCourse(3), idOfMoocCourse("added-elsewhere")])
+    expect(store.getUserData()?.mooc_courses.map((course) => course.id)).toEqual([
+      "added-elsewhere",
+    ])
+  })
+
+  test("coming to the foreground takes in another window's refreshed course", async function () {
+    const [first, store] = await makeUserData({
+      courses: [tmcCourse({ id: 1, title: "Old title" })],
+      mooc_courses: [],
+    })
+    const second = new UserData(store)
+    await second.replaceCourse(makeTmcKind(tmcCourse({ id: 1, title: "New title" })))
+
+    await first.reloadFromStorage()
+
+    expect(first.getCourse(idOfTmcCourse(1)).unwrap().data.title).toBe("New title")
   })
 })

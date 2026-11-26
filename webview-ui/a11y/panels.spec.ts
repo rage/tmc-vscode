@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import { join } from "node:path"
 
 import type { BrowserContext, CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import type AxeCore from "axe-core"
 
 // `pnpm run test:a11y` builds this with `vite build --config dev/vite.config.ts` first.
 const HARNESS_DIST = join(import.meta.dirname, "..", "dev", "dist")
@@ -10,6 +12,23 @@ const SCENARIO_IDS = JSON.parse(
   readFileSync(join(HARNESS_DIST, "scenarios.json"), "utf8"),
 ) as string[]
 const ORIGIN = "http://harness.test"
+const AXE_SOURCE = readFileSync(
+  createRequire(import.meta.url).resolve("axe-core/axe.min.js"),
+  "utf8",
+)
+const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
+
+/** Runs axe-core over the page and lists what it flags, as `rule: target`. */
+async function axeViolations(page: Page): Promise<string[]> {
+  await page.addScriptTag({ content: AXE_SOURCE })
+  return page.evaluate(async (tags) => {
+    const { axe } = window as unknown as { axe: typeof AxeCore }
+    const { violations } = await axe.run(document, { runOnly: { type: "tag", values: tags } })
+    return violations.flatMap(({ id, nodes }) =>
+      nodes.map((node) => `${id}: ${node.target.join(" ")}`),
+    )
+  }, AXE_TAGS)
+}
 
 const NAMED_ROLES = new Set([
   "button",
@@ -151,6 +170,10 @@ for (const scenarioId of SCENARIO_IDS) {
       expect(nested.map((node) => describeNode(node))).toEqual([])
     })
 
+    check("passes axe-core's WCAG A and AA rules", async () => {
+      expect(await axeViolations(page)).toEqual([])
+    })
+
     check("disclosures expose aria-expanded matching what they show", async () => {
       const { root } = (await cdp.send("DOM.getDocument", { depth: -1, pierce: true })) as {
         root: { nodeId: number }
@@ -222,14 +245,19 @@ test("a course is found and added from the keyboard alone", async ({ context, pa
   await serveHarness(context)
   await page.goto(`${ORIGIN}/frame.html?scenario=add-course%2Fcourses`)
   await expect(page.getByRole("heading", { level: 1, name: "Add Course" })).toBeFocused()
+  // Past the toolbar's Refresh and More Actions.
+  await page.keyboard.press("Tab")
   await page.keyboard.press("Tab")
   await page.keyboard.press("Tab")
   await expect(
     page.getByRole("searchbox", { name: "Search courses and organizations" }),
   ).toBeFocused()
   await page.keyboard.type("everything")
-  await page.keyboard.press("Tab")
+  // Tab only once the list shows the search's result, as a user would.
   const add = page.getByRole("button", { name: "Add Introduction to everything" })
+  await expect(add).toBeVisible()
+  await expect(page.getByRole("button", { name: "Add Python Programming 2026" })).toBeHidden()
+  await page.keyboard.press("Tab")
   await expect(add).toBeFocused()
   await page.keyboard.press("Enter")
   const posted = await page.evaluate(
@@ -277,4 +305,67 @@ test("a course notice's action comes before its dismiss in keyboard order", asyn
   await notices.getByRole("button", { name: "Download", exact: true }).focus()
   await page.keyboard.press("Tab")
   await expect(notices.getByRole("button", { name: "Dismiss the new exercises" })).toBeFocused()
+})
+
+// 400% zoom on a 1280px-wide window is a 320px-wide viewport (WCAG 2.2 SC 1.4.10).
+for (const scenarioId of SCENARIO_IDS) {
+  test(`${scenarioId} reflows at 320px without scrolling sideways`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 320, height: 256 } })
+    try {
+      await serveHarness(context)
+      const page = await context.newPage()
+      await page.goto(`${ORIGIN}/frame.html?scenario=${encodeURIComponent(scenarioId)}`)
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+      await page.waitForTimeout(300)
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, "the page scrolls sideways").toBeLessThanOrEqual(0)
+      expect(await axeViolations(page)).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+}
+
+test("focus returns to the Add button after an add fails", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=add-course%2Fcourses`)
+  const add = page.getByRole("button", { name: "Add Introduction to everything" })
+  await add.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByText("Could not add the course.")).toBeVisible()
+  await expect(add).toBeFocused()
+})
+
+test("focus returns to Restore after a restore settles", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=exercise-submission%2Fmooc-history`)
+  const first = page.getByRole("button", { name: /^Restore the / }).first()
+  const name = (await first.getAttribute("aria-label")) ?? ""
+  await first.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByText(/^Restored the /)).toBeVisible()
+  await expect(page.getByRole("button", { name, exact: true })).toBeFocused()
+})
+
+test("focus moves to Copy Link after the paste link arrives", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=exercise-submission%2Fmooc-get-help`)
+  await page.getByRole("button", { name: "Send Again" }).focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("button", { name: "Copy Link" })).toBeFocused()
+})
+
+test("dismissing failures moves focus to the next one, then to the heading", async ({
+  context,
+  page,
+}) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=course-details%2Faction-failed`)
+  await page.getByRole("button", { name: "Dismiss this error" }).focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("button", { name: "Dismiss this warning" })).toBeFocused()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused()
 })

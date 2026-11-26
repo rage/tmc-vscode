@@ -1,6 +1,6 @@
 import * as cp from "child_process"
+import { dirname } from "path"
 
-import kill from "tree-kill"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { z } from "zod"
@@ -15,6 +15,10 @@ import type {
   LocalExercise,
   MoocCourse,
   MoocDeviceLogin,
+  MoocDownloadFailure,
+  TmcDownloadFailure,
+  MoocExam,
+  TmcExerciseSlide,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
   Notification,
@@ -45,52 +49,42 @@ import {
   DOWNLOAD_PROCESS_TIMEOUT,
   LOGIN_PROCESS_TIMEOUT,
   MINIMUM_SUBMISSION_INTERVAL,
-  MOOC_BACKEND_URL,
   SUBMIT_PROCESS_TIMEOUT,
   TEST_PROCESS_TIMEOUT,
-  TMC_BACKEND_URL,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
-  AuthorizationError,
-  ChapterLockedError,
-  ExerciseLockedError,
-  ChapterNotOpenError,
+  LegacyTmcLoginEndedError,
   ConnectionError,
-  DeadlinePassedError,
-  DeviceLoginDeniedError,
-  DeviceLoginExpiredError,
+  CliCrashedError,
   EmptyLangsResponseError,
-  ExerciseNotFoundError,
   ForbiddenError,
   InsufficientScopeError,
-  InvalidTokenError,
   LangsResponseSchemaError,
-  NotEnrolledError,
   NotFoundError,
-  ObsoleteClientError,
-  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
-  ServerError,
   SpawnError,
   TimeoutError,
-  TmcLoginNotAcceptedError,
-  UnknownUploadError,
-  UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
 import { sleep } from "../utilities/utils"
+import { cliEnvironment } from "./cliEnvironment"
 import type { FractionProgress } from "./dialog"
+import { langsError } from "./langsErrors"
 
 interface Options {
   cliConfigDir?: string | undefined
   /** The JDK the CLI's Java plugin should use, read per spawn; empty for the one on `PATH`. */
   javaHome?: (() => string) | undefined
+  /** VS Code's proxy settings, read per spawn; the CLI has no other way to learn them. */
+  httpProxy?: (() => { proxy: string; noProxy: string[] }) | undefined
 }
 
 interface ExecutionOptions {
-  timeout: number
+  timeout?: number
+  /** An auth failure in the answer ends no session; see `LangsProcessArgs.suppressAuthEvents`. */
+  suppressAuthEvents?: boolean
 }
 
 interface LangsProcessArgs {
@@ -120,6 +114,16 @@ interface LangsProcessArgs {
    */
   interruptOnDeactivate?: boolean | undefined
 }
+
+/** A courses.mooc.fi account as `mooc logged-in` names it. */
+export interface MoocAccount {
+  id: string
+  name: string | null
+  email: string | null
+}
+
+/** Which stored login answers for the user; see {@link Langs.getSession}. */
+export type Session = { kind: "mooc"; account?: MoocAccount } | { kind: "tmc" }
 
 /** How an auth failure in a CLI response is attributed. */
 interface AuthAttribution {
@@ -215,8 +219,18 @@ export interface ExerciseDownloads {
   downloaded: ExerciseDownload[]
   /** Already up to date. */
   skipped: ExerciseDownload[]
-  /** Each with the reasons the CLI gave. */
-  failed: [ExerciseDownload, string[]][]
+  /** Each with the reasons the CLI gave, and why it failed. */
+  failed: [ExerciseDownload, string[], MoocDownloadFailure | TmcDownloadFailure][]
+  /** The chapter of each `failed` exercise that failed as `closed-chapter`. */
+  closedChapters: ClosedChapterOfExercise[]
+}
+
+/** A chapter not open yet, holding a requested exercise. */
+export interface ClosedChapterOfExercise {
+  id: ExerciseIdentifier
+  name: string
+  /** When the chapter opens, as a timestamp. */
+  opensAt: string
 }
 
 /** How a backend's copies of the locally downloaded exercises differ from the local ones. */
@@ -236,7 +250,7 @@ export interface LocalExerciseUpdates {
 export interface UncheckedCourse {
   courseId: CourseIdentifier
   /** What a command about this course alone fails with. */
-  refusal: InsufficientScopeError | NotFoundError
+  refusal: InsufficientScopeError | ForbiddenError | NotFoundError
 }
 
 /** A backend's download result, with each exercise as `toDownload` identifies it. */
@@ -245,13 +259,23 @@ function toExerciseDownloads<T>(
     downloaded,
     skipped,
     failed,
-  }: { downloaded: T[]; skipped: T[]; failed?: [T, string[]][] | null | undefined },
+  }: {
+    downloaded: T[]
+    skipped: T[]
+    failed?: [T, string[], MoocDownloadFailure | TmcDownloadFailure][] | null | undefined
+  },
   toDownload: (exercise: T) => ExerciseDownload,
+  closedChapters: ClosedChapterOfExercise[] = [],
 ): ExerciseDownloads {
   return {
     downloaded: downloaded.map((exercise) => toDownload(exercise)),
     skipped: skipped.map((exercise) => toDownload(exercise)),
-    failed: (failed ?? []).map(([exercise, reasons]) => [toDownload(exercise), reasons]),
+    failed: (failed ?? []).map(([exercise, reasons, failure]) => [
+      toDownload(exercise),
+      reasons,
+      failure,
+    ]),
+    closedChapters,
   }
 }
 
@@ -267,6 +291,15 @@ export type RestoreTarget = Enum<
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
 
+const SPAWN_BUSY_RETRY_DELAY_MS = 500
+
+/**
+ * How long after the CLI exits its stdout may stay open. Every process the CLI started on
+ * Windows inherits the pipe, so one that outlives it would otherwise hold the command until its
+ * timeout.
+ */
+const STDOUT_END_GRACE_MS = 3000
+
 /** POSIX has process groups, so a child spawned `detached` can be signalled as a whole tree. */
 const HAS_PROCESS_GROUPS = process.platform !== "win32"
 
@@ -276,16 +309,21 @@ const HAS_PROCESS_GROUPS = process.platform !== "win32"
  * On POSIX the child leads its own process group (see the `detached` spawn option), so one
  * synchronous signal reaches the whole tree and has taken effect before this returns --
  * which is what lets a synchronous `deactivate` stop a submit in flight. Windows has no
- * process groups, so `tree-kill` walks the tree asynchronously there instead.
+ * process groups, so `taskkill /T` walks the tree asynchronously there instead.
  */
 function killProcessTree(cprocess: cp.ChildProcess): void {
   const pid = cprocess.pid
-  // Undefined until the spawn succeeds, and `tree-kill` throws on a non-numeric pid.
+  // Undefined until the spawn succeeds.
   if (pid === undefined) {
     return
   }
   if (!HAS_PROCESS_GROUPS) {
-    kill(pid)
+    // `tree-kill` runs `taskkill` through cmd.exe, which can flash a console window.
+    cp.execFile("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, (error) => {
+      if (error) {
+        Logger.warn(`taskkill of process ${pid} failed:`, error)
+      }
+    })
     return
   }
   try {
@@ -409,33 +447,53 @@ export default class Langs {
    * stored before courses.mooc.fi logins replaced tmc ones.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
-    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
-    // trusted with its token, so any other tmc root would read as logged out.
-    const mooc = await this._isLoggedIn("mooc", options)
-    if (mooc.err || mooc.val) {
-      return mooc
-    }
-    return this._isLoggedIn("tmc", options)
+    return (await this.getSession(options)).map((session) => session !== undefined)
   }
 
-  private async _isLoggedIn(
+  /**
+   * The stored login and, for a courses.mooc.fi one, its account when courses.mooc.fi could
+   * name it; `undefined` when there is none. A `tmc` session is a tmc.mooc.fi login stored by
+   * an earlier version, which courses.mooc.fi logins have replaced.
+   */
+  public async getSession(options?: ExecutionOptions): Promise<Result<Session | undefined, Error>> {
+    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
+    // trusted with its token, so any other tmc root would read as logged out.
+    const mooc = await this._loggedIn("mooc", options)
+    if (mooc.err) {
+      return mooc
+    }
+    if (mooc.val.isLoggedIn) {
+      return Ok({ kind: "mooc", ...(mooc.val.account ? { account: mooc.val.account } : {}) })
+    }
+    const tmc = await this._loggedIn("tmc", options)
+    return tmc.map((state) => (state.isLoggedIn ? { kind: "tmc" } : undefined))
+  }
+
+  private async _loggedIn(
     backend: BackendKind,
     options?: ExecutionOptions,
-  ): Promise<Result<boolean, Error>> {
+  ): Promise<Result<{ isLoggedIn: boolean; account?: MoocAccount }, Error>> {
     const res = await this._executeLangsCommand(
       {
         backend,
         args: this._backendCmd(backend, "logged-in"),
         processTimeout: options?.timeout,
+        suppressAuthEvents: options?.suppressAuthEvents,
       },
       null,
     )
-    return res.andThen<boolean, Error>((x) => {
+    return res.andThen<{ isLoggedIn: boolean; account?: MoocAccount }, Error>((x) => {
       switch (x.result) {
-        case "logged-in":
-          return Ok(true)
+        case "logged-in": {
+          const data = (x as OutputData).data
+          return Ok(
+            data?.["output-data-kind"] === "mooc-current-user"
+              ? { isLoggedIn: true, account: data["output-data"] }
+              : { isLoggedIn: true },
+          )
+        }
         case "not-logged-in":
-          return Ok(false)
+          return Ok({ isLoggedIn: false })
         default:
           return Err(new Error(`Unexpected langs result: ${x.result}`))
       }
@@ -512,7 +570,8 @@ export default class Langs {
     }
     this._responseCache.clear()
     const failed = results.find((res) => res.err)
-    if (failed) {
+    // A revocation that could not reach the server still removed the login here.
+    if (failed && (await this.isAuthenticated({ suppressAuthEvents: true })).unwrapOr(true)) {
       return failed
     }
     this._onLogout?.(true)
@@ -653,6 +712,35 @@ export default class Langs {
   }
 
   /**
+   * Validates {@link moveProjectsDirectory} without moving anything: errs with the same
+   * `ProjectsDirMoveRefusedError` for the current directory or a folder inside it.
+   */
+  public async checkMoveProjectsDirectory(newDirectory: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("move-projects-dir", "--check", newDirectory) })
+  }
+
+  /**
+   * Moves every entry of the projects directory into `folder`, under the lock other commands on
+   * the projects directory take. Moves nothing on failure; an entry another program holds is a
+   * `FileAccessError` naming it. {@link restoreProjects} moves them back.
+   *
+   * @param folder Absent or empty, outside the projects directory and on the same drive.
+   */
+  public async setProjectsAside(folder: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("set-projects-aside", folder) })
+  }
+
+  /**
+   * Moves the entries {@link setProjectsAside} put in `folder` back into the projects directory
+   * and deletes `folder`. Errs with `ProjectsRestoreConflictError`, moving nothing, unless the
+   * projects directory holds nothing but OS metadata files. A projects directory deleted by
+   * hand, whose parent exists, counts as empty.
+   */
+  public async restoreProjects(folder: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("restore-projects", folder) })
+  }
+
+  /**
    * Gets the value for given key and asserts it's type. Uses TMC-langs `settings get` command
    * internally.
    */
@@ -736,7 +824,9 @@ export default class Langs {
           refusal:
             kind === "insufficient-scope"
               ? new InsufficientScopeError("You no longer have access to the course.")
-              : new NotFoundError("The course no longer exists."),
+              : kind === "forbidden"
+                ? new ForbiddenError("You no longer have access to the course.")
+                : new NotFoundError("The course no longer exists."),
         })),
       }))
     }
@@ -805,6 +895,7 @@ export default class Langs {
    *
    * @param courseId The course every exercise belongs to, when they share one; without it the
    * CLI looks for each exercise in every course the user is enrolled in.
+   * @param isExam `courseId` is a started exam's id.
    * @param onDownloaded Called as each exercise finishes.
    * @param onInterruptHandle Receives the function that kills the download.
    */
@@ -813,13 +904,14 @@ export default class Langs {
     courseId: string | undefined,
     onDownloaded: (progress: ExerciseDownloadProgress) => void,
     onInterruptHandle?: (interrupt: () => void) => void,
+    isExam = false,
   ): Promise<Result<ExerciseDownloads, Error>> {
     const res = await this._fetch(
       {
         backend: "mooc",
         args: this._moocCmd(
           "download-or-update-course-exercises",
-          ...(courseId ? ["--course-id", courseId] : []),
+          ...(courseId ? [isExam ? "--exam-id" : "--course-id", courseId] : []),
           "--exercise-id",
           ...exerciseIds,
         ),
@@ -842,10 +934,18 @@ export default class Langs {
     )
     this._responseCache.delete(cacheKey("mooc", "exercise-updates"))
     return res.map((result) =>
-      toExerciseDownloads(result, (exercise) => ({
-        id: makeMoocKind({ moocExerciseId: exercise["exercise-id"] }),
-        path: exercise.path,
-      })),
+      toExerciseDownloads(
+        result,
+        (exercise) => ({
+          id: makeMoocKind({ moocExerciseId: exercise["exercise-id"] }),
+          path: exercise.path,
+        }),
+        (result.closed_chapters ?? []).map((chapter) => ({
+          id: makeMoocKind({ moocExerciseId: chapter["exercise-id"] }),
+          name: chapter["chapter-name"],
+          opensAt: chapter["opens-at"],
+        })),
+      ),
     )
   }
 
@@ -1083,6 +1183,7 @@ export default class Langs {
   public async submitMoocExercise(
     exerciseId: string,
     exercisePath: string,
+    onInterruptHandle?: (interrupt: () => void) => void,
   ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
     return this._submitting("mooc", () =>
       this._fetch(
@@ -1097,6 +1198,7 @@ export default class Langs {
             exercisePath,
           ),
           onNotification: (notification) => this._showNotification(notification),
+          onInterruptHandle,
           processTimeout: SUBMIT_PROCESS_TIMEOUT,
           interruptOnDeactivate: true,
         },
@@ -1166,7 +1268,11 @@ export default class Langs {
       () => this._submitting("tmc", () => this._fetch(command, "new-submission")),
       () => this._fetch(command, "mooc-paste"),
     )
-    return res.map((pasted) => pasted.paste_url)
+    return res
+      .map((pasted) => pasted.paste_url)
+      .mapErr((error) =>
+        error instanceof RateLimitedError ? Object.assign(error, { isPasteLimit: true }) : error,
+      )
   }
 
   /**
@@ -1190,6 +1296,19 @@ export default class Langs {
         args: this._tmcCmd("send-feedback", "--feedback-url", feedbackUrl, ...feedbackArgs),
       },
       "submission-feedback-response",
+    )
+  }
+
+  /** Lists the courses.mooc.fi exams the user has started and can still answer. */
+  public async getMoocExams(): Promise<Result<MoocExam[], Error>> {
+    return this._fetch({ backend: "mooc", args: this._moocCmd("exams") }, "mooc-exams")
+  }
+
+  /** The exercises of a started exam; their gradings stay hidden while it can be answered. */
+  public async getMoocExamExercises(examId: string): Promise<Result<TmcExerciseSlide[], Error>> {
+    return this._fetch(
+      { backend: "mooc", args: this._moocCmd("exam-exercises", "--exam-id", examId) },
+      "mooc-exercise-slides",
     )
   }
 
@@ -1237,7 +1356,13 @@ export default class Langs {
 
   /** The base arguments of a `mooc` subcommand, followed by `rest`. */
   private _moocCmd(...rest: string[]): string[] {
-    return ["mooc", "--client-name", this.clientName].concat(rest)
+    return [
+      "mooc",
+      "--client-name",
+      this.clientName,
+      "--client-version",
+      this.clientVersion,
+    ].concat(rest)
   }
 
   /** The base arguments of a `tmc` subcommand, followed by `rest`. */
@@ -1288,16 +1413,39 @@ export default class Langs {
     if (process.err) {
       return { result: Promise.resolve(process), interrupt: (): void => {} }
     }
-    const { interrupt, result, getStderr } = process.val
+    let current = process.val
+    let isInterrupted = false
+    const interrupt = (): void => {
+      isInterrupted = true
+      current.interrupt()
+    }
     langsArgs.onInterruptHandle?.(interrupt)
     const auth: AuthAttribution = {
       backend: langsArgs.backend,
       expected: langsArgs.suppressAuthEvents,
     }
+    const runOnce = async (): Promise<Awaited<LangsProcessRunner["result"]>> => {
+      const first = await current.result
+      // A scanner can hold the executable for a moment; the process never ran, so rerunning is safe.
+      if (!(first.err && first.val instanceof SpawnError && first.val.code === "EBUSY")) {
+        return first
+      }
+      Logger.warn("The TestMyCode tools were busy, trying once more")
+      await sleep(SPAWN_BUSY_RETRY_DELAY_MS)
+      if (isInterrupted) {
+        return first
+      }
+      const retry = this._spawnLangsProcess(langsArgs)
+      if (retry.err) {
+        return retry
+      }
+      current = retry.val
+      return await current.result
+    }
     return {
-      result: result.then((res) =>
+      result: runOnce().then((res) =>
         res
-          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
+          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, current.getStderr()))
           .mapErr((error) => Object.assign(error, { backend: langsArgs.backend })),
       ),
       interrupt,
@@ -1398,7 +1546,7 @@ export default class Langs {
     // expected data kind first would misreport every panic and discard its message.
     if (langsResponse.status === "crashed") {
       Logger.error("Langs process crashed.", langsResponse.message)
-      return Err(new BaseError(langsResponse.message || "Langs process crashed.", stderr))
+      return Err(new CliCrashedError(langsResponse.message || "Langs process crashed.", stderr))
     }
     if (!dataMatchesKind(langsResponse, outputDataKind)) {
       // The kinds, not the payload: that is the user's data, in a log users paste into bug reports.
@@ -1416,120 +1564,40 @@ export default class Langs {
       return Err(new BaseError("Unexpected data in error response", stderr))
     }
 
-    const data = langsResponse.data
-    const message = langsResponse.message
-    const errorKind = data["output-data"].kind
+    const output = langsResponse.data["output-data"]
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone suffices to diagnose a failure, so every error carries both.
-    // The CLI lists a boxed error twice in a row, once as the box and once as itself.
-    const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
-    const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
-    const httpStatus = data["output-data"].http_status ?? undefined
-    switch (errorKind) {
-      case "connection-error":
-        return Err(new ConnectionError(message, details))
-      case "forbidden":
-        return Err(new ForbiddenError(message, details))
-      case "insufficient-scope":
-        return Err(new InsufficientScopeError(message, details))
-      case "not-enrolled":
-        return Err(new NotEnrolledError(message, details))
-      case "deadline-passed":
-        return Err(
-          new DeadlinePassedError(
-            "The deadline of this exercise has passed, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "out-of-tries":
-        return Err(
-          new OutOfTriesError(
-            "You have no tries left on this exercise, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "chapter-not-open-yet":
-        return Err(
-          new ChapterNotOpenError(
-            "This exercise's chapter has not opened yet. Try again once it opens.",
-            details,
-          ),
-        )
-      case "chapter-not-unlocked-yet":
-        return Err(
-          new ChapterLockedError(
-            "Complete the chapters before this exercise's chapter to submit it.",
-            details,
-          ),
-        )
-      case "chapter-completed-and-locked":
-        return Err(
-          new ChapterLockedError(
-            "This exercise's chapter is locked, so the exercise can no longer be submitted.",
-            details,
-          ),
-        )
-      case "exercise-locked":
-        return Err(
-          new ExerciseLockedError(
-            "The teacher has locked this exercise, so it can no longer be submitted.",
-            details,
-          ),
-        )
-      case "upload-expired":
-        return Err(new UploadExpiredError(message, details))
-      case "rate-limited":
-        return Err(
-          new RateLimitedError(
-            "You have sent this exercise to the pastebin too often. Try again in a few minutes.",
-            details,
-          ),
-        )
-      case "unknown-upload":
-        // Never a race: the backend has no record of a file the CLI named for this
-        // exercise, so a retry cannot help.
-        return Err(new UnknownUploadError(message, details))
-      case "invalid-token": {
-        this._clearBackendCache(auth.backend)
-        const rejection = new InvalidTokenError(message)
-        if (!auth.expected) {
-          this._onLogout?.(false, rejection)
-        }
-        return Err(rejection)
+    // The CLI lists a boxed error twice in a row, once as the box and once as itself, and
+    // starts with the outermost error, which is the message already.
+    const trace = output.trace.filter(
+      (line, i, lines) =>
+        line !== lines[i - 1] && !(i === 0 && line === `Caused by: ${langsResponse.message}`),
+    )
+    // Staff find the server's log line by this id.
+    const requestLine = output.request_id ? `courses.mooc.fi request id: ${output.request_id}` : ""
+    const details = [trace.join("\n"), stderr, requestLine].filter(Boolean).join("\n\n")
+    const error = langsError(
+      {
+        kind: output.kind,
+        path: output.path ?? undefined,
+        httpStatus: output.http_status ?? undefined,
+        retryAfterSeconds:
+          output.retry_after_secs === null || output.retry_after_secs === undefined
+            ? undefined
+            : Number(output.retry_after_secs),
+      },
+      langsResponse.message,
+      details,
+      auth.backend,
+    )
+    if (output.kind === "invalid-token" || output.kind === "not-logged-in") {
+      this._clearBackendCache(auth.backend)
+      // Only the old tmc.mooc.fi login was refused; a courses.mooc.fi one may remain.
+      if (!auth.expected && !(error instanceof LegacyTmcLoginEndedError)) {
+        this._onLogout?.(false, error)
       }
-      case "not-logged-in": {
-        this._clearBackendCache(auth.backend)
-        // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
-        // cannot change that.
-        const rejection =
-          auth.backend === "tmc"
-            ? new TmcLoginNotAcceptedError(message, details)
-            : new AuthorizationError(message, details)
-        if (!auth.expected) {
-          this._onLogout?.(false, rejection)
-        }
-        return Err(rejection)
-      }
-      case "device-login-denied":
-        return Err(new DeviceLoginDeniedError(message, details))
-      case "device-login-expired":
-        return Err(new DeviceLoginExpiredError(message, details))
-      case "not-found":
-        return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
-      case "exercise-not-found":
-        return Err(
-          new ExerciseNotFoundError(
-            auth.backend ? "This exercise is no longer in the course." : message,
-            details,
-          ),
-        )
-      case "server-error":
-        return Err(Object.assign(new ServerError(message, details), { httpStatus }))
-      case "obsolete-client":
-        return Err(new ObsoleteClientError(message, details))
     }
-
-    return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))
+    return Err(error)
   }
 
   /**
@@ -1566,16 +1634,16 @@ export default class Langs {
       .map((x) => JSON.stringify(x))
       .join(" ")
 
-    // override settings with environment variables, mainly for testing
-    const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL
-    const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL
-    const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir
+    const baseEnv = cliEnvironment(
+      process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir,
+      this._options.httpProxy?.(),
+    )
     const javaHome = this._options.javaHome?.() ?? ""
 
     Logger.info(`Running ${loggableCommand}`)
-    Logger.debug(`TMC backend at ${tmcBackendUrl}`)
-    Logger.debug(`MOOC backend at ${moocBackendUrl}`)
-    Logger.debug(`Config dir at ${tmcLangsConfigDir}`)
+    Logger.debug(`TMC backend at ${baseEnv.TMC_LANGS_TMC_ROOT_URL}`)
+    Logger.debug(`MOOC backend at ${baseEnv.TMC_LANGS_MOOC_ROOT_URL}`)
+    Logger.debug(`Config dir at ${baseEnv.TMC_LANGS_CONFIG_DIR}`)
 
     // debug pulls in j4rs/JNI spam, so only ask for it when the user opted into verbose
     const cliLogLevel = Logger.level === LogLevel.Verbose ? "debug" : "info"
@@ -1583,6 +1651,7 @@ export default class Langs {
     let active = true
     let interrupted = false
     let spawnFailure: Error | undefined
+    let exitStatus: { code: number | null; signal: NodeJS.Signals | null } | undefined
     let cprocess
     const startTime = Date.now()
     try {
@@ -1590,13 +1659,14 @@ export default class Langs {
         // Gives the child its own process group, so {@link killProcessTree} can reach the
         // plugins it spawns (Maven, pytest) with one signal. No-op on Windows.
         detached: HAS_PROCESS_GROUPS,
+        windowsHide: true,
+        // Windows looks for the tools the CLI starts in its working directory before PATH, and
+        // the inherited one can be a course folder.
+        cwd: dirname(this.cliPath),
         env: {
-          ...process.env,
+          ...baseEnv,
           ...env,
           RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
-          TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
-          TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
-          TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
           ...(javaHome ? { JAVA_HOME: javaHome } : {}),
         },
       })
@@ -1614,6 +1684,7 @@ export default class Langs {
     const processResult = new Promise<number | null>((resolve, reject) => {
       let resultCode: number | undefined
       let stdoutEnded = false
+      let pipeGraceTimer: NodeJS.Timeout | undefined
 
       const timeoutMs = processTimeout === undefined ? CLI_PROCESS_TIMEOUT : processTimeout
       const timeout =
@@ -1646,6 +1717,7 @@ ${error.message}`
       })
       cprocess.stdout.on("end", () => {
         stdoutEnded = true
+        clearTimeout(pipeGraceTimer)
         if (resultCode !== undefined) {
           if (timeout) {
             clearTimeout(timeout)
@@ -1658,6 +1730,7 @@ ${error.message}`
         // closure must not signal it.
         active = false
         resultCode = code ?? 0
+        exitStatus = { code, signal }
         const ending = signal ? `was killed by ${signal}` : `exited with code ${resultCode}`
         Logger.info(`Process ${ending} after ${Date.now() - startTime}ms: ${loggableCommand}`)
         if (stdoutEnded) {
@@ -1665,6 +1738,17 @@ ${error.message}`
             clearTimeout(timeout)
           }
           resolve(code)
+        } else {
+          pipeGraceTimer = setTimeout(() => {
+            Logger.warn(
+              `The TestMyCode tools' output stayed open ${STDOUT_END_GRACE_MS}ms after they exited; a process they started is probably holding it`,
+            )
+            if (timeout) {
+              clearTimeout(timeout)
+            }
+            cprocess.stdout.destroy()
+            resolve(code)
+          }, STDOUT_END_GRACE_MS)
         }
       })
       cprocess.stdout.on("data", (chunk: string) => {
@@ -1744,7 +1828,10 @@ ${error.message}`
         )
       }
       return Err(
-        new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
+        Object.assign(
+          new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
+          { exitCode: exitStatus?.code ?? null, signal: exitStatus?.signal ?? null },
+        ),
       )
     })()
 

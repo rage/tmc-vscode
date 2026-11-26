@@ -299,7 +299,7 @@ suite("Logger tail", function () {
     expect(Logger.tail()).not.toContain(TOKEN)
   })
 
-  test("shortens the extension's storage directory, which the log itself keeps in full", function () {
+  test("shortens the extension's storage directory, in the log as in its tail", function () {
     const lines: string[] = []
     Logger.output = {
       appendLine: (line: string) => lines.push(line),
@@ -316,7 +316,16 @@ suite("Logger tail", function () {
 
     expect(Logger.tail()).toContain("CLI at <extension storage>/cli")
     expect(Logger.tail()).not.toContain("/var/vscode/globalStorage")
-    expect(lines.join("\n")).toContain("/var/vscode/globalStorage/moocfi.test-my-code/cli")
+    expect(lines.join("\n")).toContain("CLI at <extension storage>/cli")
+  })
+
+  test("names no user through a percent-encoded file URI or a Windows short path", function () {
+    expect(redactPersonalInfo("file:///home/ann%20lee/x", "/home/ann lee", "annlee", false)).toBe(
+      "file://~/x",
+    )
+    expect(
+      redactPersonalInfo("at C:\\Users\\JOHNSM~1\\AppData", "C:\\Users\\John Smith", "john", true),
+    ).toBe("at %USERPROFILE%\\AppData")
   })
 
   test("leaves the home directory out", function () {

@@ -8,10 +8,10 @@ function statusBarItem(page: Page, name: RegExp) {
   return page.locator('[id="workbench.parts.statusbar"]').getByRole("button", { name })
 }
 
-vsCodeTest("the account item shows the logged-in session", async ({ page, webview }) => {
+vsCodeTest("the account item shows an old tmc.mooc.fi login as one", async ({ page, webview }) => {
   await new MoocLoginPage(page, webview).openMenu()
 
-  await expect(statusBarItem(page, /logged in with your MOOC\.fi account/)).toBeVisible()
+  await expect(statusBarItem(page, /logged in with an old tmc\.mooc\.fi login/)).toBeVisible()
 })
 
 vsCodeTest.describe(() => {

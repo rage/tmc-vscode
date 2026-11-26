@@ -10,7 +10,7 @@
   import Button from "../../components/Button.svelte"
   import ErrorNotice from "../../components/ErrorNotice.svelte"
   import Spinner from "../../components/Spinner.svelte"
-  import { announce } from "../../utilities/a11y.svelte"
+  import { announce, focusWhen } from "../../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../../utilities/script"
 
   interface Props {
@@ -32,6 +32,8 @@
   let restoringKey = $state<string | undefined>(undefined)
   let restoreError = $state<WebviewError | undefined>(undefined)
   let restoreNote = $state<string | undefined>(undefined)
+  // The entry whose Restore button takes focus once the restore settles.
+  let focusKey = $state<string | undefined>(undefined)
 
   const graded = $derived(entries?.filter((entry) => entry.kind === "submission") ?? [])
   const ungraded = $derived(entries?.filter((entry) => entry.kind !== "submission") ?? [])
@@ -40,6 +42,7 @@
     submission: "Submission",
     paste: "Help request",
     backup: "Backup",
+    unrecognized: "Other",
   }
 
   onMount(() => void load())
@@ -81,6 +84,7 @@
     const outcome = await request("restoreSubmission", { sourcePanel, key: entry.key })
     requestedKey = undefined
     restoringKey = undefined
+    focusKey = entry.key
     if (!outcome.ok) {
       restoreError = outcome.error
       return
@@ -106,6 +110,8 @@
         return { name: "comment-discussion" }
       case "backup":
         return { name: "archive" }
+      case "unrecognized":
+        return { name: "question" }
       case "submission":
         return entry.isPassed ? { name: "pass", tone: "passed" } : { name: "circle-large-outline" }
     }
@@ -150,6 +156,10 @@
               <Button
                 secondary
                 disabled={requestedKey !== undefined}
+                {@attach focusWhen(
+                  () => focusKey === entry.key && requestedKey === undefined,
+                  () => (focusKey = undefined),
+                )}
                 aria-label="Restore the {KIND_LABELS[
                   entry.kind
                 ].toLowerCase()} from {entry.dateLabel}"

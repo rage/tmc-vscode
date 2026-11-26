@@ -5,6 +5,7 @@ import { expect } from "@playwright/test"
 
 import { extensionGlobalStorage, vsCodeTest } from "../fixtures"
 import { MoocLoginPage } from "../pages/mooc-login"
+import { TmcPage } from "../pages/tmc"
 
 /** The folder activation downloads the CLI to, which a light start never touches. */
 function cliFolder(userDataDir: string): string {
@@ -17,8 +18,8 @@ vsCodeTest.use({ seedTmcCredentials: false, moocClientId: "mooc-mock-never" })
 
 vsCodeTest(
   "a fresh install opens the walkthrough without starting the CLI",
-  async ({ page, userDataDir }) => {
-    await expect(page.getByText("Get Started with TestMyCode").first()).toBeVisible()
+  async ({ page, webview, userDataDir }) => {
+    await new TmcPage(page, webview).expectWalkthroughShown()
     // oxlint-disable-next-line playwright/no-wait-for-timeout -- only a wait shows the CLI never comes; a full activation downloads it within this
     await page.waitForTimeout(3000)
 

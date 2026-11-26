@@ -6,6 +6,8 @@
   interface Props {
     /** The display name of what the panel shows, never a slug. */
     title: string
+    /** BCP 47 tag of the title's language, when it is not the interface's: a course's name. */
+    lang?: string | undefined
     /** Muted context under the title, e.g. "Python Programming · University of Helsinki". */
     subtitle?: string | undefined
     /**
@@ -18,7 +20,7 @@
   }
 
   /** A panel's one level-1 heading, with its context line and toolbar. */
-  let { title, subtitle, shouldFocusOnMount = true, toolbar }: Props = $props()
+  let { title, lang, subtitle, shouldFocusOnMount = true, toolbar }: Props = $props()
 
   function focusHeading(heading: HTMLElement) {
     if (shouldFocusOnMount) {
@@ -29,7 +31,7 @@
 
 <header class="panel-header">
   <div class="titles">
-    <h1 tabindex="-1" {@attach focusHeading}>{title}</h1>
+    <h1 tabindex="-1" {lang} {@attach focusHeading}>{title}</h1>
     {#if subtitle}<p class="subtitle muted">{subtitle}</p>{/if}
   </div>
   {#if toolbar}<div class="toolbar">{@render toolbar()}</div>{/if}

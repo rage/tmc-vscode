@@ -523,6 +523,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -564,6 +566,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -588,6 +592,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           tries_left: null,
           pending_teacher_review: null,
           exercise_locked: false,
+          reviewing_stage: null,
+          teacher_review: null,
         },
       }),
     )
@@ -633,6 +639,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
             tries_left: null,
             pending_teacher_review: null,
             exercise_locked: false,
+            reviewing_stage: null,
+            teacher_review: null,
           },
         }),
         1,
@@ -1191,7 +1199,7 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
   test("still shows the paste link the host answered with", async () => {
     showPanel()
     await chooseMenuItem("Get Help")
-    ;(await screen.findByRole("button", { name: "Send to Pastebin" })).click()
+    ;(await screen.findByRole("button", { name: "Get a Link" })).click()
     replyToRequest("pasteExercise", {
       ok: true,
       value: { link: "https://tmc.mooc.fi/paste/abc", isReused: false },

@@ -32,7 +32,17 @@ export const miscHandlers = {
   showErrorDetails: {
     requiresReady: false,
     handle(message, { host }): void {
-      host.showBeside(errorDetailsPanel(message.detailsId))
+      host.showBeside(errorDetailsPanel(message.detailsId, host.cliFolder))
+    },
+  },
+  revealCliFolder: {
+    requiresReady: false,
+    async handle(_message, { host }): Promise<void> {
+      // The folder comes from the screen the host built, never from the webview.
+      const folder = host.route?.type === "ErrorHelp" ? host.route.cliFolder : undefined
+      if (folder !== undefined) {
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(folder))
+      }
     },
   },
   requestLogTail: {
@@ -56,9 +66,11 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
       return ["testMyCode.logLevel"]
     case "workbench.action.openIssueReporter":
       return [{ extensionId: EXTENSION_ID }]
+    case "tmc.changeTmcDataPath":
     case "tmc.enrollOnCourse":
     case "tmc.logs":
     case "tmc.myCourses":
+    case "tmc.openTroubleshooting":
     case "tmc.showAiUseProblem":
     case "tmc.showMoocLogin":
     case "tmc.trustCourseWorkspace":

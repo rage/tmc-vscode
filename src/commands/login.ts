@@ -18,8 +18,9 @@ let cancelCurrentLogin: (() => void) | undefined
  * Logs in to courses.mooc.fi with the device flow, in the user's own browser so their
  * existing browser session is reused.
  *
- * The login screen shows the code and opens the verification page on request. Leaving the
- * screen cancels the login, and starting a login cancels any already in flight, so two
+ * The login screen shows the code and opens the verification page on request. Closing the
+ * screen cancels the login; showing another screen in its place leaves it waiting for the
+ * approval, with a status bar message. Starting a login cancels any already in flight, so two
  * `mooc login` processes never race on the credentials file. A failure stays on the screen, with
  * Try again. A user with no courses goes on to the add-course screen, as does `isAddingCourse`.
  */
@@ -37,6 +38,7 @@ export async function login(
   let isEnded = false
   let verificationPage: string | undefined
   const cancellation = Promise.withResolvers<"cancelled">()
+  let waitingMessage: vscode.Disposable | undefined
   const cancel = (): void => {
     isEnded = true
     interrupt()
@@ -44,9 +46,16 @@ export async function login(
   }
   cancelCurrentLogin = cancel
   const subscriptions = vscode.Disposable.from(
-    loginScreens.onDidLeave((panelId) => {
-      if (panelId === panel.id) {
+    loginScreens.onDidLeave(({ panelId, isClosed }) => {
+      if (panelId !== panel.id) {
+        return
+      }
+      if (isClosed) {
         cancel()
+      } else {
+        waitingMessage ??= vscode.window.setStatusBarMessage(
+          "$(loading~spin) TestMyCode: waiting for the login to be approved in the browser",
+        )
       }
     }),
     loginScreens.onDidRequestAction(({ panelId, action }) => {
@@ -77,6 +86,7 @@ export async function login(
   const settled = await Promise.race([result, cancellation.promise])
   isEnded = true
   subscriptions.dispose()
+  waitingMessage?.dispose()
   if (cancelCurrentLogin === cancel) {
     cancelCurrentLogin = undefined
   }

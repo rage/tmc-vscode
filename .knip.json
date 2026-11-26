@@ -24,7 +24,12 @@
       // scripts that shell scripts and CI invoke by filename, husky's
       // lint-staged config, and the `vscode` mock vitest reaches through a
       // resolve alias.
-      "entry": ["src/test/support/vscode.cjs", "bin/*.{js,mjs,ts}", ".husky/lint-staged-config.js"],
+      "entry": [
+        "src/test/support/vscode.cjs",
+        "bin/*.{js,mjs,ts}",
+        ".husky/lint-staged-config.js",
+        "playwright.real.config.ts"
+      ],
       // bin/package.bash runs it; knip does not read shell scripts.
       "ignoreDependencies": ["@vscode/vsce"],
       "project": [
@@ -32,6 +37,8 @@
         "shared/**/*.ts",
         "!shared/generated/**",
         "playwright/**/*.ts",
+        // Opt-in scratch-derived harness, exempt like in .oxlintrc.json.
+        "!playwright/real/**",
         "bin/**/*.{js,mjs,ts}",
         "*.{ts,mjs,js}",
         ".husky/*.js"

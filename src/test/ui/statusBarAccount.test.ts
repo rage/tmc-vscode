@@ -11,7 +11,11 @@ function create(isLoggedIn: boolean): {
   item: ReturnType<typeof fakeStatusBarItems>[number]
 } {
   const items = fakeStatusBarItems()
-  const account = new AccountStatusBarItem({ loggedIn: isLoggedIn, isSessionExpired: false })
+  const account = new AccountStatusBarItem({
+    loggedIn: isLoggedIn,
+    isSessionExpired: false,
+    session: isLoggedIn ? { kind: "mooc" } : undefined,
+  })
   const [item] = items
   if (!item) {
     throw new Error("no status bar item was created")
@@ -62,9 +66,9 @@ suite("AccountStatusBarItem", function () {
   test("follows logins and logouts", function () {
     const { account, item } = create(false)
 
-    account.update({ loggedIn: true, isSessionExpired: false })
+    account.update({ loggedIn: true, isSessionExpired: false, session: undefined })
     expect(item.text).toBe(shown.loggedIn)
-    account.update({ loggedIn: false, isSessionExpired: false })
+    account.update({ loggedIn: false, isSessionExpired: false, session: undefined })
     expect(item.text).toBe(shown.loggedOut)
     expect(item.command).toBe("tmc.showMoocLogin")
   })
@@ -72,11 +76,35 @@ suite("AccountStatusBarItem", function () {
   test("an expired session says so, in the words the course home uses", function () {
     const { account, item } = create(true)
 
-    account.update({ loggedIn: false, isSessionExpired: true })
+    account.update({ loggedIn: false, isSessionExpired: true, session: undefined })
     expect(item.text).toBe(shown.sessionExpired)
     expect(item.text).toBe("$(warning) TestMyCode: Logged Out")
     expect(item.command).toBe("tmc.showMoocLogin")
     expect(tooltipText(item)).toContain(LOGGED_OUT_MESSAGE)
+  })
+
+  test("names the account courses.mooc.fi named", function () {
+    const { account, item } = create(true)
+
+    account.update({
+      loggedIn: true,
+      isSessionExpired: false,
+      session: { kind: "mooc", account: { id: "a", name: "Ada", email: "ada@example.com" } },
+    })
+
+    expect(tooltipText(item)).toContain("Ada (ada@example.com)")
+    expect(item.accessibilityInformation?.label).toContain(
+      "logged in with your MOOC.fi account, Ada (ada@example.com)",
+    )
+  })
+
+  test("an old tmc.mooc.fi login is shown as one, offering the MOOC.fi login", function () {
+    const { account, item } = create(true)
+
+    account.update({ loggedIn: true, isSessionExpired: false, session: { kind: "tmc" } })
+
+    expect(item.text).toBe("$(account) tmc.mooc.fi")
+    expect(item.command).toBe("tmc.showMoocLogin")
   })
 
   test("disposes its item", function () {

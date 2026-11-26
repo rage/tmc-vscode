@@ -5,6 +5,7 @@ import {
   makeMoocKind,
   makeTmcKind,
   moocCourseUrlOf,
+  SharedMoocCourseExerciseSchema,
   SUBMIT_REFUSAL_LABELS,
   SUBMIT_REFUSAL_PRIORITY,
   submitRefusalOf,
@@ -238,5 +239,29 @@ suite("LocalCourseData.getClosedChapterOf", () => {
     expect(
       LocalCourseData.getClosedChapterOf(course, makeMoocKind({ moocExerciseId: "other" })),
     ).toBeUndefined()
+  })
+})
+
+suite("SharedMoocCourseExerciseSchema", () => {
+  test("drops a review stage or decision it does not know instead of the exercise", () => {
+    const parsed = SharedMoocCourseExerciseSchema.safeParse({
+      id: "e1",
+      name: "Hello",
+      deadline: null,
+      passed: false,
+      awardedPoints: 0,
+      availablePoints: 1,
+      reviewingStage: "some_future_stage",
+      teacherReview: {
+        decision: "some_future_decision",
+        justification: null,
+        scoreGiven: 1,
+        createdAt: "2026-11-01T00:00:00Z",
+      },
+    })
+
+    expect(parsed.success && parsed.data).toMatchObject({ id: "e1" })
+    expect(parsed.data?.reviewingStage).toBeUndefined()
+    expect(parsed.data?.teacherReview).toBeUndefined()
   })
 })

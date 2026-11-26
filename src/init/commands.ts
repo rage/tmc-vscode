@@ -8,10 +8,11 @@ import type Dialog from "../api/dialog"
 import { SHOW_ERROR_DETAILS_COMMAND } from "../api/dialog"
 import { requestWorkspaceTrust } from "../api/workspaceTrustPrompt"
 import * as commands from "../commands"
-import { EXTENSION_ID } from "../config/constants"
+import { EXTENSION_ID, TROUBLESHOOTING_URL } from "../config/constants"
 import {
   ENROLL_ON_COURSE_COMMAND,
   SHOW_AI_USE_PROBLEM_COMMAND,
+  TROUBLESHOOTING_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
 } from "../errors"
 import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
@@ -24,7 +25,8 @@ import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
-import { Logger } from "../utilities"
+import { cliFolder, Logger } from "../utilities"
+import { openWebLink } from "../utilities/webLink"
 import { openWalkthroughWhenRegistered, walkthroughProgressOf } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
@@ -98,6 +100,10 @@ export function registerServiceFreeCommands(
     Logger.show()
   })
 
+  register(TROUBLESHOOTING_COMMAND, async () => {
+    await openWebLink(TROUBLESHOOTING_URL)
+  })
+
   // Trust is the remedy for a refusal, so it must not wait for a ready activation.
   register(TRUST_COURSE_WORKSPACE_COMMAND, () => requestWorkspaceTrust())
 
@@ -143,7 +149,12 @@ export function registerCommands(
 
   register(SHOW_ERROR_DETAILS_COMMAND, (detailsId: unknown) => {
     if (typeof detailsId === "string") {
-      TmcPanel.renderBeside(context, actionContext, errorDetailsPanel(detailsId), undefined)
+      TmcPanel.renderBeside(
+        context,
+        actionContext,
+        errorDetailsPanel(detailsId, cliFolder(context)),
+        undefined,
+      )
     }
   })
 
@@ -155,11 +166,11 @@ export function registerCommands(
 
   register("tmcTreeView.refreshCourses", async () => commands.refreshCourses(readyContext))
 
-  register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
-
-  register("tmc.showAddCourse", () =>
-    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" }),
-  )
+  // The palette's Add Course and the screen's are one flow.
+  const showAddCourse = (): void =>
+    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" })
+  register("tmc.addNewCourse", showAddCourse)
+  register("tmc.showAddCourse", showAddCourse)
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))
 
@@ -292,7 +303,9 @@ export function registerCommands(
     commands.resetExercise(readyContext, resourceOf(target)),
   )
 
-  register("tmc.showAccountMenu", async () => showAccountMenu(readyContext.dialog))
+  register("tmc.showAccountMenu", async () =>
+    showAccountMenu(readyContext.dialog, readyContext.authState.session),
+  )
 
   register("tmc.showExerciseActions", async (resource: vscode.Uri | undefined) =>
     showExerciseActions(

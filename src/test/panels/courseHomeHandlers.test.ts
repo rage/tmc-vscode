@@ -42,6 +42,7 @@ function host(route: Panel | undefined = SHOWN): PanelHost {
     name: "Main webview",
     route,
     isVisible: true,
+    cliFolder: "/cli",
     post: vi.fn(),
     closeSidePanel: vi.fn(),
     showBeside: vi.fn(),

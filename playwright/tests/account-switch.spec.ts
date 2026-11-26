@@ -66,7 +66,8 @@ vsCodeTest.describe(() => {
         await expect(
           coursesView.notificationToast("Moved the other account's exercises to"),
         ).toBeVisible()
-        await expect(coursesView.row(exerciseName)).toHaveAccessibleName(/, not downloaded,/)
+        // Their course is set aside with the exercises.
+        await expect(coursesView.row(courseTitle)).toBeHidden()
         await expect(sourceTab).toBeHidden()
       })
 
@@ -79,6 +80,7 @@ vsCodeTest.describe(() => {
           coursesView.notificationToast("Brought back your exercises that another login moved"),
         ).toBeVisible()
         await expect(moocLoginPage.modalDialog()).toBeHidden()
+        await coursesView.expand(coursesView.row(courseTitle))
         await expect(coursesView.row(exerciseName)).not.toHaveAccessibleName(/, not downloaded,/)
       })
     },

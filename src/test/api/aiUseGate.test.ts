@@ -294,4 +294,12 @@ suite("warnOfUnwritableWorkspaceFile", function () {
     open()
     expect(showTextDocument).toHaveBeenCalledExactlyOnceWith(WORKSPACE_FILE)
   })
+
+  test("an editor with AI built in is refused for a course that does not allow AI", async function () {
+    const gate = new AiUseGate({ enforce: async () => undefined }, "Cursor")
+
+    const refusal = await gate.refusal(COURSE, EXERCISE_FOLDER)
+
+    expect(refusal?.message).toContain("Cursor has AI built in")
+  })
 })

@@ -259,7 +259,7 @@ suite("login command", function () {
     expect(lastView(h)?.phase).toBe("waiting")
   })
 
-  test("leaving the screen cancels its login, and no code arriving later is shown", async function () {
+  test("closing the screen cancels its login, and no code arriving later is shown", async function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
@@ -275,6 +275,18 @@ suite("login command", function () {
     expect(h.logins[0]?.interrupt).toHaveBeenCalled()
     await settle()
     expect(lastView(h)).toEqual({ phase: "requestingCode" })
+  })
+
+  test("showing another screen in its place keeps the login waiting", async function () {
+    const h = harness()
+    const { outcome, panel } = await runToCode(h)
+
+    loginScreens.leave(panel.id, false)
+    await settle()
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+
+    h.logins[0]?.finish(Ok(undefined))
+    expect(await outcome).toBe("loggedIn")
   })
 
   test("with no course added, a login goes on to the add-course screen", async function () {

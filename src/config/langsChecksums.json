@@ -1,0 +1,14 @@
+{
+  "version": "0.43.1",
+  "sha256": {
+    "tmc-langs-cli-i686-unknown-linux-gnu-0.43.1": "2d513e04c3dc4e5fd70e0a7e81968301d689bb1182d5c26492786210e8b3875b",
+    "tmc-langs-cli-x86_64-unknown-linux-gnu-0.43.1": "dce955872b47b4cb00f7704dc9ff2d4127f0d916ca582dde51d572605a2d8b98",
+    "tmc-langs-cli-armv7-unknown-linux-gnueabihf-0.43.1": "2cbb82c7acccb490a76732613d701f0688697c87605ffb546757fc74e29227d6",
+    "tmc-langs-cli-aarch64-unknown-linux-gnu-0.43.1": "20c472036aad2367717db8965808c2edaaed0cf77adae5e2945e95f414552fe2",
+    "tmc-langs-cli-x86_64-apple-darwin-0.43.1": "0de51b898a2072a0fab69eb10cc15abfc661765bee39c902c6a5be13f96060f7",
+    "tmc-langs-cli-aarch64-apple-darwin-0.43.1": "59477f436528687e307a4c65dd1f669802025eeeb67b9fe8131744dc72c3db3a",
+    "tmc-langs-cli-i686-pc-windows-msvc-0.43.1.exe": "928516792e615b9649677fa4ba4b98857b5ea93c31ac85487575c6b1720708d7",
+    "tmc-langs-cli-x86_64-pc-windows-msvc-0.43.1.exe": "d5c867b508f8e2d5585be6235728da8342989113a942ae20e78322411195fdc1",
+    "tmc-langs-cli-x86_64-unknown-linux-musl-0.43.1": "6058f2a5a46a8ee0245f2f7a8a5b8b6f54124635eeba031b892f5abec03e4dbc"
+  }
+}

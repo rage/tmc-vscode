@@ -2,7 +2,12 @@ import { z } from "zod"
 
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
 import { makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
-import { ChapterLockingStatus, CourseAiPolicy } from "./generated/langs"
+import {
+  ChapterLockingStatus,
+  CourseAiPolicy,
+  ReviewingStage,
+  TeacherDecision,
+} from "./generated/langs"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -70,7 +75,7 @@ export const SharedMoocCourseExerciseSchema = z.object({
   id: z.string(),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  /** The name the course author gave it; its folder on disk is a kebab-cased form of it. */
+  /** The name the course author gave it; the CLI derives its folder on disk from it. */
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
@@ -93,6 +98,32 @@ export const SharedMoocCourseExerciseSchema = z.object({
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
   pageUrl: z.string().optional(),
+  /**
+   * Answered on the course page only, as tmc-langs will not download it (a browser exercise, or
+   * one with several editor tasks); absent means no.
+   */
+  browserOnly: z.boolean().optional(),
+  /** The exercise's instructions as plain text paragraphs; absent when it has none. */
+  instructions: z.array(z.string()).optional(),
+  /** courses.mooc.fi reveals the model solution to the student; absent means no. */
+  hasModelSolution: z.boolean().optional(),
+  /**
+   * Where the student's answer is in a peer, self or teacher review; absent outside one. An
+   * unknown stored stage is dropped rather than failing the exercise's whole record.
+   */
+  // oxlint-disable-next-line unicorn/prefer-top-level-await -- zod's catch, not a promise's
+  reviewingStage: ReviewingStage.optional().catch(undefined),
+  /** A teacher's grading of the student's answer; absent when there is none. */
+  // oxlint-disable-next-line unicorn/prefer-top-level-await -- zod's catch, not a promise's
+  teacherReview: z
+    .object({
+      decision: TeacherDecision,
+      justification: z.string().nullable(),
+      scoreGiven: z.number(),
+      createdAt: z.string(),
+    })
+    .optional()
+    .catch(undefined),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
@@ -138,6 +169,20 @@ export const SharedMoocCourseDataSchema = z.object({
   accessLoss: CourseAccessLossSchema.optional(),
   /** Absent means none. */
   closedChapters: z.array(MoocClosedChapterSchema).optional(),
+  /** The course's front page on courses.mooc.fi; absent from a backend that predates it. */
+  url: z.string().optional(),
+  /** The course's language, such as "fi-FI"; absent when unknown. */
+  languageCode: z.string().optional(),
+  /** Shared by the course's versions in other languages; absent when unknown. */
+  languageGroupId: z.string().optional(),
+  /** ISO timestamp of when the course ended; absent while it runs. */
+  closedAt: z.string().optional(),
+  /** The course that continues this one, such as its next run; absent when none. */
+  successorCourseId: z.string().optional(),
+  /** The student teaches or assists on the course; absent means no. */
+  isStaff: z.boolean().optional(),
+  /** Set when the stored course is an exam: when its answers close, as an ISO timestamp. */
+  examAnswerableUntil: z.string().optional(),
 })
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
@@ -433,6 +478,9 @@ export namespace LocalCourseData {
       lcd,
       (tmc) => tmc.materialUrl ?? undefined,
       (mooc) => {
+        if (mooc.url) {
+          return mooc.url
+        }
         const pageUrl = mooc.exercises.find((exercise) => exercise.pageUrl)?.pageUrl
         return pageUrl === undefined ? undefined : moocCourseUrlOf(pageUrl)
       },
@@ -442,6 +490,17 @@ export namespace LocalCourseData {
   /** Whether the course hides submission results, as an exam does; never for mooc. */
   export function isExamMode(lcd: LocalCourseData): boolean {
     return lcd.kind === "tmc" && lcd.data.perhapsExamMode
+  }
+
+  /** Whether the course is a courses.mooc.fi exam, whose id is an exam id; see {@link isExamMode}. */
+  export function isMoocExam(lcd: LocalCourseData): boolean {
+    return lcd.kind === "mooc" && !!lcd.data.examAnswerableUntil
+  }
+
+  /** Whether the course is a courses.mooc.fi exam whose answers closed before `now`, in epoch ms. */
+  export function isClosedExam(lcd: LocalCourseData, now: number): boolean {
+    const closesAt = lcd.kind === "mooc" ? Date.parse(lcd.data.examAnswerableUntil ?? "") : NaN
+    return closesAt <= now
   }
 
   export function getNewExercises(lcd: LocalCourseData): ExerciseIdentifier[] {
@@ -501,6 +560,7 @@ export function moocCourseUrlOf(pageUrl: string): string | undefined {
  * (`removed`).
  */
 export type ExerciseStatus =
+  | "browserOnly"
   | "closed"
   | "downloading"
   | "downloadFailed"

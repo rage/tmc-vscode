@@ -1,9 +1,20 @@
+import { langsError } from "../api/langsErrors"
 import {
+  CertificateError,
+  FileAccessError,
+  ForbiddenError,
+  isSessionLost,
+  LoginClientRejectedError,
+  ProjectsDirUnreachableError,
+  ToolchainMissingError,
   AuthorizationError,
   ChapterLockedError,
   ChapterNotOpenError,
+  LegacyTmcLoginEndedError,
+  CliCrashedError,
   ConnectionError,
   DeadlinePassedError,
+  EmptyLangsResponseError,
   ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
@@ -14,6 +25,9 @@ import {
   OutOfTriesError,
   ObsoleteClientError,
   presentationFor,
+  ProjectsDirMoveError,
+  ProjectsSplitError,
+  RateLimitedError,
   RuntimeError,
   ServerError,
   SpawnError,
@@ -101,13 +115,28 @@ suite("presentationFor", function () {
     expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
+  test("a courses.mooc.fi 403 is lost access to the course, not a logout", function () {
+    const error = Object.assign(new ForbiddenError("no_access"), { backend: "mooc" as const })
+
+    expect(presentationFor(error).message).toContain("You do not have access")
+    expect(isSessionLost(error)).toBe(false)
+  })
+
+  test.each([
+    [new CertificateError("tls"), "tmc.openTroubleshooting"],
+    [new ToolchainMissingError("python not found"), "tmc.openTroubleshooting"],
+    [new FileAccessError("held"), "tmc.openTroubleshooting"],
+    [new ProjectsDirUnreachableError("gone"), "tmc.changeTmcDataPath"],
+    [new LoginClientRejectedError("client"), "workbench.extensions.action.checkForUpdates"],
+  ])("%s offers its remedy", (error, command) => {
+    expect(presentationFor(error).actions.map((action) => action.command)).toEqual([command])
+  })
+
   // Logging in again cannot make tmc.mooc.fi accept the login.
   test("a login tmc.mooc.fi does not accept offers no login", function () {
-    const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
+    const presentation = presentationFor(new TmcLoginNotAcceptedError("Ask the course staff."))
 
-    expect(presentation.message).toBe(
-      "This course's server did not accept your MOOC.fi login. Try again later.",
-    )
+    expect(presentation.message).toBe("Ask the course staff.")
     expect(presentation.actions).toEqual([])
   })
 
@@ -158,12 +187,63 @@ suite("presentationFor", function () {
     expect(withBackend.message).not.toContain("tmc.mooc.fi")
   })
 
-  test("a CLI that cannot run points at the antivirus help", function () {
-    const presentation = presentationFor(new SpawnError("spawn EACCES"))
+  test("a CLI that is gone offers to download it again", function () {
+    const presentation = presentationFor(
+      Object.assign(new SpawnError("spawn ENOENT"), { code: "ENOENT" }),
+    )
 
-    expect(presentation.message).toContain("antivirus")
+    expect(presentation.message).toContain("download them again")
+    expect(presentation.actions.map((action) => action.command)).toContain(
+      "workbench.action.restartExtensionHost",
+    )
+  })
+
+  test.each(["EACCES", "EPERM", "UNKNOWN"])(
+    "a CLI that %s on spawn names the security policy and IT support",
+    function (code) {
+      const presentation = presentationFor(Object.assign(new SpawnError(`spawn ${code}`), { code }))
+
+      expect(presentation.message).toContain("security policy")
+      expect(presentation.message).toContain("IT support")
+      expect(presentation.message).not.toContain("antivirus program may")
+    },
+  )
+
+  test("a busy CLI asks for a moment, not for a reinstall", function () {
+    const presentation = presentationFor(
+      Object.assign(new SpawnError("spawn EBUSY"), { code: "EBUSY" }),
+    )
+
+    expect(presentation.message).toContain("Try again in a moment")
+    expect(presentation.actions).toEqual([])
+  })
+
+  test("a CLI that exits without a result reports the exit code and offers a bug report", function () {
+    const presentation = presentationFor(
+      Object.assign(new EmptyLangsResponseError("no result"), { exitCode: 3 }),
+    )
+
+    expect(presentation.message).toContain("exited with code 3")
+    expect(presentation.actions.map((action) => action.label)).toEqual(["Report an Issue"])
+  })
+
+  test("a CLI killed by a signal says which", function () {
+    const presentation = presentationFor(
+      Object.assign(new EmptyLangsResponseError("no result"), { signal: "SIGKILL" }),
+    )
+
+    expect(presentation.message).toContain("killed by SIGKILL")
+  })
+
+  test("a CLI panic offers a bug report instead of the raw panic text", function () {
+    const presentation = presentationFor(
+      new CliCrashedError("Process panicked unexpectedly with message: index out of bounds"),
+    )
+
+    expect(presentation.message).toContain("stopped unexpectedly")
+    expect(presentation.message).not.toContain("index out of bounds")
     expect(presentation.actions).toEqual([
-      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Report an Issue", command: "workbench.action.openIssueReporter" },
     ])
   })
 
@@ -187,6 +267,72 @@ suite("presentationFor", function () {
     expect(presentationFor(new RuntimeError("tmc-langs-cli exited")).message).toBe(
       "tmc-langs-cli exited.",
     )
+  })
+
+  test("a CLI error is worded by its kind, not by the CLI's message", function () {
+    const locked = langsError({ kind: "chapter-completed-and-locked" }, "403 from …", "", "mooc")
+    const unlocked = langsError({ kind: "chapter-not-unlocked-yet" }, "403 from …", "", "mooc")
+
+    expect(locked).toBeInstanceOf(ChapterLockedError)
+    expect(locked.message).toBe("403 from …")
+    expect(presentationFor(locked).message).toContain("chapter is locked")
+    expect(presentationFor(unlocked).message).toContain("Complete the chapters before")
+  })
+
+  test("a file a CLI error is about is named in its sentence", function () {
+    const error = langsError({ kind: "disk-full", path: "/home/x" }, "os error 28", "", undefined)
+
+    expect(error).toBeInstanceOf(FileAccessError)
+    expect(presentationFor(error).message).toBe(
+      "The disk or your home folder quota is full (/home/x). Free some space and try again.",
+    )
+  })
+
+  test("a missing toolchain keeps the CLI's naming of the program", function () {
+    const error = langsError({ kind: "toolchain-missing" }, "python was not found", "", undefined)
+
+    expect(presentationFor(error).message).toMatch(/^Python was not found\. If you installed/)
+  })
+
+  test("a rate limit says how long to wait, and blames Get Help only for pastes", function () {
+    const limited = langsError({ kind: "rate-limited", retryAfterSeconds: 300 }, "429", "", "mooc")
+
+    expect(presentationFor(limited).message).toContain("from your network. Try again in 5 minutes")
+    Object.assign(limited, { isPasteLimit: true })
+    expect(limited).toBeInstanceOf(RateLimitedError)
+    expect(presentationFor(limited).message).toContain("used Get Help on this exercise too often")
+  })
+
+  test("a refused tmc.mooc.fi token ends only the old tmc.mooc.fi login", function () {
+    const error = langsError({ kind: "invalid-token" }, "401", "", "tmc")
+
+    expect(error).toBeInstanceOf(LegacyTmcLoginEndedError)
+    expect(isSessionLost(error)).toBe(false)
+    expect(presentationFor(error).message).toContain("old tmc.mooc.fi login has ended")
+  })
+
+  test("a failed folder move gives the cause's sentence and remedy, then where the exercises are", function () {
+    const cause = langsError(
+      { kind: "projects-dir-unreachable", path: "/mnt" },
+      "gone",
+      "",
+      undefined,
+    )
+
+    const { message, actions } = presentationFor(
+      new ProjectsDirMoveError(cause, "Your exercises are now in /old."),
+    )
+
+    expect(message).toMatch(/^The exercises folder \(\/mnt\) cannot be reached\./)
+    expect(message).toContain("then try again. Your exercises are now in /old.")
+    expect(actions).toEqual(presentationFor(cause).actions)
+  })
+
+  test("an interrupted set-aside names the folder the other half of the exercises is in", function () {
+    const error = langsError({ kind: "projects-split", path: "/aside" }, "split", "", undefined)
+
+    expect(error).toBeInstanceOf(ProjectsSplitError)
+    expect(presentationFor(error).message).toContain("exercises folder and /aside.")
   })
 
   test("the sentence holds none of a CLI failure's diagnostics", function () {

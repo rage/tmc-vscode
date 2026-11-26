@@ -152,7 +152,14 @@
   /** The state's one suggested next step and its alternative; the rest is in `menuActions`. */
   const barActions = $derived.by((): ComponentProps<typeof ActionBar> => {
     if (isInProgress) {
-      return { secondary: [{ label: "Run in Background", onclick: closePanel }] }
+      const runInBackground: BarAction = { label: "Run in Background", onclick: closePanel }
+      const cancel: BarAction = {
+        label: "Cancel",
+        onclick: () => void vscode.postMessage({ type: "cancelSubmission", sourcePanel }),
+      }
+      return {
+        secondary: view?.phase === "uploading" ? [cancel, runInBackground] : [runInBackground],
+      }
     }
     const [remedy] = remedies
     if (view?.canKeepWaiting) {
@@ -392,6 +399,9 @@
   {/if}
   {#if view?.pendingReview}
     <p>{view.pendingReview}</p>
+  {/if}
+  {#if view?.newerLocalRun}
+    <p class="muted">{view.newerLocalRun}</p>
   {/if}
   {#if view?.feedbackText}
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>

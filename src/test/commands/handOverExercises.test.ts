@@ -1,18 +1,30 @@
 import * as fs from "fs"
 import * as path from "path"
 
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
-import { handOverExercises } from "../../commands/handOverExercises"
+import { langsError } from "../../api/langsErrors"
+import {
+  handOverExercises,
+  handOverExercisesOnAccountChange,
+} from "../../commands/handOverExercises"
 import type Resources from "../../config/resources"
 import { submissionViews } from "../../ui/submissionViews"
 import { idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import { makeTmpDirs } from "../utils"
+
+/** Moves every entry of `from` into `to`, as tmc-langs' set-aside and restore do. */
+function moveEntries(from: string, to: string): void {
+  fs.mkdirSync(to, { recursive: true })
+  for (const entry of fs.readdirSync(from)) {
+    fs.renameSync(path.join(from, entry), path.join(to, entry))
+  }
+}
 
 function setUp(
   loggedInAs: string | undefined,
@@ -26,9 +38,28 @@ function setUp(
         getMoocAccountId: vi.fn(async () => Ok(loggedInAs)),
         listLocalExercises: async () => Ok([]),
         listSettings: async () => Ok({}),
+        setProjectsAside: async (folder: string) => {
+          moveEntries(projectsDirectory, folder)
+          return Ok.EMPTY
+        },
+        restoreProjects: async (folder: string) => {
+          const [clash] = fs.readdirSync(projectsDirectory)
+          if (clash !== undefined) {
+            return Err(
+              langsError({ kind: "projects-restore-conflict", path: clash }, "", "", undefined),
+            )
+          }
+          moveEntries(folder, projectsDirectory)
+          fs.rmdirSync(folder)
+          return Ok.EMPTY
+        },
       } as never,
       resources: { projectsDirectory } as Resources,
-      userData: { getCourses: () => [] } as never,
+      userData: {
+        getCourses: () => [],
+        takeAllCourses: vi.fn(async () => Ok({ courses: [], mooc_courses: [] })),
+        restoreCourses: vi.fn(async () => Ok.EMPTY),
+      } as never,
       workspaceManager: {
         getExercises: () => [{}],
         setExercises: async () => Ok.EMPTY,
@@ -151,6 +182,7 @@ suite("handOverExercises", function () {
     expect(fs.readdirSync(projectsDirectory)).toEqual(["mooc"])
     expect(context.startup.accountHandover.movedAside).toEqual([])
     expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-a"])
+    expect(context.startup.userData.takeAllCourses).not.toHaveBeenCalled()
   })
 
   test("another account may keep the exercises, which stay the first one's too", async function () {
@@ -192,6 +224,11 @@ suite("handOverExercises", function () {
     expect(context.dialog.notification).toHaveBeenLastCalledWith(
       "Brought back your exercises that another login moved aside.",
     )
+    expect(context.startup.userData.takeAllCourses).toHaveBeenCalledOnce()
+    expect(context.startup.userData.restoreCourses).toHaveBeenCalledWith({
+      courses: [],
+      mooc_courses: [],
+    })
   })
 
   test("bringing exercises back keeps the exercises folder itself, which tmc-langs may recreate meanwhile", async function () {
@@ -245,5 +282,17 @@ suite("handOverExercises", function () {
 
     expect(context.dialog.choose).not.toHaveBeenCalled()
     expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-a"])
+  })
+  test("an account whose check failed is checked again at its next change", async function () {
+    const { context } = setUp("user-retried", true)
+    const getAccountId = vi.mocked(context.startup.langs.getMoocAccountId)
+    getAccountId.mockResolvedValueOnce(Err(new Error("the CLI failed")))
+
+    await handOverExercisesOnAccountChange(context, "user-retried")
+    await handOverExercisesOnAccountChange(context, "user-retried")
+    await handOverExercisesOnAccountChange(context, "user-retried")
+
+    expect(getAccountId).toHaveBeenCalledTimes(2)
+    expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-retried"])
   })
 })

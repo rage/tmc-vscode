@@ -95,6 +95,7 @@ export const zCourseData = z.object({
  */
 export const zCourseRefusalKind = z.union([
     z.literal('insufficient-scope'),
+    z.literal('forbidden'),
     z.literal('not-found')
 ]);
 
@@ -158,7 +159,9 @@ export const zExerciseChapter = z.object({
  */
 export const zExercisePackagingConfiguration = z.object({
     exercise_file_paths: z.array(z.string()),
-    student_file_paths: z.array(z.string())
+    plugin: z.string().nullish(),
+    student_file_paths: z.array(z.string()),
+    tests_timeout_ms: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }).nullish()
 });
 
 export const zExercisePoint = z.object({
@@ -197,7 +200,8 @@ export const zExerciseStanding = z.union([
     z.literal('NotAttempted'),
     z.literal('Attempted'),
     z.literal('Passed'),
-    z.literal('OutOfTries')
+    z.literal('OutOfTries'),
+    z.literal('Unrecognized')
 ]);
 
 export const zExerciseSubmission = z.object({
@@ -251,7 +255,8 @@ export const zGradingProgress = z.union([
     z.literal('NotReady'),
     z.literal('PendingManual'),
     z.literal('Pending'),
-    z.literal('FullyGraded')
+    z.literal('FullyGraded'),
+    z.literal('Unrecognized')
 ]);
 
 /**
@@ -307,7 +312,29 @@ export const zKind = z.union([
     z.literal('chapter-not-open-yet'),
     z.literal('chapter-not-unlocked-yet'),
     z.literal('chapter-completed-and-locked'),
-    z.literal('exercise-locked')
+    z.literal('exercise-locked'),
+    z.literal('invalid-request'),
+    z.literal('unexpected-response'),
+    z.literal('connection-timeout'),
+    z.literal('certificate-error'),
+    z.literal('proxy-error'),
+    z.literal('login-client-rejected'),
+    z.literal('tmc-login-not-accepted'),
+    z.literal('tmc-login-unconfirmed'),
+    z.literal('local-config-corrupt'),
+    z.literal('archive-too-large'),
+    z.literal('unsupported-exercise'),
+    z.literal('file-in-use'),
+    z.literal('permission-denied'),
+    z.literal('path-too-long'),
+    z.literal('disk-full'),
+    z.literal('toolchain-missing'),
+    z.literal('executable-blocked'),
+    z.literal('projects-dir-unreachable'),
+    z.literal('projects-dir-move-to-itself'),
+    z.literal('projects-dir-move-into-itself'),
+    z.literal('projects-restore-conflict'),
+    z.literal('projects-split')
 ]);
 
 /**
@@ -368,11 +395,19 @@ export const zMoocClientUpdateData = z.object({
 
 export const zMoocCourse = z.object({
     ai_policy: zCourseAiPolicy.default('not_set'),
+    closed_at: z.string().nullable().default(null),
     description: z.string().nullable(),
     id: z.uuid(),
+    is_enrolled: z.boolean().nullable().default(null),
+    is_staff: z.boolean().default(false),
+    language_code: z.string().nullable().default(null),
+    language_group_id: z.uuid().nullable().default(null),
+    moved_to_course_id: z.uuid().nullable().default(null),
     name: z.string(),
     organization_name: z.string(),
-    slug: z.string()
+    slug: z.string(),
+    successor_course_id: z.uuid().nullable().default(null),
+    url: z.string().nullable().default(null)
 });
 
 /**
@@ -380,7 +415,9 @@ export const zMoocCourse = z.object({
  * student switched accounts.
  */
 export const zMoocCurrentUser = z.object({
-    id: z.uuid()
+    email: z.string().nullable().default(null),
+    id: z.uuid(),
+    name: z.string().nullable().default(null)
 });
 
 /**
@@ -395,14 +432,54 @@ export const zMoocDeviceLogin = z.object({
     verification_uri_complete: z.string().nullable()
 });
 
+/**
+ * Why a mooc exercise could not be downloaded.
+ */
+export const zMoocDownloadFailure = z.union([
+    z.literal('server-error'),
+    z.literal('connection-error'),
+    z.literal('other'),
+    z.literal('not-found'),
+    z.literal('closed-chapter'),
+    z.literal('browser-only'),
+    z.literal('several-editor-tasks'),
+    z.literal('file-missing'),
+    z.literal('extract-failed')
+]);
+
+/**
+ * An exam the user has started and can still answer.
+ */
+export const zMoocExam = z.object({
+    answerable_until: z.string(),
+    id: z.uuid(),
+    name: z.string(),
+    started_at: z.string()
+});
+
+/**
+ * The chapter that has not opened yet and holds a requested mooc exercise.
+ */
+export const zMoocExerciseClosedChapter = z.object({
+    'chapter-name': z.string(),
+    'chapter-number': z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    'exercise-id': z.uuid(),
+    'opens-at': z.string()
+});
+
 export const zMoocExerciseDownload = z.object({
     'exercise-id': z.uuid(),
     path: z.string()
 });
 
 export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
+    closed_chapters: z.array(zMoocExerciseClosedChapter).optional(),
     downloaded: z.array(zMoocExerciseDownload),
-    failed: z.array(z.tuple([zMoocExerciseDownload, z.array(z.string())])).nullish(),
+    failed: z.array(z.tuple([
+        zMoocExerciseDownload,
+        z.array(z.string()),
+        zMoocDownloadFailure
+    ])).nullish(),
     skipped: z.array(zMoocExerciseDownload)
 });
 
@@ -481,72 +558,6 @@ export const zPendingTeacherReview = z.union([
     z.literal('unrecognized')
 ]);
 
-/**
- * The current user's progress on a single exercise. `standing` is the "passed" signal;
- * `completed` is only the activity stage, which any graded submission can reach.
- */
-export const zExerciseProgress = z.object({
-    attempted: z.boolean(),
-    completed: z.boolean(),
-    exercise_id: z.uuid(),
-    exercise_locked: z.boolean().default(false),
-    max_tries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null),
-    pending_teacher_review: zPendingTeacherReview.nullable().default(null),
-    score_given: z.number(),
-    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    standing: zExerciseStanding.nullable(),
-    tries_left: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null)
-});
-
-/**
- * A chapter of the course that opens later, with the user's progress on its exercises.
- */
-export const zClosedChapter = z.object({
-    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    exercises: z.array(zExerciseProgress),
-    id: z.uuid(),
-    name: z.string(),
-    opens_at: z.string()
-});
-
-/**
- * The current user's progress across every exercise they can see in a course.
- * Course-level totals (awarded/available points, passed count, percentage) are
- * not sent separately; derive them by summing over `exercises`, guarding the
- * percentage against a zero total.
- */
-export const zCourseProgress = z.object({
-    closed_chapters: z.array(zClosedChapter).default([]),
-    course_id: z.uuid(),
-    exercises: z.array(zExerciseProgress)
-});
-
-/**
- * A task submission's grading record.
- */
-export const zGrading = z.object({
-    exercise_progress: zExerciseProgress.nullable(),
-    feedback_text: z.string().nullable(),
-    grading_completed_at: z.string().nullable(),
-    grading_progress: zGradingProgress,
-    grading_started_at: z.string().nullable(),
-    score_given: z.number().nullable(),
-    test_results: zGradingTestRun.nullable()
-});
-
-/**
- * The grading status of a task submission, as polled after `submit`.
- */
-export const zExerciseTaskSubmissionStatus = z.union([
-    z.object({
-        status: z.literal('no-grading-yet')
-    }),
-    z.object({
-        grading: zGrading,
-        status: z.literal('grading')
-    })
-]);
-
 export const zPublicSpec = z.object({
     archive_name: z.string(),
     browser_test: zBrowserTestSpec.nullable(),
@@ -566,6 +577,18 @@ export const zPythonVer = z.object({
 });
 
 /**
+ * An exercise found by [`prepare_exercise_repository`].
+ */
+export const zRepositoryExercise = z.object({
+    name: z.string(),
+    part: z.string(),
+    path: z.string(),
+    plugin: z.string(),
+    tests_timeout_ms: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }),
+    written_files: z.array(z.string())
+});
+
+/**
  * get /api/v8/core/courses/{course_id}/reviews
  */
 export const zReview = z.object({
@@ -582,6 +605,20 @@ export const zReview = z.object({
     updated_at: z.string(),
     url: z.string()
 });
+
+/**
+ * Where an answer is in an exercise's review process. No stage takes new answers.
+ */
+export const zReviewingStage = z.union([
+    z.enum(['waiting_for_teacher']),
+    z.literal('peer_review'),
+    z.literal('self_review'),
+    z.literal('waiting_for_peer_reviews'),
+    z.literal('reviewed_and_locked'),
+    z.literal('locked'),
+    z.literal('not_answered_and_locked'),
+    z.literal('unrecognized')
+]);
 
 /**
  * The overall status of a test run.
@@ -746,7 +783,8 @@ export const zSubmissionFeedbackQuestion = z.object({
 export const zSubmissionKind = z.union([
     z.literal('submission'),
     z.literal('paste'),
-    z.literal('backup')
+    z.literal('backup'),
+    z.literal('unrecognized')
 ]);
 
 /**
@@ -778,6 +816,102 @@ export const zSubmissionFeedbackResponse = z.object({
     api_version: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
     status: zSubmissionStatus
 });
+
+export const zTeacherDecision = z.union([
+    z.literal('zero_points'),
+    z.literal('custom_points'),
+    z.literal('suspected_plagiarism'),
+    z.literal('unauthorized_ai_use'),
+    z.literal('bad_answer'),
+    z.literal('other'),
+    z.literal('reject_and_reset'),
+    z.literal('unrecognized')
+]);
+
+/**
+ * A teacher's grading of the user's answer.
+ */
+export const zTeacherReview = z.object({
+    created_at: z.string(),
+    decision: zTeacherDecision,
+    justification: z.string().nullable(),
+    score_given: z.number()
+});
+
+/**
+ * The current user's progress on a single exercise. `standing` is the "passed" signal;
+ * `completed` is only the activity stage, which any graded submission can reach.
+ */
+export const zExerciseProgress = z.object({
+    attempted: z.boolean(),
+    completed: z.boolean(),
+    exercise_id: z.uuid(),
+    exercise_locked: z.boolean().default(false),
+    max_tries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null),
+    pending_teacher_review: zPendingTeacherReview.nullable().default(null),
+    reviewing_stage: zReviewingStage.nullable().default(null),
+    score_given: z.number(),
+    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    standing: zExerciseStanding.nullable(),
+    teacher_review: zTeacherReview.nullable().default(null),
+    tries_left: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null)
+});
+
+/**
+ * A chapter of the course that opens later, with the user's progress on its exercises.
+ */
+export const zClosedChapter = z.object({
+    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    exercises: z.array(zExerciseProgress),
+    id: z.uuid(),
+    name: z.string(),
+    opens_at: z.string()
+});
+
+/**
+ * The current user's progress across every exercise they can see in a course.
+ * Course-level totals (awarded/available points, passed count, percentage) are
+ * not sent separately; derive them by summing over `exercises`, guarding the
+ * percentage against a zero total.
+ */
+export const zCourseProgress = z.object({
+    closed_chapters: z.array(zClosedChapter).default([]),
+    course_id: z.uuid(),
+    exercises: z.array(zExerciseProgress)
+});
+
+/**
+ * A task submission's grading record.
+ */
+export const zGrading = z.object({
+    exercise_progress: zExerciseProgress.nullable(),
+    feedback_text: z.string().nullable(),
+    grading_completed_at: z.string().nullable(),
+    grading_progress: zGradingProgress,
+    grading_started_at: z.string().nullable(),
+    score_given: z.number().nullable(),
+    submission_page_url: z.string().nullable(),
+    test_results: zGradingTestRun.nullable()
+});
+
+/**
+ * The grading status of a task submission, as polled after `submit`.
+ */
+export const zExerciseTaskSubmissionStatus = z.union([
+    z.object({
+        status: z.literal('no-grading-yet')
+    }),
+    z.object({
+        grading: zGrading,
+        status: z.literal('grading')
+    }),
+    z.object({
+        status: z.literal('grading-hidden')
+    }),
+    z.object({
+        status: z.literal('unrecognized')
+    })
+]);
 
 export const zTestCase = z.object({
     detailed_message: z.string().nullable(),
@@ -831,6 +965,17 @@ export const zTmcConfig = z.object({
     projects_dir: z.string()
 });
 
+/**
+ * Why a TMC exercise could not be downloaded.
+ */
+export const zTmcDownloadFailure = z.union([
+    z.literal('server-error'),
+    z.literal('connection-error'),
+    z.literal('other'),
+    z.literal('not-found'),
+    z.literal('extract-failed')
+]);
+
 export const zTmcExerciseDownload = z.object({
     'course-slug': z.string(),
     'exercise-slug': z.string(),
@@ -840,13 +985,19 @@ export const zTmcExerciseDownload = z.object({
 
 export const zDownloadOrUpdateTmcCourseExercisesResult = z.object({
     downloaded: z.array(zTmcExerciseDownload),
-    failed: z.array(z.tuple([zTmcExerciseDownload, z.array(z.string())])).nullish(),
+    failed: z.array(z.tuple([
+        zTmcExerciseDownload,
+        z.array(z.string()),
+        zTmcDownloadFailure
+    ])).nullish(),
     skipped: z.array(zTmcExerciseDownload)
 });
 
 export const zTmcExerciseTask = z.object({
     assignment: z.unknown(),
     checksum: z.string().nullable(),
+    exercise_service_slug: z.string(),
+    instructions_text: z.array(z.string()).optional(),
     model_solution_spec: zModelSolutionSpec.nullable(),
     order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     public_spec: zPublicSpec.nullable(),
@@ -857,12 +1008,14 @@ export const zTmcExerciseSlide = z.object({
     chapter: zExerciseChapter.nullable(),
     course_id: z.uuid(),
     deadline: z.string().nullable(),
+    exam_id: z.uuid().nullable().default(null),
     exercise_id: z.uuid(),
     exercise_name: z.string(),
     exercise_order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     page_url: z.string().nullable(),
     slide_id: z.uuid(),
-    tasks: z.array(zTmcExerciseTask)
+    tasks: z.array(zTmcExerciseTask),
+    unsupported: zMoocDownloadFailure.nullish()
 });
 
 /**
@@ -993,6 +1146,9 @@ export const zDataKind = z.union([
         'output-data': z.object({
             http_status: z.int().gte(0).lte(65535).nullish(),
             kind: zKind,
+            path: z.string().nullish(),
+            request_id: z.string().nullish(),
+            retry_after_secs: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }).nullish(),
             trace: z.array(z.string())
         }),
         'output-data-kind': z.literal('error')
@@ -1016,6 +1172,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': zRefreshData,
         'output-data-kind': z.literal('refresh-result')
+    }),
+    z.object({
+        'output-data': z.array(zRepositoryExercise),
+        'output-data-kind': z.literal('repository-exercises')
     }),
     z.object({
         'output-data': zRunResult,
@@ -1140,6 +1300,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': z.array(zMoocCourse),
         'output-data-kind': z.literal('mooc-courses')
+    }),
+    z.object({
+        'output-data': z.array(zMoocExam),
+        'output-data-kind': z.literal('mooc-exams')
     }),
     z.object({
         'output-data': z.array(zTmcExerciseSlide),

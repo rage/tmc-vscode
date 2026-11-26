@@ -1,4 +1,3 @@
-export * from "./addNewCourse"
 export * from "./changeTmcDataPath"
 export * from "./cleanExercise"
 export * from "./closeExercise"

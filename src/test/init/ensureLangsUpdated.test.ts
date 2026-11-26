@@ -178,6 +178,8 @@ suite("verifyCli", function () {
   })
 })
 
+const hoursAgo = (hours: number): Date => new Date(Date.now() - hours * 60 * 60 * 1000)
+
 suite("removeStaleCliFiles", function () {
   let tmpDir: tmp.DirResult
 
@@ -192,17 +194,47 @@ suite("removeStaleCliFiles", function () {
     await removeStaleCliFiles(path.join(tmpDir.name, "does-not-exist"), [])
   })
 
-  test("removes other versions and abandoned downloads, but not one in progress", async function () {
+  test("removes abandoned downloads and all but the newest other version", async function () {
     const folder = tmpDir.name
-    for (const name of ["cli-1", "cli-1.sha256", "cli-0", "temp-old-cli-1", "temp-new-cli-1"]) {
+    const names = [
+      "tmc-langs-cli-3",
+      "tmc-langs-cli-3.sha256",
+      "tmc-langs-cli-2",
+      "tmc-langs-cli-2.sha256",
+      "tmc-langs-cli-2.verified",
+      "tmc-langs-cli-1",
+      "tmc-langs-cli-1.sha256",
+      "temp-old-cli",
+      "temp-new-cli",
+    ]
+    for (const name of names) {
       fs.outputFileSync(path.join(folder, name), "data")
     }
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    fs.utimesSync(path.join(folder, "temp-old-cli-1"), dayAgo, dayAgo)
+    fs.utimesSync(path.join(folder, "temp-old-cli"), hoursAgo(24), hoursAgo(24))
+    fs.utimesSync(path.join(folder, "tmc-langs-cli-2"), hoursAgo(48), hoursAgo(48))
+    fs.utimesSync(path.join(folder, "tmc-langs-cli-1"), hoursAgo(96), hoursAgo(96))
 
-    await removeStaleCliFiles(folder, ["cli-1", "cli-1.sha256"])
+    await removeStaleCliFiles(folder, ["tmc-langs-cli-3", "tmc-langs-cli-3.sha256"])
 
-    expect(fs.readdirSync(folder).toSorted()).toEqual(["cli-1", "cli-1.sha256", "temp-new-cli-1"])
+    expect(fs.readdirSync(folder).toSorted()).toEqual([
+      "temp-new-cli",
+      "tmc-langs-cli-2",
+      "tmc-langs-cli-2.sha256",
+      "tmc-langs-cli-2.verified",
+      "tmc-langs-cli-3",
+      "tmc-langs-cli-3.sha256",
+    ])
+  })
+
+  test("removes every version when told not to keep the previous one", async function () {
+    const folder = tmpDir.name
+    for (const name of ["tmc-langs-cli-2", "tmc-langs-cli-2.sha256", "tmc-langs-cli-2.verified"]) {
+      fs.outputFileSync(path.join(folder, name), "data")
+    }
+
+    await removeStaleCliFiles(folder, [], { keepPrevious: false })
+
+    expect(fs.readdirSync(folder)).toEqual([])
   })
 })
 
@@ -277,7 +309,7 @@ suite("ensureLangsUpdated end-to-end", function () {
     expect((await verifyCli(cliPath, cliPath + ".sha256")).match).toBe(true)
   })
 
-  test("removes an earlier version once the new one is in place", async function () {
+  test("keeps the previous version for windows still running it", async function () {
     const cli = Buffer.from("fake cli binary contents")
     const state: ServeState = {
       cli,
@@ -287,6 +319,9 @@ suite("ensureLangsUpdated end-to-end", function () {
     server = await startLangsServer(state)
     const folder = path.join(tmpDir.name, "cli")
     fs.outputFileSync(path.join(folder, "tmc-langs-cli-0.0.0-older"), "old")
+    fs.outputFileSync(path.join(folder, "tmc-langs-cli-0.0.0-oldest"), "older")
+    const longAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    fs.utimesSync(path.join(folder, "tmc-langs-cli-0.0.0-oldest"), longAgo, longAgo)
 
     const result = await ensureLangsUpdated(folder, createDialogMock()[0], {
       downloadUrl: serverUrl(server),
@@ -294,7 +329,14 @@ suite("ensureLangsUpdated end-to-end", function () {
     })
 
     expect(result.ok).toBe(true)
-    expect(fs.readdirSync(folder).toSorted()).toEqual([executable, `${executable}.sha256`])
+    expect(fs.readdirSync(folder).toSorted()).toEqual(
+      [
+        executable,
+        `${executable}.sha256`,
+        `${executable}.verified`,
+        "tmc-langs-cli-0.0.0-older",
+      ].toSorted(),
+    )
   })
 
   test("fresh install accepts an uppercase + CRLF checksum on the first try", async function () {
@@ -574,6 +616,224 @@ suite("ensureLangsUpdated on an unsupported platform", function () {
       expect(result.val).toBeInstanceOf(FreshInitializationError)
       expect(result.val.message).toContain(process.platform)
       expect(result.val.message).toContain(process.arch)
+    }
+  })
+})
+
+suite("ensureLangsUpdated against the built-in checksums", function () {
+  const version = "0.0.0-test"
+  const executable = getLangsCLIForPlatform(getPlatform(), version)
+  const cli = Buffer.from("fake cli binary contents")
+
+  let server: http.Server | undefined
+  let tmpDir: tmp.DirResult
+
+  beforeEach(function () {
+    tmpDir = tmp.dirSync({ unsafeCleanup: true })
+  })
+
+  afterEach(function () {
+    tmpDir.removeCallback()
+    const s = server
+    server = undefined
+    return s
+      ? new Promise<void>((resolve) => {
+          s.close(() => resolve())
+        })
+      : undefined
+  })
+
+  async function serve(served: Buffer, remoteSha: string): Promise<ServeState> {
+    const state: ServeState = {
+      cli: served,
+      shaFor: () => `${remoteSha}  ${executable}`,
+      hits: { cli: 0, sha: 0 },
+    }
+    server = await startLangsServer(state)
+    return state
+  }
+
+  test("accepts a download that matches the built-in checksum", async function () {
+    await serve(cli, sha256(cli))
+    const folder = path.join(tmpDir.name, "cli")
+
+    const result = await ensureLangsUpdated(folder, createDialogMock()[0], {
+      downloadUrl: serverUrl(server as http.Server),
+      version,
+      builtInChecksums: { [executable]: sha256(cli) },
+    })
+
+    expect(result.ok).toBe(true)
+  })
+
+  test("rejects a substituted binary even though the server's own checksum agrees with it", async function () {
+    const substitute = Buffer.from("not the build we released")
+    await serve(substitute, sha256(substitute))
+
+    const result = await ensureLangsUpdated(path.join(tmpDir.name, "cli"), createDialogMock()[0], {
+      downloadUrl: serverUrl(server as http.Server),
+      version,
+      builtInChecksums: { [executable]: sha256(cli) },
+    })
+
+    expect(result.err).toBe(true)
+    expect(result.val).toBeInstanceOf(InitializationError)
+  })
+
+  test("fails loudly when the table has no entry for this platform", async function () {
+    const state = await serve(cli, sha256(cli))
+
+    const result = await ensureLangsUpdated(path.join(tmpDir.name, "cli"), createDialogMock()[0], {
+      downloadUrl: serverUrl(server as http.Server),
+      version,
+      builtInChecksums: { "tmc-langs-cli-some-other-platform": sha256(cli) },
+    })
+
+    expect(result.err).toBe(true)
+    expect((result.val as Error).message).toContain("no built-in checksum")
+    expect(state.hits.cli).toBe(0)
+  })
+})
+
+suite("ensureLangsUpdated install hygiene", function () {
+  const version = "0.0.0-test"
+  const executable = getLangsCLIForPlatform(getPlatform(), version)
+
+  let server: http.Server | undefined
+  let tmpDir: tmp.DirResult
+
+  beforeEach(function () {
+    tmpDir = tmp.dirSync({ unsafeCleanup: true })
+  })
+
+  afterEach(function () {
+    tmpDir.removeCallback()
+    const s = server
+    server = undefined
+    return s
+      ? new Promise<void>((resolve) => {
+          s.close(() => resolve())
+        })
+      : undefined
+  })
+
+  test("leaves no partial download behind when every attempt fails", async function () {
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": "1000" })
+      res.write("partial")
+      res.destroy()
+    })
+    const folder = path.join(tmpDir.name, "cli")
+
+    const result = await ensureLangsUpdated(folder, createDialogMock()[0], {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(result.err).toBe(true)
+    expect(fs.readdirSync(folder)).toEqual([])
+  })
+
+  test("sweeps a download abandoned by an earlier run at the start", async function () {
+    const cli = Buffer.from("fake cli binary contents")
+    server = await startLangsServer({
+      cli,
+      shaFor: () => `${sha256(cli)}  ${executable}`,
+      hits: { cli: 0, sha: 0 },
+    })
+    const folder = path.join(tmpDir.name, "cli")
+    const abandoned = path.join(folder, `temp-dead-${executable}`)
+    fs.outputFileSync(abandoned, "half")
+    const longAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    fs.utimesSync(abandoned, longAgo, longAgo)
+
+    await ensureLangsUpdated(folder, createDialogMock()[0], {
+      downloadUrl: serverUrl(server),
+      version,
+    })
+
+    expect(fs.existsSync(abandoned)).toBe(false)
+  })
+
+  test("does not hash the CLI again while its size and mtime are those it was verified at", async function () {
+    const cli = Buffer.from("fake cli binary contents")
+    server = await startLangsServer({
+      cli,
+      shaFor: () => `${sha256(cli)}  ${executable}`,
+      hits: { cli: 0, sha: 0 },
+    })
+    const folder = path.join(tmpDir.name, "cli")
+    const config = { downloadUrl: serverUrl(server), version }
+    await ensureLangsUpdated(folder, createDialogMock()[0], config)
+    const cliPath = path.join(folder, executable)
+
+    // Same size and mtime, different bytes: only a skipped hash still matches.
+    const mtime = new Date(Math.floor(Date.now() / 1000) * 1000 - 60_000)
+    fs.utimesSync(cliPath, mtime, mtime)
+    expect((await verifyCli(cliPath, `${cliPath}.sha256`)).match).toBe(true)
+    fs.writeFileSync(cliPath, Buffer.alloc(cli.length, "x"))
+    fs.utimesSync(cliPath, mtime, mtime)
+    const trusting = await verifyCli(cliPath, `${cliPath}.sha256`)
+    expect(trusting.match).toBe(true)
+
+    // A touched file is hashed, and fails.
+    const later = new Date(mtime.getTime() + 5000)
+    fs.utimesSync(cliPath, later, later)
+    const rehashed = await verifyCli(cliPath, `${cliPath}.sha256`)
+    expect(rehashed.match).toBe(false)
+  })
+
+  test("does not set the executable bit on Windows, where a scanner can hold the new file", async function () {
+    const winExecutable = getLangsCLIForPlatform("windows64", version)
+    const cli = Buffer.from("fake cli binary contents")
+    server = await startServer((req, res) => {
+      const body = (req.url ?? "").endsWith(".sha256") ? `${sha256(cli)}  ${winExecutable}` : cli
+      res.writeHead(200, { "content-length": String(Buffer.byteLength(body)) })
+      res.end(body)
+    })
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")
+    const arch = Object.getOwnPropertyDescriptor(process, "arch")
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    Object.defineProperty(process, "arch", { value: "x64", configurable: true })
+    try {
+      const folder = path.join(tmpDir.name, "cli")
+      const result = await ensureLangsUpdated(folder, createDialogMock()[0], {
+        downloadUrl: serverUrl(server),
+        version,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(fs.statSync(path.join(folder, winExecutable)).mode & 0o111).toBe(0)
+    } finally {
+      Object.defineProperty(process, "platform", platform as PropertyDescriptor)
+      Object.defineProperty(process, "arch", arch as PropertyDescriptor)
+    }
+  })
+
+  test("warns Java students on musl that Java exercises cannot run", async function () {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")
+    const arch = Object.getOwnPropertyDescriptor(process, "arch")
+    const report = Object.getOwnPropertyDescriptor(process, "report")
+    Object.defineProperty(process, "platform", { value: "linux", configurable: true })
+    Object.defineProperty(process, "arch", { value: "x64", configurable: true })
+    Object.defineProperty(process, "report", {
+      value: { getReport: () => ({ header: {} }) },
+      configurable: true,
+    })
+    const [dialog] = createDialogMock()
+    try {
+      await ensureLangsUpdated(path.join(tmpDir.name, "cli"), dialog, {
+        downloadUrl: "http://127.0.0.1:9/",
+        version,
+      })
+
+      expect(dialog.warningNotification).toHaveBeenCalledWith(
+        expect.stringContaining("Java exercises cannot be run"),
+      )
+    } finally {
+      Object.defineProperty(process, "platform", platform as PropertyDescriptor)
+      Object.defineProperty(process, "arch", arch as PropertyDescriptor)
+      Object.defineProperty(process, "report", report as PropertyDescriptor)
     }
   })
 })

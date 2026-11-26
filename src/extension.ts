@@ -6,6 +6,7 @@ import * as vscode from "vscode"
 
 import { LocalCourseData, LOGGED_OUT_MESSAGE, toError } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
+import { pendingGradings } from "./actions/pendingGradings"
 import type {
   ActionContext,
   DegradedStartup,
@@ -35,21 +36,28 @@ import WorkspaceManager, {
 import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
 import { promptForCourseWorkspaceTrust } from "./api/workspaceTrustPrompt"
 import { createCourseWorkspaceOffer, login, logout, refreshEverything } from "./commands"
+import { handOverExercisesOnAccountChange } from "./commands/handOverExercises"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
+  DEFERRED_AUTH_CHECK_DELAY,
+  FOCUS_AUTH_CHECK_INTERVAL,
   FOCUS_REFRESH_INTERVAL,
+  STARTUP_AUTH_CHECK_TIMEOUT,
   EXTENSION_VERSION,
   TMC_LANGS_CONFIG_DIR,
+  TMC_LANGS_CHECKSUMS,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
+  MOOC_BACKEND_URL,
+  TMC_BACKEND_URL,
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import { FileSystemError, InitializationError } from "./errors"
+import { ConnectionError, FileSystemError, InitializationError, TimeoutError } from "./errors"
 import * as init from "./init"
 import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
@@ -69,13 +77,21 @@ import { failedUpdates } from "./ui/failedUpdates"
 import { JobProgressNotifications } from "./ui/jobProgressNotifications"
 import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
 import { shownCourseHome } from "./ui/shownCourseHome"
-import { AccountStatusBarItem } from "./ui/statusBarAccount"
+import { AccountStatusBarItem, accountLabel } from "./ui/statusBarAccount"
 import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
+import { recordCli } from "./uninstall"
 import type { VersionChange } from "./utilities"
-import { cliFolder, Logger, setRedactedExtensionStorage, versionChangeSince } from "./utilities"
+import {
+  cliFolder,
+  legacyCliFolder,
+  Logger,
+  semVerCompare,
+  setRedactedExtensionStorage,
+  versionChangeSince,
+} from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   listWalkthroughUnlessUpdated,
@@ -211,6 +227,9 @@ async function activateFully(context: vscode.ExtensionContext, mementos: Memento
 /** When the last unprompted refresh started, in epoch milliseconds. */
 let lastBackgroundRefreshAt = 0
 
+/** Set by a logout and cleared by a login, so a later start does not report an expired session. */
+const LOGGED_OUT_KEY = "loggedOut"
+
 function refreshInBackground(
   ready: ReadyActionContext,
   openCourseRefresh: OpenCourseRefresh | undefined,
@@ -242,6 +261,10 @@ async function activateInner(
   Logger.banner(`${vscode.env.appName} version: ${vscode.version}`)
   Logger.banner(`${EXTENSION_ID} version: ${EXTENSION_VERSION}`)
   Logger.banner(`Currently open workspace: ${vscode.workspace.name}`)
+  Logger.banner(`Platform: ${process.platform} ${process.arch}`)
+  Logger.banner(`TestMyCode tools version: ${TMC_LANGS_VERSION}`)
+  Logger.banner(`Backends: ${TMC_BACKEND_URL}, ${MOOC_BACKEND_URL}`)
+  Logger.banner(`courses.mooc.fi courses: ${settings.isCoursesMoocFiEnabled() ? "on" : "off"}`)
 
   // Gates the developer-only palette entries (e.g. "Show Debug View").
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)
@@ -255,7 +278,11 @@ async function activateInner(
   const cliPathResult = await init.ensureLangsUpdated(cliFolder(context), dialog, {
     downloadUrl: TMC_LANGS_DL_URL,
     version: TMC_LANGS_VERSION,
+    builtInChecksums: TMC_LANGS_CHECKSUMS,
   })
+  if (cliFolder(context) !== legacyCliFolder(context)) {
+    void init.removeStaleCliFiles(legacyCliFolder(context), [], { keepPrevious: false })
+  }
 
   // download langs if necessary
   let langs: Result<Langs, Error>
@@ -265,22 +292,25 @@ async function activateInner(
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath, globalState)
+    void recordCli({ cliPath: cliPathResult.val, httpProxy: settings.getHttpProxy() })
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
+      httpProxy: () => settings.getHttpProxy(),
     })
     // A submit or paste would otherwise keep polling the backend past shutdown.
     context.subscriptions.push({ dispose: () => langsInstance.killAllProcesses() })
     langs = new Ok(langsInstance)
   }
 
+  pendingGradings.attach(globalState)
   const authState = createAuthState(langs)
   authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())
   restoreWalkthroughMilestones(globalState)
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
-  const initialAuthCheck = authState.refresh({ timeout: 15000 })
+  const initialAuthCheck = authState.refresh({ timeout: STARTUP_AUTH_CHECK_TIMEOUT })
 
   const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
@@ -312,8 +342,15 @@ async function activateInner(
     initialAuthCheck,
     langs.ok ? scanLocalExercises(langs.val) : undefined,
   ])
-  if (authChecked.err) {
+  // A slow network or a first-run antivirus scan is no startup failure: the check is retried
+  // until it answers.
+  const isAuthCheckDeferred =
+    authChecked.err &&
+    (authChecked.val instanceof TimeoutError || authChecked.val instanceof ConnectionError)
+  if (authChecked.err && !isAuthCheckDeferred) {
     reportInitializationError("Checking your login", authChecked.val)
+  } else if (authChecked.err) {
+    Logger.warn("Could not check the login at startup; checking again later", authChecked.val)
   }
 
   let tmcDataPath: string | undefined
@@ -373,11 +410,15 @@ async function activateInner(
   if (langs.ok) {
     langs.val.on("login", async () => {
       await authState.set(true)
+      void globalState.update(LOGGED_OUT_KEY, undefined)
       sessionExpiry.onLogin()
       expiryNotifier.onLogin()
+      // Names the account, for the status bar and the exercise hand-over.
+      void authState.refresh()
     })
     langs.val.on("logout", async (expected, rejection) => {
       if (expected) {
+        await globalState.update(LOGGED_OUT_KEY, true)
         await authState.set(false)
         sessionExpiry.onLogout()
         return
@@ -396,8 +437,9 @@ async function activateInner(
   }
 
   let versionChange: VersionChange | undefined
+  let previousVersion: string | undefined
   try {
-    const previousVersion = storage.getSessionState()?.extensionVersion
+    previousVersion = storage.getSessionState()?.extensionVersion
     if (EXTENSION_VERSION !== previousVersion) {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
     }
@@ -481,7 +523,7 @@ async function activateInner(
       ? {
           kind: "ready",
           accountHandover: new AccountHandover(globalState),
-          aiUseGate: new AiUseGate(aiRestriction),
+          aiUseGate: new AiUseGate(aiRestriction, vscode.env.appName),
           courseWorkspaceSwitches,
           langs: langs.val,
           resources: resources.val,
@@ -543,6 +585,7 @@ async function activateInner(
     authState.subscribe(() => account.update(authState))
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
+      accountLabel: () => accountLabel(authState.session),
       login: async () => (await login(readyContext)) === "loggedIn",
       logout: () => logout(readyContext),
     })
@@ -630,7 +673,8 @@ async function activateInner(
     refreshInBackground(readyContext, openCourseRefresh, isOpenedBySwitch)
   }
 
-  async function runMaintenancePoll(): Promise<void> {
+  /** @returns Whether the login check answered. */
+  async function runMaintenancePoll(): Promise<boolean> {
     try {
       const checked = await authState.refresh()
       if (checked.err) {
@@ -641,19 +685,69 @@ async function activateInner(
       if (readyContext && authState.loggedIn) {
         refreshInBackground(readyContext, openCourseRefresh)
       }
+      return checked.ok
     } catch (e) {
       Logger.error("Maintenance check failed", e)
+      return false
     }
   }
 
   setMaintenancePollArmed(authState.loggedIn)
 
+  if (isAuthCheckDeferred) {
+    // Until a check answers, the poll is not armed and the student is shown as logged out.
+    let retry: NodeJS.Timeout | undefined
+    let isDisposed = false
+    const scheduleAuthRetry = (): void => {
+      retry = setTimeout(() => {
+        void runMaintenancePoll().then((isAnswered) => {
+          if (!isAnswered && !isDisposed && !authState.loggedIn) {
+            scheduleAuthRetry()
+          }
+        })
+      }, DEFERRED_AUTH_CHECK_DELAY)
+    }
+    scheduleAuthRetry()
+    context.subscriptions.push({
+      dispose: () => {
+        isDisposed = true
+        clearTimeout(retry)
+      },
+    })
+  }
+
+  // Another window may have logged in, out or as someone else since this one last looked.
+  let lastFocusAuthCheckAt = Date.now()
+  async function recheckLoginOnFocus(): Promise<void> {
+    if (Date.now() - lastFocusAuthCheckAt < FOCUS_AUTH_CHECK_INTERVAL) {
+      return
+    }
+    lastFocusAuthCheckAt = Date.now()
+    const wasLoggedIn = authState.loggedIn
+    const checked = await authState.refresh()
+    if (checked.err) {
+      Logger.warn("Failed to recheck the login", checked.val)
+      return
+    }
+    if (!wasLoggedIn && authState.loggedIn && readyContext) {
+      refreshInBackground(readyContext, openCourseRefresh)
+    }
+  }
+
   // The poll alone would leave exercises published mid-session unnoticed for up to its whole
   // interval; coming back to the window is when the student would want to hear of them.
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((state) => {
+      if (!state.focused) {
+        return
+      }
+      void recheckLoginOnFocus().catch((e) => Logger.error("Login recheck failed", e))
+      if (readyContext) {
+        void readyContext.startup.userData
+          .reloadFromStorage()
+          .catch((e) => Logger.error("Rereading the stored courses failed", e))
+      }
       if (
-        state.focused &&
         readyContext &&
         authState.loggedIn &&
         Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
@@ -662,6 +756,27 @@ async function activateInner(
       }
     }),
   )
+
+  if (readyContext) {
+    const handoverContext = readyContext
+    authState.subscribe(() => {
+      const session = authState.session
+      if (session?.kind === "mooc" && session.account) {
+        void handOverExercisesOnAccountChange(handoverContext, session.account.id).catch((e) =>
+          Logger.error("Checking whose the exercises are failed", e),
+        )
+      }
+    })
+    // Stored courses with no login and no logout is a session that ended while VS Code was closed.
+    if (
+      authChecked.ok &&
+      !authState.loggedIn &&
+      !globalState.get<boolean>(LOGGED_OUT_KEY) &&
+      handoverContext.startup.userData.getCourses().length > 0
+    ) {
+      authState.markSessionExpired()
+    }
+  }
 
   // Created after the listener above, so that a full refresh due on the same focus runs first and
   // stands in for this one.
@@ -719,7 +834,27 @@ async function activateInner(
       isUnasked: true,
     }).catch((e) => Logger.warn("Could not open the walkthrough", e))
   } else if (readyContext && versionChange === "updated") {
-    dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
+    if ((semVerCompare(EXTENSION_VERSION, previousVersion ?? "", "major") ?? 0) > 0) {
+      void dialog.notification(
+        `TestMyCode ${EXTENSION_VERSION} looks different: your courses are in the TestMyCode view, ` +
+          "Run Tests and Submit are buttons in the editor title, and the old Ctrl+Shift+T, C and A " +
+          "shortcuts are gone.",
+        [
+          "What's New",
+          (): void =>
+            void vscode.commands.executeCommand(
+              "markdown.showPreview",
+              vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+            ),
+        ],
+        [
+          "Show Courses",
+          (): void => void vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`),
+        ],
+      )
+    } else {
+      dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
+    }
   }
 
   initializationErrors.notify(!readyContext)

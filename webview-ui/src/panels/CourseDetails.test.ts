@@ -160,6 +160,50 @@ suite("the course home", () => {
     expect(screen.queryByText(/days/)).not.toBeInTheDocument()
   })
 
+  test("shows an exercise's review, teacher feedback and instructions under its row", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "part01",
+            name: "Part 1",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "01_hello", {
+                reviewNote: "Give peer reviews on the course page to finish this exercise.",
+                teacherReview: {
+                  sentence: "A teacher reviewed your answer.",
+                  justification: "Tidy.",
+                },
+                instructions: ["Print hello."],
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    expect(
+      screen.getByText("Give peer reviews on the course page to finish this exercise."),
+    ).toBeTruthy()
+    expect(screen.getByText("Tidy.")).toBeTruthy()
+    expect(screen.getByText("Instructions")).toBeTruthy()
+    expect(screen.getByText("Print hello.")).toBeTruthy()
+  })
+
+  test("offers to add the version that continues an ended course", async () => {
+    const panel = await renderHome(
+      courseHomeView({
+        endedNote: "This course ended on May 1, 2026.",
+        successor: { courseId: "next" },
+      }),
+    )
+
+    expect(screen.getByText("This course ended on May 1, 2026.")).toBeTruthy()
+    await fireEvent.click(screen.getByRole("button", { name: "Add the New Version" }))
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "addSuccessorCourse"))
+  })
+
   test("lists each part's exercises with their state, points and deadline", async () => {
     await renderHome(
       courseHomeView({
@@ -197,6 +241,45 @@ suite("the course home", () => {
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
   })
 
+  test("names an exercise's points with hidden text and reveals its exact deadline from a button", async () => {
+    await renderHome(
+      courseHomeView({
+        languageCode: "fi",
+        parts: [
+          {
+            key: "part01",
+            name: "Osa 1",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(2, "02_loops", {
+                availablePoints: 2,
+                deadline: {
+                  at: "2099-01-01T00:00:00Z",
+                  absolute: "Jan 1, 2099, 12:00 AM GMT+2",
+                  relative: null,
+                  brief: "Jan 1, 2099",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(within(row as HTMLElement).getByText("points")).toHaveClass("visually-hidden")
+    expect((row as HTMLElement).querySelector("[aria-label$='points']")).toBeNull()
+    expect(screen.getByRole("heading", { level: 1 })).toHaveAttribute("lang", "fi")
+    expect(screen.getByText("02_loops")).toHaveAttribute("lang", "fi")
+
+    const toggle = within(row as HTMLElement).getByRole("button", { name: /due Jan 1, 2099/ })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByText(/12:00 AM GMT\+2/)).not.toBeInTheDocument()
+    await fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByText(/Deadline: Jan 1, 2099, 12:00 AM GMT\+2/)).toBeInTheDocument()
+  })
+
   test("counts tries left, says why an exercise cannot be submitted, and shows a chapter's lock", async () => {
     await renderHome(
       courseHomeView({
@@ -226,8 +309,7 @@ suite("the course home", () => {
     const [whileRow, forRow] = screen.getAllByRole("listitem")
     expect(whileRow).toHaveTextContent(/while.*2 tries left/)
     expect(forRow).toHaveTextContent(/for.*deadline passed/)
-    expect(within(forRow as HTMLElement).getByText("deadline passed")).toHaveAttribute(
-      "title",
+    expect((forRow as HTMLElement).querySelector(".detail")).toHaveTextContent(
       "The deadline of for has passed.",
     )
     expect(screen.getByText(/This chapter is locked\./)).toBeInTheDocument()
@@ -301,8 +383,7 @@ suite("the course home", () => {
     )
 
     const [row] = screen.getAllByRole("listitem")
-    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toHaveAttribute(
-      "title",
+    expect((row as HTMLElement).querySelector(".detail")).toHaveTextContent(
       "The points wait for a teacher's review.",
     )
     expect(row).not.toHaveTextContent("0/2")

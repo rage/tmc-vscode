@@ -9,7 +9,7 @@
     TmcOrganizations,
     WebviewError,
   } from "../../../shared/lib"
-  import { backendName } from "../../../shared/lib"
+  import { backendName, countOf } from "../../../shared/lib"
   import ActionMenu from "../components/ActionMenu.svelte"
   import Button from "../components/Button.svelte"
   import ErrorNotice from "../components/ErrorNotice.svelte"
@@ -18,7 +18,7 @@
   import Section from "../components/Section.svelte"
   import Spinner from "../components/Spinner.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import { announce } from "../utilities/a11y.svelte"
+  import { announce, focusWhen } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
@@ -46,6 +46,13 @@
   // The slug of the organization whose courses the tmc section shows; empty for none.
   const browsed = uiState("organization", "")
   let addingKey = $state<string | undefined>(undefined)
+  // The course whose Add or Open button takes focus once the action settles.
+  let focusKey = $state<string | undefined>(undefined)
+  const focusCourseButton = (course: CatalogCourse) =>
+    focusWhen(
+      () => focusKey === course.key && addingKey === undefined,
+      () => (focusKey = undefined),
+    )
   let addFailure = $state<{ key: string; error: WebviewError } | undefined>(undefined)
   let organizationHeading = $state<HTMLElement | undefined>(undefined)
 
@@ -58,10 +65,33 @@
       : undefined,
   )
 
-  async function loadMooc() {
-    mooc = { state: "loading" }
+  /** @param isQuiet Keeps the current list on screen while the new one loads. */
+  async function loadMooc(isQuiet = false) {
+    if (!isQuiet) {
+      mooc = { state: "loading" }
+    }
     const outcome = await request("requestMoocCatalog", { sourcePanel })
     mooc = outcome.ok ? { state: "loaded", value: outcome.value } : failed(outcome.error)
+  }
+
+  // A student sent to enroll on the website comes back to this screen expecting the course.
+  const REFOCUS_RELOAD_INTERVAL_MS = 5000
+  let lastLoadedAt = Date.now()
+  function reloadOnReturn() {
+    if (document.visibilityState !== "visible" || mooc.state === "loading") {
+      return
+    }
+    if (Date.now() - lastLoadedAt < REFOCUS_RELOAD_INTERVAL_MS) {
+      return
+    }
+    lastLoadedAt = Date.now()
+    void loadMooc(true)
+  }
+
+  function refresh() {
+    lastLoadedAt = Date.now()
+    void loadMooc()
+    void loadOrganizations()
   }
 
   async function loadOrganizations() {
@@ -94,6 +124,12 @@
       await tick()
       restoreScroll()
     })
+    window.addEventListener("focus", reloadOnReturn)
+    document.addEventListener("visibilitychange", reloadOnReturn)
+    return () => {
+      window.removeEventListener("focus", reloadOnReturn)
+      document.removeEventListener("visibilitychange", reloadOnReturn)
+    }
   })
 
   async function browse(organization: CatalogOrganization) {
@@ -120,6 +156,7 @@
     addFailure = undefined
     const outcome = await request("addCourse", { sourcePanel, key: course.key })
     addingKey = undefined
+    focusKey = course.key
     if (!outcome.ok) {
       addFailure = { key: course.key, error: outcome.error }
     }
@@ -170,14 +207,21 @@
     }
     const courses = shownMoocCourses.length + shownOrganizationCourses.length
     const summary = browsedOrganization
-      ? `${plural(courses, "course")} found`
-      : `${plural(courses, "course")} and ${plural(shownOrganizations.length, "organization")} found`
+      ? `${countOf(courses, "course")} found`
+      : `${countOf(courses, "course")} and ${countOf(shownOrganizations.length, "organization")} found`
     const timer = setTimeout(() => announce(summary), 600)
     return () => clearTimeout(timer)
   })
 
-  function plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? "" : "s"}`
+  const languageNames = new Intl.DisplayNames(["en"], { type: "language" })
+
+  /** "Finnish" for "fi-FI"; the code itself when the browser has no name for it. */
+  function languageName(code: string): string {
+    try {
+      return languageNames.of(code) ?? code
+    } catch {
+      return code
+    }
   }
 </script>
 
@@ -186,7 +230,10 @@
 {/snippet}
 
 {#snippet toolbar()}
-  <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
+  <ToolbarButton icon="refresh" label="Refresh" onclick={refresh} />
+  {#if isMoocListed}
+    <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
+  {/if}
 {/snippet}
 
 {#snippet courseList(courses: CatalogCourse[], label: string)}
@@ -194,7 +241,13 @@
     {#each courses as course (course.key)}
       <CatalogCard
         name={course.name}
-        context={course.organization}
+        context={[
+          course.organization,
+          course.languageCode && `in ${languageName(course.languageCode)}`,
+          course.isStaff && "you teach it",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         description={course.description}
         failure={addFailure?.key === course.key
           ? {
@@ -210,7 +263,12 @@
               <vscode-icon name="check" aria-hidden="true"></vscode-icon>
               Added
             </span>
-            <Button secondary aria-label="Open {course.name}" onclick={() => void add(course)}>
+            <Button
+              secondary
+              aria-label="Open {course.name}"
+              {@attach focusCourseButton(course)}
+              onclick={() => void add(course)}
+            >
               Open
             </Button>
           {:else if addingKey === course.key}
@@ -220,6 +278,7 @@
               secondary
               disabled={addingKey !== undefined}
               aria-label="Add {course.name}"
+              {@attach focusCourseButton(course)}
               onclick={() => void add(course)}
             >
               Add
@@ -232,7 +291,7 @@
 {/snippet}
 
 <div class="add-course">
-  <PanelHeader title="Add Course" toolbar={isMoocListed ? toolbar : undefined} />
+  <PanelHeader title="Add Course" {toolbar} />
   <p class="muted intro">Pick the course you're taking.</p>
 
   <div class="search">
@@ -271,6 +330,15 @@
         {@render noMatches()}
       {:else}
         {@render courseList(shownMoocCourses, `${MOOC} courses`)}
+      {/if}
+      {#if mooc.state === "loaded" && mooc.value.kind === "listed" && mooc.value.items.length > 0}
+        <p class="muted">
+          These are the courses you are enrolled on, and the ones you teach. Enroll on {MOOC}
+          to see more here.
+        </p>
+        <div class="actions">
+          <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
+        </div>
       {/if}
     </Section>
   {/if}

@@ -10,7 +10,7 @@ import type {
 import { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { reportFailureIn, withOperation } from "../../api/withOperation"
-import { Logger } from "../../utilities"
+import { Logger, PROSE_LOCALE } from "../../utilities"
 import { restoreSubmission } from "../restoreSubmission"
 import type { HandlerMap, PanelHost } from "../router"
 import { screenFailureSink } from "../screenFailures"
@@ -34,7 +34,7 @@ export const exerciseHandlers = {
       // Silent: the panel that asked shows the failure, remedies included.
       return withOperation(
         actionContext.dialog,
-        { failure: "Failed to send the exercise to the pastebin.", silent: true },
+        { failure: "Failed to get a link to the exercise.", silent: true },
         () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
     },
@@ -58,7 +58,7 @@ export const exerciseHandlers = {
         return listed
       }
       rememberListing(shown.id, listed.val)
-      return Ok(actions.submissionHistory(listed.val, new Date(), vscode.env.language))
+      return Ok(actions.submissionHistory(listed.val, new Date(), PROSE_LOCALE))
     },
   },
   restoreSubmission: {
@@ -91,6 +91,12 @@ export const exerciseHandlers = {
             }),
           ),
       )
+    },
+  },
+  cancelSubmission: {
+    requiresReady: true,
+    handle(message): void {
+      actions.cancelSubmissionUpload(message.sourcePanel.id)
     },
   },
   keepWaitingForGrading: {

@@ -31,6 +31,8 @@ export interface PanelHost {
   readonly route: Panel | undefined
   /** Whether the student can see this webview now. */
   readonly isVisible: boolean
+  /** Where the CLI is installed, for the screens that point the student to it. */
+  readonly cliFolder: string
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: PanelMessage) => void
   closeSidePanel: () => void

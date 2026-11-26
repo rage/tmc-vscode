@@ -13,6 +13,7 @@
   import {
     aiAssistanceSentence,
     aiPolicyRule,
+    countOf,
     LOGGED_OUT_MESSAGE,
     NOT_LOGGED_IN_MESSAGE,
     offersLogIn,
@@ -190,15 +191,11 @@
     return rest > 0 ? `${shown.join(", ")} and ${rest} more` : shown.join(", ")
   }
 
-  function plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? "" : "s"}`
-  }
-
   const downloadAll: BarAction = $derived({
     label:
       downloadingCount > 0
-        ? `Downloading ${plural(downloadingCount, "Exercise")}…`
-        : `Download ${plural(downloadableCount, "Exercise")}`,
+        ? `Downloading ${countOf(downloadingCount, "Exercise")}…`
+        : `Download ${countOf(downloadableCount, "Exercise")}`,
     icon: "cloud-download",
     disabled: downloadingCount > 0 || !canDownload,
     onclick: () => runCourseAction("downloadAllExercises"),
@@ -220,7 +217,7 @@
       : undefined,
   )
   const closeCompleted: BarAction = $derived({
-    label: `Close ${plural(completedOpenCount, "Completed Exercise")}`,
+    label: `Close ${countOf(completedOpenCount, "Completed Exercise")}`,
     icon: "close-all",
     onclick: () => runCourseAction("closeCompletedExercises"),
   })
@@ -276,6 +273,25 @@
           title: "Could not reach the server",
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
+      view.successor !== undefined && {
+        key: "successor",
+        tone: "info",
+        title: "A new version of this course is available",
+        detail: view.endedNote ?? "The course continues in a new version.",
+        actions: [
+          {
+            label: "Add the New Version",
+            onclick: () => runCourseAction("addSuccessorCourse"),
+          },
+        ],
+      },
+      view.successor === undefined &&
+        view.endedNote !== undefined && {
+          key: "ended",
+          tone: "info",
+          title: "This course has ended",
+          detail: view.endedNote,
+        },
       view.accessLoss === "forbidden" && {
         key: "accessLoss",
         tone: "warning",
@@ -318,7 +334,7 @@
       view.newExercises.length > 0 && {
         key: "new",
         tone: "info",
-        title: plural(view.newExercises.length, "new exercise"),
+        title: countOf(view.newExercises.length, "new exercise"),
         detail: listNames(view.newExercises.map((ex) => ex.name)),
         actions:
           canDownload && !view.isOffline
@@ -341,7 +357,7 @@
       view.failedUpdates.length > 0 && {
         key: "updates",
         tone: "warning",
-        title: `Couldn't update ${plural(view.failedUpdates.length, "exercise")}`,
+        title: `Couldn't update ${countOf(view.failedUpdates.length, "exercise")}`,
         detail: [
           `${listNames(view.failedUpdates.map((ex) => ex.name))}.`,
           ...new Set(view.failedUpdates.map((ex) => ex.reason).filter((reason) => reason !== "")),
@@ -468,7 +484,7 @@
 
 <div class="course-home">
   {#if view}
-    <PanelHeader title={view.title} subtitle={view.organization}>
+    <PanelHeader title={view.title} lang={view.languageCode} subtitle={view.organization}>
       {#snippet toolbar()}
         <ToolbarButton
           icon="refresh"
@@ -482,12 +498,19 @@
     </PanelHeader>
 
     {#if view.description}
-      <p class="description">{view.description}</p>
+      <p class="description" lang={view.languageCode}>{view.description}</p>
+    {/if}
+    {#if view.isStaff}
+      <p class="muted">You teach or assist on this course.</p>
     {/if}
     <div class="summary">
       {#if view.availablePoints > 0}
         <div class="summary-points">
-          <Meter label="Points" value={view.awardedPoints} max={view.availablePoints} />
+          <Meter
+            label={view.backend === "mooc" ? "Programming points" : "Points"}
+            value={view.awardedPoints}
+            max={view.availablePoints}
+          />
         </div>
       {/if}
       {#if view.nextDeadline}
@@ -529,7 +552,7 @@
       {#if downloadingCount > 0}
         <vscode-progress-bar indeterminate class="downloading" aria-hidden="true"
         ></vscode-progress-bar>
-        <span class="visually-hidden">Downloading {plural(downloadingCount, "exercise")}</span>
+        <span class="visually-hidden">Downloading {countOf(downloadingCount, "exercise")}</span>
       {/if}
     </div>
 
@@ -539,6 +562,7 @@
     {#each view.parts as part (part.key)}
       <CoursePart
         {part}
+        lang={view.languageCode}
         isWorkspaceOpen={view.isWorkspaceOpen}
         canDownload={canDownload && !view.isOffline}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}

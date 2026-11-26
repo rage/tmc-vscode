@@ -1,8 +1,7 @@
-import { expect } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 import type { Locator } from "@playwright/test"
 
 import { AddCoursePage } from "./add-course"
-import { CourseHomePage } from "./course-home"
 import { TmcPage } from "./tmc"
 
 function startingWith(text: string): RegExp {
@@ -44,7 +43,14 @@ export class CoursesViewPage extends TmcPage {
   public async runInlineAction(row: Locator, action: string): Promise<void> {
     await row.hover()
     await row.getByRole("button", { name: action, exact: true }).click()
-    // The row's hover tooltip outlives the click and swallows clicks on the rows below it.
+    await this.dismissHover()
+  }
+
+  /**
+   * Moves the pointer off a just-clicked button: its hover tooltip outlives the click and
+   * swallows clicks on the rows below it.
+   */
+  private async dismissHover(): Promise<void> {
     await this.page.mouse.move(0, 0)
     await expect(this.page.locator(".context-view:visible")).toHaveCount(0)
   }
@@ -54,10 +60,14 @@ export class CoursesViewPage extends TmcPage {
     await this.reloadingWindow(() =>
       this.runInlineAction(this.row(course), "Open Course Workspace"),
     )
+    // The course home opens once the extension starts there, covering any file opened before.
+    await this.panelHeaded(course)
   }
 
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */
   public async runContextMenuCommand(row: Locator, command: string): Promise<void> {
+    // oxlint-disable-next-line playwright/no-skipped-test -- skips whichever test needs the menu
+    test.skip(process.platform === "darwin", "macOS shows context menus natively, outside the page")
     const item = this.page
       .locator(".monaco-menu")
       .getByRole("menuitem", { name: command, exact: true })
@@ -79,16 +89,16 @@ export class CoursesViewPage extends TmcPage {
       .getByRole("toolbar", { name: "TestMyCode: Courses actions" })
       .getByRole("button", { name: "Add Course", exact: true })
       .click()
-    const addCourse = new AddCoursePage(this.page, this.webview)
-    await addCourse.expectShown()
-    return addCourse
+    await this.dismissHover()
+    // By heading: a panel revealed again keeps its place, behind webviews opened since.
+    return new AddCoursePage(this.page, await this.panelHeaded("Add Course"))
   }
 
   /** Adds a tmc.mooc.fi course, which is picked inside its organization, and waits for its home. */
   public async addNewCourse(name: string): Promise<void> {
     const addCourse = await this.openAddCourse()
     await addCourse.addTmcCourse("Test Organization", name)
-    await new CourseHomePage(this.page, this.webview).expectShown(name)
+    await this.panelHeaded(name)
   }
 
   /**
@@ -96,25 +106,26 @@ export class CoursesViewPage extends TmcPage {
    * that backend has a session, so this logs in first.
    */
   public async addNewMoocCourse(name: string): Promise<void> {
-    await this.logInToMooc()
-    const addCourse = new AddCoursePage(this.page, this.webview)
+    const addCourse = await this.logInToMooc()
     await addCourse.addMoocCourse(name)
-    await new CourseHomePage(this.page, this.webview).expectShown(name)
+    await this.panelHeaded(name)
   }
 
   /** Logs in from the add-course screen, which offers it while courses.mooc.fi has no session. */
-  public async startMoocLogin(): Promise<void> {
+  public async startMoocLogin(): Promise<AddCoursePage> {
     const addCourse = await this.openAddCourse()
     await addCourse.section("courses.mooc.fi").getByRole("button", { name: "Log In" }).click()
+    return addCourse
   }
 
   /**
    * Runs the device flow to completion against the mock's auto-approving client, which leaves
    * the add-course screen showing the enrolled courses.
    */
-  public async logInToMooc(): Promise<void> {
-    await this.startMoocLogin()
+  public async logInToMooc(): Promise<AddCoursePage> {
+    const addCourse = await this.startMoocLogin()
     await expect(this.statusBarMessage("Logged in.")).toBeVisible()
-    await new AddCoursePage(this.page, this.webview).expectShown()
+    await addCourse.expectShown()
+    return addCourse
   }
 }

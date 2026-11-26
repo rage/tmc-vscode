@@ -49,8 +49,11 @@ vsCodeTest(
     await vsCodeTest.step("opening it again does not ask again", async () => {
       await tmc.runPaletteCommand("Notifications: Clear All Notifications")
       await expect(toast).toHaveCount(0)
-      await page.getByRole("tab", { name: /passing_exercise\.py/ }).click()
-      await tmc.runPaletteCommand("View: Close Editor")
+      // The tab's own button: a palette command can lose its input to the editor the click focuses.
+      await page
+        .getByRole("tab", { name: /passing_exercise\.py/ })
+        .getByRole("button", { name: /^Close/ })
+        .click()
       await expect(page.getByRole("tab", { name: /passing_exercise\.py/ })).toHaveCount(0)
       await courseHome.reveal(COURSE_TITLE)
       await courseHome.openExercise("passing_exercise")

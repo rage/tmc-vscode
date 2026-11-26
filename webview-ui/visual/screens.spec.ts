@@ -15,6 +15,9 @@ const THEMES = {
   light: "Light Modern",
   dark: "Dark Modern",
   hc: "Default High Contrast",
+  hcLight: "Default High Contrast Light",
+  light2026: "Light 2026",
+  dark2026: "Dark 2026",
 } as const
 
 // The themes name system-ui and Droid Sans Mono, which differ from machine to machine.

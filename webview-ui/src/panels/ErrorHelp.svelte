@@ -6,6 +6,7 @@
   import ActionBar from "../components/ActionBar.svelte"
   import type { MenuAction } from "../components/ActionMenu.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
+  import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
@@ -67,6 +68,10 @@
     ]
       .filter((part) => part !== "")
       .join("\n\n")
+  }
+
+  function revealCliFolder() {
+    vscode.postMessage({ type: "revealCliFolder", sourcePanel })
   }
 
   const showLogs: BarAction = { label: "Show Logs", onclick: () => runCommand("tmc.logs") }
@@ -185,6 +190,17 @@
 {:else if topic.kind === "operation" && topic.details}
   <Section title="Cause">
     <CodeBlock label="Cause" code={topic.details.causeChain} oncopy={copy} />
+  </Section>
+{/if}
+
+{#if panel.cliFolder}
+  <Section title="TestMyCode tools folder">
+    <p class="muted">An antivirus or security program may need to allow this folder.</p>
+    <CodeBlock label="TestMyCode tools folder" code={panel.cliFolder} oncopy={copy} />
+    <p>
+      <Button secondary onclick={() => void copy(panel.cliFolder ?? "")}>Copy</Button>
+      <Button secondary onclick={revealCliFolder}>Reveal in File Explorer</Button>
+    </p>
   </Section>
 {/if}
 

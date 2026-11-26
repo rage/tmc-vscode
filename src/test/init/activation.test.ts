@@ -14,7 +14,7 @@ import {
   FOCUS_REFRESH_INTERVAL,
   workspaceFileName,
 } from "../../config/constants"
-import { CorruptStoredDataError, StoredDataMigrationError } from "../../errors"
+import { CorruptStoredDataError, StoredDataMigrationError, TimeoutError } from "../../errors"
 import { activate } from "../../extension"
 import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
@@ -49,8 +49,10 @@ const langsStub = vi.hoisted(() => ({
   settingsWritten: [] as [string, unknown][],
   /** What activation subscribed to, so a test can fire an event at it. */
   handlers: new Map<string, (payload: never) => void>(),
-  /** When set, both `isAuthenticated` and `listSettings` fail with this same error. */
+  /** When set, both `getSession` and `listSettings` fail with this same error. */
   sharedFailure: undefined as Error | undefined,
+  /** When set, only `getSession` fails, with this error. */
+  authFailure: undefined as Error | undefined,
 }))
 
 /** The writer activation hands `WorkspaceManager`, so a test can drive it. */
@@ -186,9 +188,10 @@ vi.mock("../../api/workspaceManager", async (importOriginal) => {
 
 vi.mock("../../api/langs", () => ({
   default: class {
-    public isAuthenticated = async (): Promise<unknown> => {
+    public getSession = async (): Promise<unknown> => {
       langsStub.authChecks += 1
-      return langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(langsStub.authenticated)
+      const failure = langsStub.sharedFailure ?? langsStub.authFailure
+      return failure ? Err(failure) : Ok(langsStub.authenticated ? { kind: "mooc" } : undefined)
     }
     public listSettings = async (): Promise<unknown> =>
       langsStub.sharedFailure
@@ -238,6 +241,8 @@ vi.mock("../../api/workspaceTrustPrompt", () => ({
   requestWorkspaceTrust: async (): Promise<void> => {},
 }))
 
+// Its record lands beside the module, which under vitest is src/.
+vi.mock("../../uninstall", () => ({ recordCli: vi.fn(async () => undefined) }))
 vi.mock("../../init/ensureLangsUpdated", () => ({
   ensureLangsUpdated: async (): Promise<unknown> => {
     recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]
@@ -367,6 +372,7 @@ function resetActivationRecording(): void {
   langsStub.settingsWritten.length = 0
   langsStub.handlers.clear()
   langsStub.sharedFailure = undefined
+  langsStub.authFailure = undefined
   langsDownload.failure = undefined
   workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
@@ -489,6 +495,17 @@ suite("initialization error deduplication", function () {
   afterEach(function () {
     disposeActivatedContexts()
     vi.restoreAllMocks()
+  })
+
+  test("a login check that times out is retried later, not reported", async function () {
+    langsStub.authFailure = new TimeoutError("slow network")
+    const logError = vi.spyOn(Logger, "error")
+
+    await activate(createContext())
+
+    const loggedSteps = logError.mock.calls.map((call) => String(call[0]))
+    expect(loggedSteps.some((m) => m.includes("Checking your login"))).toBe(false)
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled()
   })
 
   // The authentication check and the datapath lookup are two separate steps that both
@@ -1170,8 +1187,20 @@ suite("the first start of a new version", function () {
   })
 
   // Opening a panel, or even a toast, unasked on every update covers whatever the user was doing.
+  test("a major update tells once what moved, with the changelog a click away", async function () {
+    sessionState.previousVersion = "0.1.0"
+
+    await activate(createContext())
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining("looks different"),
+      expect.objectContaining({ title: "What's New" }),
+      expect.objectContaining({ title: "Show Courses" }),
+    )
+  })
+
   test("an update says so in the status bar alone", async function () {
-    sessionState.previousVersion = "1.0.0"
+    sessionState.previousVersion = `${EXTENSION_VERSION.split(".")[0]}.0.0`
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const setStatusBarMessage = vi.spyOn(vscode.window, "setStatusBarMessage")
 

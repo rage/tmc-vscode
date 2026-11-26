@@ -89,6 +89,29 @@ suite("the add-course screen", () => {
     expect(within(card).getByText("All of it, briefly.")).toBeInTheDocument()
   })
 
+  test("names a course's language and the student's teaching, and says what is listed", async () => {
+    await renderScreen({
+      kind: "listed",
+      items: [course("Ohjelmointi", { languageCode: "fi-FI", isStaff: true })],
+    })
+
+    expect(
+      screen.getByText("University of Helsinki · in Finnish (Finland) · you teach it"),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/These are the courses you are enrolled on/)).toBeInTheDocument()
+  })
+
+  test("asks for the courses again from its Refresh button", async () => {
+    await renderScreen()
+    postedMessages.mockClear()
+
+    await fireEvent.click(document.querySelector('vscode-toolbar-button[title="Refresh"]')!)
+
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "requestMoocCatalog" }),
+    )
+  })
+
   test("adds a course, and shows it adding meanwhile", async () => {
     await renderScreen()
 

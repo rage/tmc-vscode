@@ -132,6 +132,91 @@ suite("buildCourseHomeView", function () {
     })
   })
 
+  test("shows a mooc exercise's instructions, review stage, teacher review and revealed solution", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          instructions: ["Print hello."],
+          reviewingStage: "peer_review",
+          teacherReview: {
+            decision: "custom_points",
+            justification: "Nice.",
+            scoreGiven: 1,
+            createdAt: "2026-05-01T10:00:00Z",
+          },
+          hasModelSolution: true,
+          pageUrl: "https://courses.mooc.fi/org/o/courses/c/chapter-1/page",
+        }),
+      ],
+    })
+
+    const [row] = buildCourseHomeView(contextFor(course), idOfMoocCourse(MOOC_COURSE_ID), NOW)
+      .unwrap()
+      .parts.flatMap((part) => part.exercises)
+
+    expect(row).toMatchObject({
+      instructions: ["Print hello."],
+      reviewNote: "Give peer reviews on the course page to finish this exercise.",
+      teacherReview: { justification: "Nice." },
+      solutionUrl: "https://courses.mooc.fi/org/o/courses/c/chapter-1/page",
+    })
+    expect(row?.teacherReview?.sentence).toContain("1 point, points given by the teacher.")
+  })
+
+  test("calls an exercise held by a peer review in review, not locked by the teacher", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({ id: "a", exerciseLocked: true, reviewingStage: "peer_review" }),
+      ],
+    })
+
+    const [row] = buildCourseHomeView(contextFor(course), idOfMoocCourse(MOOC_COURSE_ID), NOW)
+      .unwrap()
+      .parts.flatMap((part) => part.exercises)
+
+    expect(row?.submitRefusal).toMatchObject({
+      label: "in review",
+      sentence: "Give peer reviews on the course page to finish this exercise.",
+    })
+  })
+
+  test("says when an exam's answers close, and once they have, that it ended", function () {
+    const view = (examAnswerableUntil: string): string | null =>
+      buildCourseHomeView(
+        contextFor(moocLocalCourse({ examAnswerableUntil })),
+        idOfMoocCourse(MOOC_COURSE_ID),
+        NOW,
+      ).unwrap().description
+
+    expect(view("2999-06-01T12:00:00Z")).toMatch(/^An exam\. Its answers close on /)
+    expect(view("2020-06-01T12:00:00Z")).toBe("An exam. It ended on Jun 1, 2020.")
+  })
+
+  test("says when a mooc course has ended and offers the version that continues it", function () {
+    const course = moocLocalCourse({
+      closedAt: "2026-05-01T00:00:00Z",
+      successorCourseId: "next-course",
+      languageCode: "fi-FI",
+      isStaff: true,
+      url: "https://courses.mooc.fi/org/o/courses/c",
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view).toMatchObject({
+      successor: { courseId: "next-course" },
+      languageCode: "fi-FI",
+      isStaff: true,
+      materialUrl: "https://courses.mooc.fi/org/o/courses/c",
+    })
+    expect(view.endedNote).toMatch(/^This course ended on (Apr 30|May 1), 2026\.$/)
+  })
+
   test("says a review can change points already given, without calling them held back", function () {
     const course = moocLocalCourse({
       exercises: [

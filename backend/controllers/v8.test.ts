@@ -510,4 +510,44 @@ describe("legacy TMC mock accepting courses.mooc.fi tokens", () => {
   test("the legacy token still works beside it", async () => {
     assert.equal((await coursesWith(MOCK_TMC_ACCESS_TOKEN)).status, 200)
   })
+
+  const setOutcome = (outcome: string): Promise<Response> =>
+    fetch(`${mock.base}/tmc-mock/set-introspection-outcome`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ outcome }),
+    })
+
+  test("an unavailable introspection answers 503 with tmc-server's text, sparing the legacy token", async () => {
+    try {
+      assert.equal((await setOutcome("unavailable")).status, 204)
+      const res = await coursesWith(MOCK_SEEDED_ACCESS_TOKEN)
+      assert.equal(res.status, 503)
+      assert.equal(
+        ((await res.json()) as { error: string }).error,
+        "courses.mooc.fi could not verify your login right now. Try again later.",
+      )
+      assert.equal((await coursesWith(MOCK_TMC_ACCESS_TOKEN)).status, 200)
+    } finally {
+      await setOutcome("active")
+    }
+    assert.equal((await coursesWith(MOCK_SEEDED_ACCESS_TOKEN)).status, 200)
+  })
+
+  test("a verified token with no tmc-server user is a guest: 401 where a login is needed", async () => {
+    try {
+      assert.equal((await setOutcome("no-user")).status, 204)
+      assert.equal((await coursesWith(MOCK_SEEDED_ACCESS_TOKEN)).status, 401)
+      const open = await fetch(`${mock.base}/api/v8/org.json`, {
+        headers: { authorization: `Bearer ${MOCK_SEEDED_ACCESS_TOKEN}` },
+      })
+      assert.equal(open.status, 200)
+    } finally {
+      await setOutcome("active")
+    }
+  })
+
+  test("an unknown introspection outcome is refused", async () => {
+    assert.equal((await setOutcome("maybe")).status, 400)
+  })
 })

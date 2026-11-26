@@ -29,14 +29,16 @@ import type {
 import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import Langs from "../api/langs"
 import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
+import type { InsufficientScopeError } from "../errors"
 import {
   AuthorizationError,
   ChapterLockedError,
   DeadlinePassedError,
+  ForbiddenError,
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
-  InsufficientScopeError,
   InvalidTokenError,
+  LegacyTmcLoginEndedError,
   NotEnrolledError,
   NotFoundError,
   OutOfTriesError,
@@ -165,12 +167,12 @@ suite("tmc langs cli spec", function () {
     // A backend-rejected token ends a session too: the CLI deletes the credential, so the extension
     // must be told. Not get-course-data: its LangsError wrapping hides the 401 the CLI otherwise
     // turns into invalid-token (see "should not get existing api data in general").
-    test("reports a logout when the backend rejects the stored token", async function () {
+    test("drops a stored tmc.mooc.fi token the backend rejects, without ending the session", async function () {
       writeCredentials(configDir, "no-longer-accepted")
 
       const result = await tmc.getCourses("test")
-      expect(result.val).to.be.instanceOf(InvalidTokenError)
-      expect(onLoggedOutCalls).to.be.equal(1)
+      expect(result.val).to.be.instanceOf(LegacyTmcLoginEndedError)
+      expect(onLoggedOutCalls).to.be.equal(0)
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     })
 
@@ -199,9 +201,10 @@ suite("tmc langs cli spec", function () {
     }).timeout(10000)
 
     // Ids missing from the server are missing from the response.
-    test.skip("should not be able to download a non-existent exercise", async function () {
+    test("should not be able to download a non-existent exercise", async function () {
       const downloads = await unwrapResult(tmc.downloadTmcExercises([404], true, () => {}))
-      expect(downloads.failed.length).to.be.equal(1)
+      expect(downloads.downloaded).to.deep.equal([])
+      expect(downloads.failed).to.deep.equal([])
     })
 
     test("should get existing api data", async function () {
@@ -321,8 +324,7 @@ suite("tmc langs cli spec", function () {
         expect(newSubmissions.length).to.be.equal(submissions.length)
       })
 
-      // Langs fails to remove folder on Windows CI
-      test.skip("should be able to save the exercise state and reset it to original template", async function () {
+      test("should be able to save the exercise state and reset it to original template", async function () {
         const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
         await unwrapResult(tmc.resetExercise(idOfTmcExercise(1), exercisePath, true))
 
@@ -331,8 +333,7 @@ suite("tmc langs cli spec", function () {
         expect(newSubmissions.length).to.be.equal(submissions.length + 1)
       })
 
-      // Langs fails to remove folder on Windows CI
-      test.skip("should be able to reset exercise without saving the current state", async function () {
+      test("should be able to reset exercise without saving the current state", async function () {
         const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
         await unwrapResult(tmc.resetExercise(idOfTmcExercise(1), exercisePath, false))
 
@@ -382,14 +383,14 @@ suite("tmc langs cli spec", function () {
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
-      // Downloads exercise on Langs 0.18
-      test.skip("should encounter an error when attempting to revert to an older submission", async function () {
+      test("should re-download the exercise when trying to revert it to an older submission", async function () {
         const result = await tmc.restoreSubmission(
           makeTmcKind({ exerciseId: 1, submissionId: 1 }),
           missingExercisePath,
           false,
         )
-        expect(result.val).to.be.instanceOf(RuntimeError)
+        expect(result.ok).to.be.true
+        expect(fs.existsSync(missingExercisePath)).to.be.true
       })
 
       // Locks live in a central dir, not in the exercise, so a missing directory is re-downloaded
@@ -552,7 +553,7 @@ suite("tmc langs cli spec", function () {
         expect(result.val).to.be.instanceOf(AuthorizationError)
       })
 
-      test.skip("should not be able to submit exercise to TMC-paste", async function () {
+      test("should not be able to submit exercise to TMC-paste", async function () {
         const result = await tmc.paste(idOfTmcExercise(1), exercisePath)
         expect(result.val).to.be.instanceOf(AuthorizationError)
       })
@@ -776,13 +777,13 @@ suite("tmc langs cli spec", function () {
         expect((await setCourseAccess("open")).status).to.equal(204)
       })
 
-      // The extension tells this from a missing scope by the course list, which still loads.
-      test("should report a closed course as an insufficient scope", async function () {
+      // Told from a token missing the scope by the host's `no_access` key, not by the course list.
+      test("should report a closed course as forbidden", async function () {
         expect((await setCourseAccess("forbidden")).status).to.equal(204)
 
         const data = await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })
 
-        expect(data.val).to.be.instanceOf(InsufficientScopeError)
+        expect(data.val).to.be.instanceOf(ForbiddenError)
         expect((await tmc.getEnrolledMoocCourses()).ok).to.be.true
       })
 
@@ -813,10 +814,24 @@ suite("tmc langs cli spec", function () {
           expect(unchecked?.refusal).to.be.instanceOf(refusal)
         }
 
-      test(
-        "should leave a closed course unchecked and still check the others",
-        leavesUncheckedAlone("forbidden", InsufficientScopeError),
-      )
+      // Langs reports the closed course as `forbidden`, which `Langs.checkExerciseUpdates` still
+      // converts to NotFoundError, so only the CLI's own answer is pinned here.
+      test("should leave a closed course unchecked as forbidden and still check the others", async function () {
+        const ids = [PASSING_EXERCISE_ID, FAILING_EXERCISE_ID]
+        ;(await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
+        expect((await setCourseAccess("forbidden")).status).to.equal(204)
+
+        const checked = await runCli(testDir, ["mooc", "check-exercise-updates"])
+
+        const { removed, unchecked_courses } = outputDataOf(checked) as {
+          removed: string[]
+          unchecked_courses: { course_id: string; kind: string }[]
+        }
+        expect(removed).to.deep.equal([])
+        expect(unchecked_courses).to.deep.equal([
+          { course_id: PYTHON_COURSE_ID, kind: "forbidden" },
+        ])
+      })
 
       test(
         "should leave a deleted course unchecked and still check the others",
@@ -1108,6 +1123,158 @@ suite("tmc langs cli spec", function () {
       writeMoocCredentials(configDir)
       ;(await tmc.deauthenticate()).unwrap()
       expect(hasMoocCredentials(configDir)).to.be.false
+    })
+
+    suite("the CLI contract beyond the Langs wrapper", function () {
+      const EXAM_ID = "ab0ab0ab-0000-4000-8000-0000000000e0"
+      const EXAM_EXERCISE_ID = "ab0ab0ab-0000-4000-8000-000000000001"
+      const BROWSER_EXERCISE_ID = "d4d4d4d4-0000-4000-8000-000000000001"
+      const NAMES_COURSE_ID = "55555555-5555-4555-8555-555555555555"
+      const COLLIDING_EXERCISE_IDS = [
+        "55555555-0000-4000-8000-000000000001",
+        "66666666-0000-4000-8000-000000000001",
+      ]
+      const PATH_LIKE_EXERCISE_ID = "77777777-0000-4000-8000-000000000001"
+
+      test("should list the started exam and serve its exercise slides", async function () {
+        const exams = await runCli(testDir, ["mooc", "exams"])
+        expect(exams.result).to.equal("executed-command")
+        expect(outputDataOf(exams)).to.deep.equal([
+          {
+            id: EXAM_ID,
+            name: "Mock exam",
+            started_at: "2000-01-01T00:00:00Z",
+            answerable_until: "2100-01-01T00:00:00Z",
+          },
+        ])
+
+        const slides = await runCli(testDir, ["mooc", "exam-exercises", "--exam-id", EXAM_ID])
+        const [slide] = outputDataOf(slides) as { exercise_id: string; exam_id: string }[]
+        expect([slide?.exercise_id, slide?.exam_id]).to.deep.equal([EXAM_EXERCISE_ID, EXAM_ID])
+      })
+
+      test("should download an exam exercise under the exam's folder", async function () {
+        const downloaded = await runCli(testDir, [
+          "mooc",
+          "download-or-update-course-exercises",
+          "--exam-id",
+          EXAM_ID,
+          "--exercise-id",
+          EXAM_EXERCISE_ID,
+        ])
+        const result = outputDataOf(downloaded) as {
+          downloaded: { "exercise-id": string; path: string }[]
+        }
+        expect(result.downloaded.map((d) => d["exercise-id"])).to.deep.equal([EXAM_EXERCISE_ID])
+        expect(fs.existsSync(result.downloaded[0]!.path)).to.be.true
+        expect(result.downloaded[0]!.path).to.contain(`${path.sep}mock-exam${path.sep}`)
+      })
+
+      test("should report an exercise that cannot be downloaded with its failure kind", async function () {
+        const downloaded = await runCli(testDir, [
+          "mooc",
+          "download-or-update-course-exercises",
+          "--course-id",
+          VARIANTS_COURSE_ID,
+          "--exercise-id",
+          BROWSER_EXERCISE_ID,
+        ])
+        const { downloaded: done, failed } = outputDataOf(downloaded) as {
+          downloaded: unknown[]
+          failed: [{ "exercise-id": string }, string[], string][]
+        }
+        expect(done).to.deep.equal([])
+        expect(failed).to.have.lengthOf(1)
+        const [exercise, chain, kind] = failed[0]!
+        expect(exercise["exercise-id"]).to.equal(BROWSER_EXERCISE_ID)
+        expect(chain).to.not.be.empty
+        expect(kind).to.equal("browser-only")
+      })
+
+      test("should store exercises whose names collide or look like paths side by side", async function () {
+        expect(
+          (await postJson("mooc-mock/set-enrolled", { course_id: NAMES_COURSE_ID, enrolled: true }))
+            .status,
+        ).to.equal(204)
+        try {
+          const downloaded = await runCli(testDir, [
+            "mooc",
+            "download-or-update-course-exercises",
+            "--course-id",
+            NAMES_COURSE_ID,
+            "--exercise-id",
+            ...COLLIDING_EXERCISE_IDS,
+            PATH_LIKE_EXERCISE_ID,
+          ])
+          const { downloaded: done, failed } = outputDataOf(downloaded) as {
+            downloaded: { path: string }[]
+            failed?: unknown[] | null
+          }
+          expect(failed ?? []).to.deep.equal([])
+          const folders = done.map((d) => path.relative(path.join(testDir, "tmcdata"), d.path))
+          expect(new Set(folders).size).to.equal(3)
+          for (const folder of folders) {
+            expect(folder.split(path.sep)).to.have.lengthOf(3)
+            expect(folder).to.not.contain("..")
+          }
+        } finally {
+          await postJson("mooc-mock/set-enrolled", { course_id: NAMES_COURSE_ID, enrolled: false })
+        }
+      })
+
+      test("should advertise the client version on every request", async function () {
+        await runCli(testDir, ["mooc", "exams"])
+        const state = (await (await fetch(`${MOCK_BACKEND_URL}/mooc-mock/auth-state`)).json()) as {
+          lastClientVersion?: string
+        }
+        expect(state.lastClientVersion).to.equal(TMC_LANGS_VERSION)
+      })
+
+      test("should report a course the student may not open as forbidden", async function () {
+        const setAccess = (access: string): Promise<Response> =>
+          postJson("mooc-mock/set-course-access", { course_id: PYTHON_COURSE_ID, access })
+        expect((await setAccess("forbidden")).status).to.equal(204)
+        try {
+          const refused = await runCli(testDir, ["mooc", "course", "--course-id", PYTHON_COURSE_ID])
+          expect(refused.result).to.equal("error")
+          expect(errorKindOf(refused)).to.equal("forbidden")
+        } finally {
+          await setAccess("open")
+        }
+      })
+
+      test("should report a rejected OAuth client at login", async function () {
+        const refused = await runCli(testDir, ["mooc", "login"], {
+          TMC_LANGS_MOOC_CLIENT_ID: "some-unregistered-client",
+        })
+        expect(errorKindOf(refused)).to.equal("login-client-rejected")
+      })
+
+      suite("tmc-server consulting courses.mooc.fi", function () {
+        const setOutcome = (outcome: string): Promise<Response> =>
+          postJson("tmc-mock/set-introspection-outcome", { outcome })
+
+        teardown(async function () {
+          await setOutcome("active")
+        })
+
+        // A stored tmc token would be used instead of the mooc login the case is about.
+        setup(function () {
+          clearCredentials(configDir)
+        })
+
+        test("should report a login tmc-server could not verify as unconfirmed", async function () {
+          expect((await setOutcome("unavailable")).status).to.equal(204)
+          const refused = await runCli(testDir, ["tmc", "get-courses", "--organization", "test"])
+          expect(errorKindOf(refused)).to.equal("tmc-login-unconfirmed")
+        })
+
+        test("should report a verified login tmc-server has no user for as not accepted", async function () {
+          expect((await setOutcome("no-user")).status).to.equal(204)
+          const refused = await runCli(testDir, ["tmc", "get-courses", "--organization", "test"])
+          expect(errorKindOf(refused)).to.equal("tmc-login-not-accepted")
+        })
+      })
     })
 
     suite("device flow", function () {
@@ -1538,4 +1705,64 @@ async function stopServer(server: cp.ChildProcess | undefined): Promise<void> {
       setTimeout(resolve, 5000)
     }),
   ])
+}
+
+interface CliOutput {
+  result: string
+  message: string
+  data?: { "output-data-kind": string; "output-data": unknown }
+}
+
+/** The error kind of a failed CLI run. */
+function errorKindOf(output: CliOutput): unknown {
+  return (outputDataOf(output) as { kind?: string } | undefined)?.kind
+}
+
+function postJson(route: string, body: unknown): Promise<Response> {
+  return fetch(`${MOCK_BACKEND_URL}/${route}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+/** The payload of a CLI output line. */
+function outputDataOf(output: CliOutput): unknown {
+  return output.data?.["output-data"]
+}
+
+/**
+ * Runs the CLI once, for the commands and error kinds the Langs wrapper does not expose, and
+ * returns its final output line. Uses the same config dir and backend roots as `Langs`.
+ */
+function runCli(
+  configRoot: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<CliOutput> {
+  const [backend, ...rest] = args
+  return new Promise((resolve, reject) => {
+    cp.execFile(
+      CLI_FILE,
+      [backend!, "--client-name", CLIENT_NAME, "--client-version", "4.0.0-test", ...rest],
+      {
+        env: {
+          ...process.env,
+          TMC_LANGS_CONFIG_DIR: configRoot,
+          TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
+          TMC_LANGS_MOOC_ROOT_URL: MOCK_BACKEND_URL,
+          ...env,
+        },
+        timeout: 30000,
+      },
+      (error, stdout) => {
+        const lastLine = stdout.trim().split("\n").at(-1)
+        if (!lastLine) {
+          reject(error ?? new Error("the CLI printed nothing"))
+          return
+        }
+        resolve(JSON.parse(lastLine) as CliOutput)
+      },
+    )
+  })
 }

@@ -1172,6 +1172,21 @@ suite("WorkspaceManager class", function () {
       )
     })
 
+    test("moves a workspace file that does not parse aside and writes a fresh one", async function () {
+      fs.writeFileSync(workspaceFile, '{ "folders": [')
+
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc", false)
+
+      expect(jsonc.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual({
+        ...WORKSPACE_SETTINGS,
+        folders: [{ path: WORKSPACE_ROOT_FOLDER_NAME }],
+      })
+      const aside = fs
+        .readdirSync(path.dirname(workspaceFile))
+        .filter((name) => name.includes(".damaged-"))
+      expect(aside).toHaveLength(1)
+    })
+
     test("creates the workspace file it prepares to open", async function () {
       await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc", false)
 

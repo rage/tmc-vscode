@@ -49,6 +49,9 @@ import {
     zMoocCourse,
     zMoocCurrentUser,
     zMoocDeviceLogin,
+    zMoocDownloadFailure,
+    zMoocExam,
+    zMoocExerciseClosedChapter,
     zMoocExerciseDownload,
     zMoocExerciseUpdates,
     zNewSubmission,
@@ -63,7 +66,9 @@ import {
     zPythonVer,
     zRefreshData,
     zRefreshExercise,
+    zRepositoryExercise,
     zReview,
+    zReviewingStage,
     zRunResult,
     zRunStatus,
     zStatus,
@@ -78,10 +83,13 @@ import {
     zSubmissionFinished,
     zSubmissionKind,
     zSubmissionStatus,
+    zTeacherDecision,
+    zTeacherReview,
     zTestCase,
     zTestDesc,
     zTestResult,
     zTmcConfig,
+    zTmcDownloadFailure,
     zTmcExerciseDownload,
     zTmcExerciseSlide,
     zTmcExerciseTask,
@@ -349,6 +357,24 @@ export type MoocCurrentUser = z.infer<typeof MoocCurrentUser>;
 export const MoocDeviceLogin = zMoocDeviceLogin;
 export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>;
 
+/**
+ * Why a mooc exercise could not be downloaded.
+ */
+export const MoocDownloadFailure = zMoocDownloadFailure;
+export type MoocDownloadFailure = z.infer<typeof MoocDownloadFailure>;
+
+/**
+ * An exam the user has started and can still answer.
+ */
+export const MoocExam = zMoocExam;
+export type MoocExam = z.infer<typeof MoocExam>;
+
+/**
+ * The chapter that has not opened yet and holds a requested mooc exercise.
+ */
+export const MoocExerciseClosedChapter = zMoocExerciseClosedChapter;
+export type MoocExerciseClosedChapter = z.infer<typeof MoocExerciseClosedChapter>;
+
 export const MoocExerciseDownload = zMoocExerciseDownload;
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>;
 
@@ -419,10 +445,22 @@ export const RefreshExercise = zRefreshExercise;
 export type RefreshExercise = z.infer<typeof RefreshExercise>;
 
 /**
+ * An exercise found by [`prepare_exercise_repository`].
+ */
+export const RepositoryExercise = zRepositoryExercise;
+export type RepositoryExercise = z.infer<typeof RepositoryExercise>;
+
+/**
  * get /api/v8/core/courses/{course_id}/reviews
  */
 export const Review = zReview;
 export type Review = z.infer<typeof Review>;
+
+/**
+ * Where an answer is in an exercise's review process. No stage takes new answers.
+ */
+export const ReviewingStage = zReviewingStage;
+export type ReviewingStage = z.infer<typeof ReviewingStage>;
 
 /**
  * The result of running an exercise's test suite against a submission.
@@ -499,6 +537,15 @@ export type SubmissionKind = z.infer<typeof SubmissionKind>;
 export const SubmissionStatus = zSubmissionStatus;
 export type SubmissionStatus = z.infer<typeof SubmissionStatus>;
 
+export const TeacherDecision = zTeacherDecision;
+export type TeacherDecision = z.infer<typeof TeacherDecision>;
+
+/**
+ * A teacher's grading of the user's answer.
+ */
+export const TeacherReview = zTeacherReview;
+export type TeacherReview = z.infer<typeof TeacherReview>;
+
 export const TestCase = zTestCase;
 export type TestCase = z.infer<typeof TestCase>;
 
@@ -519,6 +566,12 @@ export type TestResult = z.infer<typeof TestResult>;
  */
 export const TmcConfig = zTmcConfig;
 export type TmcConfig = z.infer<typeof TmcConfig>;
+
+/**
+ * Why a TMC exercise could not be downloaded.
+ */
+export const TmcDownloadFailure = zTmcDownloadFailure;
+export type TmcDownloadFailure = z.infer<typeof TmcDownloadFailure>;
 
 export const TmcExerciseDownload = zTmcExerciseDownload;
 export type TmcExerciseDownload = z.infer<typeof TmcExerciseDownload>;

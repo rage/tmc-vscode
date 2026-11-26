@@ -78,23 +78,20 @@ vsCodeTest(
       },
     )
 
-    await vsCodeTest.step(
-      "send it to the pastebin in Get Help, twice, getting one link",
-      async () => {
-        await page.getByText("def hello()").click()
-        await coursesView.runExercisePaletteCommand("TestMyCode: Get Help")
-        const link = sidePanel.getByText(/\/shared-submissions\/[0-9a-f-]+$/)
-        await expect(link).toBeVisible()
-        const firstLink = await link.textContent()
-        await expect(sidePanel.getByRole("button", { name: "Copy Link" })).toBeVisible()
-        await expect(sidePanel.getByRole("button", { name: "Open Link" })).toBeVisible()
+    await vsCodeTest.step("get a link to it in Get Help, twice, getting one link", async () => {
+      await page.getByText("def hello()").click()
+      await coursesView.runExercisePaletteCommand("TestMyCode: Get Help")
+      const link = sidePanel.getByText(/\/shared-submissions\/[0-9a-f-]+$/)
+      await expect(link).toBeVisible()
+      const firstLink = await link.textContent()
+      await expect(sidePanel.getByRole("button", { name: "Copy Link" })).toBeVisible()
+      await expect(sidePanel.getByRole("button", { name: "Open Link" })).toBeVisible()
 
-        await page.getByText("def hello()").click()
-        await coursesView.runExercisePaletteCommand("TestMyCode: Get Help")
-        await expect(sidePanel.getByText(/unchanged since you last sent it/)).toBeVisible()
-        await expect(link).toHaveText(firstLink ?? "")
-        await expect(coursesView.notificationToast("Copied the paste link")).toBeHidden()
-      },
-    )
+      await page.getByText("def hello()").click()
+      await coursesView.runExercisePaletteCommand("TestMyCode: Get Help")
+      await expect(sidePanel.getByText(/unchanged since you last sent it/)).toBeVisible()
+      await expect(link).toHaveText(firstLink ?? "")
+      await expect(coursesView.notificationToast("Copied the paste link")).toBeHidden()
+    })
   },
 )

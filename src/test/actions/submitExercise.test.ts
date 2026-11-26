@@ -11,7 +11,10 @@ import {
   makeMoocKind,
   makeTmcKind,
 } from "../../../shared/lib"
+import { exerciseResultsPanel } from "../../actions/exerciseResults"
+import { pendingGradings } from "../../actions/pendingGradings"
 import {
+  cancelSubmissionUpload,
   checkCanSubmit,
   keepWaitingForGrading,
   onDidFinishSubmission,
@@ -20,6 +23,7 @@ import {
 } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
+import { langsError } from "../../api/langsErrors"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -27,13 +31,13 @@ import { runForExercise } from "../../commands/runForExercise"
 import {
   AiUseRefusedError,
   BottleneckError,
-  ChapterLockedError,
   CourseAccessLostError,
   DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
+  InvalidTokenError,
   NotEnrolledError,
-  OutOfTriesError,
+  NotFoundError,
   WorkspaceUntrustedError,
 } from "../../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -55,6 +59,7 @@ import {
   idOfTmcExercise,
 } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+import { createMockContext } from "../mocks/vscode"
 import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window/exerciseDocuments", () => ({
@@ -422,7 +427,7 @@ suite("submitExercise action, mooc", () => {
     const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
 
-    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise")
+    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise", expect.any(Function))
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
@@ -550,45 +555,42 @@ suite("submitExercise action, mooc", () => {
     expect(setStanding).not.toHaveBeenCalled()
   })
 
-  test("refuses up front an exercise the backend reported out of tries", async () => {
+  test("submits an exercise stored as out of tries, and shows courses.mooc.fi's refusal", async () => {
     const outOfTries = {
       ...moocCourse,
       exercises: [{ ...moocCourse.exercises[0]!, awardedPoints: 2, outOfTries: true }],
     }
-    const submit = vi.fn()
+    const submit = vi
+      .fn()
+      .mockResolvedValue(Err(langsError({ kind: "out-of-tries" }, "403", "", "mooc")))
     const { actionContext } = contextFor(makeMoocKind(outOfTries), { submitMoocExercise: submit })
 
     const result = await submitExercise(actionContext, moocExercise)
-    expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(OutOfTriesError)
-    expect((result.val as Error).message).toBe(
-      `You have no tries left on ${EXERCISE_SLUG}, so its 2/3 points are final.`,
+
+    expect(result.ok).toBe(true)
+    expect(submit).toHaveBeenCalledOnce()
+    expect(lastView()?.error?.message).toBe(
+      "You have no tries left on this exercise, so it can no longer be submitted.",
     )
-    expect(submit).not.toHaveBeenCalled()
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
   })
 
-  test.each([
-    [
-      "past its deadline",
-      { deadline: "2000-01-01T00:00:00Z" },
-      DeadlinePassedError,
-      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
-    ],
-    [
-      "in a chapter not unlocked yet",
-      { chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" as const } },
-      ChapterLockedError,
-      `Complete the chapters before the chapter "Loops" to submit ${EXERCISE_SLUG}.`,
-    ],
-  ])("refuses up front an exercise %s", async (_case, data, errorClass, message) => {
-    const refused = { ...moocCourse, exercises: [{ ...moocCourse.exercises[0]!, ...data }] }
+  test("refuses up front a tmc exercise past its deadline", async () => {
+    const late = {
+      ...tmcCourse,
+      exercises: [{ ...tmcCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+    }
     const submit = vi.fn()
-    const { actionContext } = contextFor(makeMoocKind(refused), { submitMoocExercise: submit })
+    const { actionContext } = contextFor(makeTmcKind(late), {
+      submitTmcExerciseAndWaitForResults: submit,
+    })
 
-    const result = await submitExercise(actionContext, moocExercise)
+    const result = await submitExercise(actionContext, tmcExercise)
 
-    expect(result.val).toBeInstanceOf(errorClass)
-    expect((result.val as Error).message).toBe(message)
+    expect(result.val).toBeInstanceOf(DeadlinePassedError)
+    expect((result.val as Error).message).toBe(
+      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
+    )
     expect(submit).not.toHaveBeenCalled()
   })
 
@@ -655,12 +657,14 @@ suite("submitExercise action, mooc", () => {
 
   test("checking whether it can submit refuses as the submit would, and submits nothing", async () => {
     const pastDeadline = {
-      ...moocCourse,
-      exercises: [{ ...moocCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+      ...tmcCourse,
+      exercises: [{ ...tmcCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
     }
     const submit = vi.fn()
-    const late = contextFor(makeMoocKind(pastDeadline), { submitMoocExercise: submit })
-    expect((await checkCanSubmit(late.actionContext, moocExercise)).val).toBeInstanceOf(
+    const late = contextFor(makeTmcKind(pastDeadline), {
+      submitTmcExerciseAndWaitForResults: submit,
+    })
+    expect((await checkCanSubmit(late.actionContext, tmcExercise)).val).toBeInstanceOf(
       DeadlinePassedError,
     )
 
@@ -782,6 +786,15 @@ suite("submitExercise action, mooc", () => {
 
     const waited = await keepWaitingForGrading(actionContext, earlierPanelId)
     expect(waited.ok).toBe(true)
+  })
+
+  test("a grading the server refuses to show offers no keep waiting", async () => {
+    const { actionContext, wait } = moocContextWith(undefined)
+    wait.mockResolvedValue(Err(new NotFoundError("gone")))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()).toMatchObject({ phase: "failed", canKeepWaiting: false })
   })
 
   test("a failed status check after the submit still offers to keep waiting", async () => {
@@ -1105,5 +1118,114 @@ suite("sendSubmissionFeedback action", () => {
 
     expect(first.err).toBe(true)
     expect(second.ok).toBe(true)
+  })
+})
+
+suite("a mooc grading left pending across a reload", () => {
+  test("is shown as still grading, and Keep Waiting fetches its result", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith({ status: "no-grading-yet" })
+    await submitExercise(actionContext, moocExercise)
+    expect(pendingGradings.get(moocExercise.id, undefined)?.taskSubmissionId).toBe(
+      TASK_SUBMISSION_ID,
+    )
+    submissionViews.clear()
+
+    const panel = exerciseResultsPanel(actionContext, moocExercise).unwrap()
+
+    expect(submissionViews.latestFor(moocExercise.id)?.view).toMatchObject({
+      headline: "Your latest submission is still being graded",
+      canKeepWaiting: true,
+    })
+    wait.mockResolvedValue(Ok({ status: "grading-hidden" }))
+    const waited = await keepWaitingForGrading(actionContext, panel.id)
+    expect(waited.ok).toBe(true)
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("is saved once the submission is accepted, before the grading ends", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith({ status: "grading-hidden" })
+    let pendingWhileWaiting: unknown
+    wait.mockImplementation(async () => {
+      pendingWhileWaiting = pendingGradings.get(moocExercise.id, undefined)
+      return Ok({ status: "grading-hidden" })
+    })
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(pendingWhileWaiting).toMatchObject({ taskSubmissionId: TASK_SUBMISSION_ID })
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("is kept when the session ends while waiting, so a new login can keep waiting", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext, wait } = moocContextWith(undefined)
+    wait.mockResolvedValueOnce(Err(new InvalidTokenError("401")))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeDefined()
+    expect(lastView()).toMatchObject({ canKeepWaiting: true })
+    wait.mockResolvedValue(Ok({ status: "grading-hidden" }))
+    const panelId = submissionViews.latestFor(moocExercise.id)!.panel.id
+    expect((await keepWaitingForGrading(actionContext, panelId)).ok).toBe(true)
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+
+  test("belongs to the account that submitted it", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    const { actionContext } = moocContextWith({ status: "no-grading-yet" })
+    const loggedInAs = (id: string): ReadyActionContext => ({
+      ...actionContext,
+      authState: {
+        ...actionContext.authState,
+        session: { kind: "mooc", account: { id, name: null, email: null } },
+      },
+    })
+    await submitExercise(loggedInAs("user-a"), moocExercise)
+    submissionViews.clear()
+
+    exerciseResultsPanel(loggedInAs("user-b"), moocExercise).unwrap()
+    expect(submissionViews.latestFor(moocExercise.id)?.view.canKeepWaiting).toBeFalsy()
+    submissionViews.clear()
+
+    exerciseResultsPanel(loggedInAs("user-a"), moocExercise).unwrap()
+    expect(submissionViews.latestFor(moocExercise.id)?.view.canKeepWaiting).toBe(true)
+  })
+
+  test("is dropped when a later submission fails to upload", async () => {
+    pendingGradings.attach(createMockContext().globalState)
+    await submitExercise(moocContextWith({ status: "no-grading-yet" }).actionContext, moocExercise)
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeDefined()
+
+    await submitExercise(moocContextWithErr(new Error("upload failed")).actionContext, moocExercise)
+
+    expect(pendingGradings.get(moocExercise.id, undefined)).toBeUndefined()
+  })
+})
+
+suite("cancelling a mooc submission's upload", () => {
+  test("stops the upload and says the submission was cancelled", async () => {
+    const { actionContext, submit } = moocContextWith(undefined)
+    let finish: (() => void) | undefined
+    submit.mockImplementation(
+      async (_id: string, _path: string, onInterruptHandle: (interrupt: () => void) => void) => {
+        const stopped = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        onInterruptHandle(() => finish?.())
+        await stopped
+        return Err(new Error("The TestMyCode tools were stopped."))
+      },
+    )
+
+    const submitting = submitExercise(actionContext, moocExercise)
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const panelId = submissionViews.latestFor(moocExercise.id)!.panel.id
+    cancelSubmissionUpload(panelId)
+    await submitting
+
+    expect(lastView()).toMatchObject({ headline: "Submission cancelled", tone: "info" })
   })
 })

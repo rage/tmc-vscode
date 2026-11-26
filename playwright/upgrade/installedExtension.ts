@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import * as fs from "node:fs"
+import { tmpdir } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
@@ -18,6 +19,9 @@ const UPGRADE_CACHE_DIR = join(rootPath, ".vscode-test", "upgrade-e2e")
 
 /** The checkout packaged as an update to {@link LEGACY_RELEASE}, by `bin/packageUpgradeVsix.sh`. */
 export const NEXT_VSIX = join(UPGRADE_CACHE_DIR, "next.vsix")
+
+/** `origin/rollback-3.5.x`, packaged by `bin/packageRollbackVsix.sh`. */
+export const ROLLBACK_VSIX = join(UPGRADE_CACHE_DIR, "rollback.vsix")
 
 const EXTENSION_ID = "moocfi.test-my-code"
 
@@ -160,7 +164,9 @@ export async function launchVsCode(profile: Profile): Promise<ElectronApplicatio
   await seedLangsClis(profile)
   return electron.launch({
     executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
-    args: launchArgs(profile.userDataDir, false, { extensionsDir: profile.extensionsDir }),
+    // The real keychain, as a user's VS Code has: with the mock one, macOS runs intermittently
+    // showed 4.x without 3.5.5's courses.
+    args: launchArgs(profile.userDataDir, false, { extensionsDir: profile.extensionsDir }, false),
     env: mockBackendEnv(profile.configDir, profile.projectsDir),
   })
 }
@@ -170,14 +176,17 @@ export async function launchVsCode(profile: Profile): Promise<ElectronApplicatio
  * a running VS Code writes it lazily.
  */
 export function readGlobalState(profile: Profile): Record<string, unknown> {
-  const database = new DatabaseSync(
-    join(profile.userDataDir, "User", "globalStorage", "state.vscdb"),
-    { readOnly: true },
-  )
+  // Read from a copy: node:sqlite can hold the file open past `close()`, and on Windows that
+  // handle stops the profile from being deleted.
+  const copyDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-state-"))
+  const copy = join(copyDir, "state.vscdb")
+  fs.copyFileSync(join(profile.userDataDir, "User", "globalStorage", "state.vscdb"), copy)
+  const database = new DatabaseSync(copy, { readOnly: true })
   try {
     const row = database.prepare("SELECT value FROM ItemTable WHERE key = ?").get(EXTENSION_ID)
     return row === undefined ? {} : (JSON.parse(String(row.value)) as Record<string, unknown>)
   } finally {
     database.close()
+    fs.rm(copyDir, { recursive: true, force: true }, () => undefined)
   }
 }

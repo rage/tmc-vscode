@@ -6,8 +6,9 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
-import { FileSystemError } from "../errors"
-import { isPathInside, Logger } from "../utilities"
+import { FileSystemError, ProjectsDirMoveError, ProjectsDirMoveRefusedError } from "../errors"
+import { Logger } from "../utilities"
+import { releaseExerciseEditors } from "../window/exerciseDocuments"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -40,7 +41,7 @@ export async function moveExtensionDataPath(
   let newFsPath = newPath.fsPath
   let existingEntries: string[]
   try {
-    existingEntries = fs.readdirSync(newFsPath)
+    existingEntries = await fs.readdir(newFsPath)
   } catch (e) {
     return new Err(new FileSystemError(e, `Failed to read the folder ${newFsPath}`))
   }
@@ -49,17 +50,34 @@ export async function moveExtensionDataPath(
   }
 
   const current = resources.projectsDirectory
-  if (current !== undefined && isPathInside(current, newFsPath)) {
-    return Err(
-      new Error(
-        `The exercises folder cannot be moved into itself: ${newFsPath} is inside ${current}.`,
-      ),
-    )
+  // Before the editors are closed, which the move itself would only refuse after.
+  const checked = await langs.checkMoveProjectsDirectory(newFsPath)
+  if (checked.err) {
+    return checked
+  }
+
+  if (current !== undefined) {
+    const released = await releaseExerciseEditors(current)
+    if (released.err) {
+      return released
+    }
   }
 
   const moveResult = await langs.moveProjectsDirectory(newFsPath, onUpdate)
-  if (moveResult.err) {
+  if (moveResult.err && moveResult.val instanceof ProjectsDirMoveRefusedError) {
     return moveResult
+  }
+  if (moveResult.err) {
+    // A move that stopped part way may have recorded either folder; show whichever it did.
+    const settings = await langs.listSettings()
+    if (settings.ok) {
+      resources.projectsDirectory = settings.val.projects_dir
+    }
+    await refreshLocalExercises(actionContext)
+    const where = resources.projectsDirectory ?? current
+    return Err(
+      new ProjectsDirMoveError(moveResult.val, where ? `Your exercises are now in ${where}.` : ""),
+    )
   }
 
   resources.projectsDirectory = newFsPath

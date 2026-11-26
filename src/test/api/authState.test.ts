@@ -17,8 +17,10 @@ function harness(answers: boolean[] = []): {
     const answer = remaining.shift()
     return answer === undefined ? Err(new Error("check failed")) : Ok(answer)
   })
+  const getSession = async (): Promise<unknown> =>
+    (await isAuthenticated()).map((answer) => (answer ? { kind: "mooc" } : undefined))
   const setLoggedIn = vi.fn()
-  const authState = createAuthState(new Ok({ isAuthenticated } as unknown as Langs))
+  const authState = createAuthState(new Ok({ getSession } as unknown as Langs))
   authState.subscribe(setLoggedIn)
 
   return {

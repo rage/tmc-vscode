@@ -33,7 +33,6 @@ type Budget = Record<string, Record<string, number>>
 const BUDGET: Budget = {
   "src/actions/downloadOrUpdateExercises.ts": { progressNotification: 1 },
   "src/api/aiUseGate.ts": { warningNotification: 1 },
-  "src/commands/addNewCourse.ts": { reportError: 1, withOperation: 1 },
   "src/commands/changeTmcDataPath.ts": {
     errorNotification: 1,
     notification: 1,
@@ -73,14 +72,14 @@ const BUDGET: Budget = {
   "src/commands/wipe.ts": { errorNotification: 1, warningNotification: 1, withOperation: 1 },
   "src/extension.ts": {
     errorNotification: 2,
-    notification: 1,
+    notification: 2,
     offer: 1,
     statusMessage: 1,
     warningNotification: 2,
     withProgress: 1,
   },
   "src/init/commands.ts": { reportError: 1, statusMessage: 1 },
-  "src/init/ensureLangsUpdated.ts": { progressNotification: 1 },
+  "src/init/ensureLangsUpdated.ts": { progressNotification: 1, warningNotification: 1 },
   "src/panels/TmcPanel.ts": { offer: 1 },
   "src/panels/router.ts": { reportError: 1 },
   "src/storage/migration/exerciseData.ts": { progressNotification: 1, warningNotification: 1 },

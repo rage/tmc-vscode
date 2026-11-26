@@ -80,6 +80,15 @@ export default class Settings implements vscode.Disposable {
     return Settings._configuration().get<string>("javaHome", "").trim()
   }
 
+  /** VS Code's own proxy settings (`http.proxy`, `http.noProxy`), which the CLI cannot read. */
+  public getHttpProxy(): { proxy: string; noProxy: string[] } {
+    const http = vscode.workspace.getConfiguration("http")
+    return {
+      proxy: http.get<string>("proxy", "").trim(),
+      noProxy: http.get<string[]>("noProxy", []),
+    }
+  }
+
   /**
    * Whether the student can add courses.mooc.fi courses (`testMyCode.experimental.coursesMoocFi`).
    * Courses already added keep working either way.
