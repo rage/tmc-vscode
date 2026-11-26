@@ -253,8 +253,11 @@ test("a course is found and added from the keyboard alone", async ({ context, pa
     page.getByRole("searchbox", { name: "Search courses and organizations" }),
   ).toBeFocused()
   await page.keyboard.type("everything")
-  await page.keyboard.press("Tab")
+  // Tab only once the list shows the search's result, as a user would.
   const add = page.getByRole("button", { name: "Add Introduction to everything" })
+  await expect(add).toBeVisible()
+  await expect(page.getByRole("button", { name: "Add Python Programming 2026" })).toBeHidden()
+  await page.keyboard.press("Tab")
   await expect(add).toBeFocused()
   await page.keyboard.press("Enter")
   const posted = await page.evaluate(
