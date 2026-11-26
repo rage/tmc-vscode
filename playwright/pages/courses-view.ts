@@ -115,7 +115,7 @@ export class CoursesViewPage extends TmcPage {
   public async startMoocLogin(): Promise<AddCoursePage> {
     const addCourse = await this.openAddCourse()
     // Above the listings when logged out, in the courses.mooc.fi section with a tmc.mooc.fi login.
-    await this.webview.getByRole("button", { name: "Log In", exact: true }).click()
+    await addCourse.webview.getByRole("button", { name: "Log In", exact: true }).click()
     return addCourse
   }
 
