@@ -164,7 +164,9 @@ export async function launchVsCode(profile: Profile): Promise<ElectronApplicatio
   await seedLangsClis(profile)
   return electron.launch({
     executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
-    args: launchArgs(profile.userDataDir, false, { extensionsDir: profile.extensionsDir }),
+    // The real keychain, as a user's VS Code has: with the mock one, macOS runs intermittently
+    // showed 4.x without 3.5.5's courses.
+    args: launchArgs(profile.userDataDir, false, { extensionsDir: profile.extensionsDir }, false),
     env: mockBackendEnv(profile.configDir, profile.projectsDir),
   })
 }

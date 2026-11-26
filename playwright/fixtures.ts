@@ -93,6 +93,7 @@ export function launchArgs(
   userDataDir: string,
   isWorkspaceTrustEnabled: boolean,
   extension: ExtensionSource,
+  isKeychainMocked: boolean,
 ): string[] {
   return [
     "--disable-gpu-sandbox",
@@ -104,9 +105,7 @@ export function launchArgs(
     "--disable-backgrounding-occluded-windows",
     "--disable-background-timer-throttling",
     "--disable-updates",
-    // The run's own HOME has no login keychain, so macOS would show a native "Keychain Not Found"
-    // dialog that Playwright cannot see, stalling the window.
-    ...(isWorkspaceTrustEnabled && process.platform === "darwin" ? ["--use-mock-keychain"] : []),
+    ...(isKeychainMocked ? ["--use-mock-keychain"] : []),
     // The trust prompt interrupts at unpredictable points once a course workspace opens.
     ...(isWorkspaceTrustEnabled ? [] : ["--disable-workspace-trust"]),
     "developmentPath" in extension
@@ -273,7 +272,14 @@ export const customTestFixtures: Fixtures<
     await resetMockBackend("tmc")
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
-      args: launchArgs(userDataDir, isWorkspaceTrustEnabled, { developmentPath: rootPath }),
+      // On macOS the first launch against the login keychain stalls the window behind a native
+      // keychain dialog Playwright cannot see; a run's own HOME has no keychain at all.
+      args: launchArgs(
+        userDataDir,
+        isWorkspaceTrustEnabled,
+        { developmentPath: rootPath },
+        process.platform === "darwin",
+      ),
       env: {
         ...mockBackendEnv(configDir, projectsDir),
         ...(isWorkspaceTrustEnabled && { HOME: join(userDataDir, "home") }),
