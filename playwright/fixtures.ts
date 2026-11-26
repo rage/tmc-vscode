@@ -121,9 +121,11 @@ export function launchArgs(
   ]
 }
 
-// The only login is the device flow; a seeded tmc token lets tmc specs start logged in
-// and covers the "existing credentials keep working" path.
-function seedTmcCredentials(configDir: string): void {
+/**
+ * Leaves a tmc.mooc.fi session in `configDir`, as a pre-4.0 password login did. The only login
+ * is the device flow, so this is how tmc specs start logged in.
+ */
+export function seedTmcCredentials(configDir: string): void {
   const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
   fs.mkdirSync(clientConfigDir, { recursive: true })
   fs.writeFileSync(join(clientConfigDir, "credentials.json"), JSON.stringify(tmcCredentials()))

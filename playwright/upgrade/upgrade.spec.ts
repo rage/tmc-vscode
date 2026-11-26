@@ -5,7 +5,7 @@ import { basename, join } from "node:path"
 import { expect, test } from "@playwright/test"
 import type { FrameLocator, Page, TestInfo } from "@playwright/test"
 
-import { closeElectron, resetMockBackend, tmcWebview } from "../fixtures"
+import { closeElectron, resetMockBackend, seedTmcCredentials, tmcWebview } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import type { Profile } from "./installedExtension"
 import {
@@ -216,6 +216,71 @@ async function runUpgradeScenario(
   }
 }
 
+/** Adds a course in 4.x and one in 3.5.5, then installs the rollback build and 4.x again. */
+async function runRollbackScenario(testInfo: TestInfo): Promise<void> {
+  for (const vsix of [NEXT_VSIX, ROLLBACK_VSIX]) {
+    expect(fs.existsSync(vsix), `${vsix} is missing; run bin/package*Vsix.sh`).toBe(true)
+  }
+  const parentDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-upgrade-"))
+  const profile = createProfile(parentDir)
+  const bothCourses = [PYTHON_COURSE, JAVA_COURSE]
+
+  try {
+    await resetMockBackend("tmc")
+    seedTmcCredentials(profile.configDir)
+    await installVsix(profile, NEXT_VSIX)
+
+    await test.step("4.x: add a course", async () => {
+      await withVsCode(profile, "next", testInfo, async ({ page, webview }) => {
+        const coursesView = new CoursesViewPage(page, webview)
+        await coursesView.goto()
+        await coursesView.addNewCourse(PYTHON_COURSE.title)
+        await expect(coursesView.row(PYTHON_COURSE.title)).toBeVisible()
+      })
+      expect(readGlobalState(profile)).toHaveProperty(
+        ["user-data-v1", "courses", "0", "name"],
+        PYTHON_COURSE.name,
+      )
+    })
+
+    // Before the rollback build, so this course is only in `user-data-v1` when 4.x's is imported.
+    await test.step("downgrade: 3.5.5 shows 4.x's course, and adds one", async () => {
+      await installVsix(profile, await legacyVsix())
+      await withVsCode(profile, "downgrade", testInfo, async ({ page }) => {
+        const legacy = new LegacyTmcPage(page)
+        await legacy.openCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
+        await legacy.addCourse(JAVA_COURSE.title, JAVA_COURSE.name)
+      })
+    })
+
+    await test.step("rollback build: imports 4.x's data and keeps 3.5.5's course", async () => {
+      await installVsix(profile, ROLLBACK_VSIX)
+      await withVsCode(profile, "rollback", testInfo, async ({ page }) => {
+        const legacy = new LegacyTmcPage(page)
+        await legacy.openMyCourses()
+        for (const course of bothCourses) {
+          await expect(legacy.courseHeading(course.title, course.name)).toBeVisible()
+        }
+        await expect(legacy.menuItem("Log out")).toBeVisible()
+        await expectNoErrorNotification(page)
+      })
+    })
+
+    await test.step("re-upgrade: 4.x shows both courses", async () => {
+      await installVsix(profile, NEXT_VSIX)
+      await withVsCode(profile, "re-upgrade", testInfo, (session) =>
+        expectKeptBy4x(
+          session,
+          bothCourses.map((course) => course.title),
+          false,
+        ),
+      )
+    })
+  } finally {
+    fs.rmSync(parentDir, { recursive: true, force: true, maxRetries: 5 })
+  }
+}
+
 test.describe(() => {
   test.describe.configure({ timeout: 10 * 60_000 })
 
@@ -229,5 +294,9 @@ test.describe(() => {
       "tmc-langs 0.42.1 drops exercises 0.39.9 downloaded from course_config.toml; 0.42.2 keeps them",
     )
     await runUpgradeScenario(testInfo, { isExerciseChecked: true })
+  })
+
+  test("a 4.x user who rolls back keeps the courses they add in 3.5.5", async ({}, testInfo) => {
+    await runRollbackScenario(testInfo)
   })
 })
