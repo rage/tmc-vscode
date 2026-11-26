@@ -177,6 +177,11 @@
     return terms.every((term) => text.includes(term))
   }
 
+  // Any session lists the organizations; with a legacy tmc.mooc.fi login, courses.mooc.fi
+  // still asks for its own in its section.
+  const isLoggedOut = $derived(
+    organizations.state === "loaded" && organizations.value.kind === "loggedOut",
+  )
   const isMoocListed = $derived(!(mooc.state === "loaded" && mooc.value.kind === "disabled"))
   const shownMoocCourses = $derived(
     mooc.state === "loaded" && mooc.value.kind === "listed"
@@ -294,140 +299,142 @@
   <PanelHeader title="Add Course" {toolbar} />
   <p class="muted intro">Pick the course you're taking.</p>
 
-  <div class="search">
-    <vscode-icon name="search" aria-hidden="true"></vscode-icon>
-    <input
-      type="search"
-      placeholder="Search courses"
-      aria-label="Search courses and organizations"
-      bind:value={query.current}
-    />
-  </div>
+  {#if isLoggedOut}
+    <Notice kind="info" title="Not logged in">
+      <p>Log in with your MOOC.fi account to see the courses you can add.</p>
+      {#snippet actions()}
+        <Button onclick={logIn}>Log In</Button>
+      {/snippet}
+    </Notice>
+  {:else}
+    <div class="search">
+      <vscode-icon name="search" aria-hidden="true"></vscode-icon>
+      <input
+        type="search"
+        placeholder="Search courses"
+        aria-label="Search courses and organizations"
+        bind:value={query.current}
+      />
+    </div>
 
-  {#if isMoocListed}
-    <Section title={MOOC}>
-      {#if mooc.state === "loading"}
-        <Spinner label="Loading your courses…" />
-      {:else if mooc.state === "failed"}
-        <ErrorNotice error={mooc.error} title="Could not list your {MOOC} courses">
+    {#if isMoocListed}
+      <Section title={MOOC}>
+        {#if mooc.state === "loading"}
+          <Spinner label="Loading your courses…" />
+        {:else if mooc.state === "failed"}
+          <ErrorNotice error={mooc.error} title="Could not list your {MOOC} courses">
+            {#snippet actions()}
+              <Button secondary onclick={() => void loadMooc()}>Try Again</Button>
+            {/snippet}
+          </ErrorNotice>
+        {:else if mooc.value.kind === "loggedOut"}
+          <Notice kind="info" title="Not logged in">
+            <p>Log in with your MOOC.fi account to see the courses you are enrolled in.</p>
+            {#snippet actions()}
+              <Button onclick={logIn}>Log In</Button>
+            {/snippet}
+          </Notice>
+        {:else if mooc.value.kind === "listed" && mooc.value.items.length === 0}
+          <p>You are not enrolled on any {MOOC} course with programming exercises yet.</p>
+          <div class="actions">
+            <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
+          </div>
+        {:else if shownMoocCourses.length === 0}
+          {@render noMatches()}
+        {:else}
+          {@render courseList(shownMoocCourses, `${MOOC} courses`)}
+        {/if}
+        {#if mooc.state === "loaded" && mooc.value.kind === "listed" && mooc.value.items.length > 0}
+          <p class="muted">
+            These are the courses you are enrolled on, and the ones you teach. Enroll on {MOOC}
+            to see more here.
+          </p>
+          <div class="actions">
+            <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
+          </div>
+        {/if}
+      </Section>
+    {/if}
+
+    <Section title={TMC}>
+      {#if browsedOrganization}
+        <div class="organization-header">
+          <ToolbarButton
+            icon="arrow-left"
+            label="Back to Organizations"
+            onclick={leaveOrganization}
+          />
+          <h3 bind:this={organizationHeading} tabindex="-1">{browsedOrganization.name}</h3>
+        </div>
+        {#if organizationCourses.state === "loading"}
+          <Spinner label="Loading the courses of {browsedOrganization.name}…" />
+        {:else if organizationCourses.state === "failed"}
+          <ErrorNotice
+            error={organizationCourses.error}
+            title="Could not list the courses of {browsedOrganization.name}"
+          >
+            {#snippet actions()}
+              <Button
+                secondary
+                onclick={() =>
+                  browsedOrganization && void loadOrganizationCourses(browsedOrganization.slug)}
+              >
+                Try Again
+              </Button>
+            {/snippet}
+          </ErrorNotice>
+        {:else if organizationCourses.value.length === 0}
+          <p class="muted">This organization has no courses.</p>
+        {:else if shownOrganizationCourses.length === 0}
+          {@render noMatches()}
+        {:else}
+          {@render courseList(shownOrganizationCourses, `Courses of ${browsedOrganization.name}`)}
+        {/if}
+      {:else if organizations.state === "loading"}
+        <Spinner label="Loading the organizations…" />
+      {:else if organizations.state === "failed"}
+        <!-- Most students have no course here, so its failure is news, not an error, and the
+           cause is not theirs to fix. -->
+        {@const detailsId = organizations.error.detailsId}
+        <Notice kind="info" title="The {TMC} course list is unavailable">
+          <p>Try again later.</p>
           {#snippet actions()}
-            <Button secondary onclick={() => void loadMooc()}>Try Again</Button>
-          {/snippet}
-        </ErrorNotice>
-      {:else if mooc.value.kind === "loggedOut"}
-        <Notice kind="info" title="Not logged in">
-          <p>Log in with your MOOC.fi account to see the courses you are enrolled in.</p>
-          {#snippet actions()}
-            <Button onclick={logIn}>Log In</Button>
+            <Button secondary onclick={() => void loadOrganizations()}>Try Again</Button>
+            {#if detailsId !== undefined}
+              <Button
+                secondary
+                onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}
+              >
+                Show Details
+              </Button>
+            {/if}
           {/snippet}
         </Notice>
-      {:else if mooc.value.kind === "listed" && mooc.value.items.length === 0}
-        <p>You are not enrolled on any {MOOC} course with programming exercises yet.</p>
-        <div class="actions">
-          <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
-        </div>
-      {:else if shownMoocCourses.length === 0}
+      {:else if organizations.value.kind === "listed" && organizations.value.items.length === 0}
+        <p class="muted">{TMC} lists no organizations.</p>
+      {:else if shownOrganizations.length === 0}
         {@render noMatches()}
       {:else}
-        {@render courseList(shownMoocCourses, `${MOOC} courses`)}
-      {/if}
-      {#if mooc.state === "loaded" && mooc.value.kind === "listed" && mooc.value.items.length > 0}
-        <p class="muted">
-          These are the courses you are enrolled on, and the ones you teach. Enroll on {MOOC}
-          to see more here.
-        </p>
-        <div class="actions">
-          <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>
-        </div>
+        <p class="muted">Courses on {TMC} are listed under their organization.</p>
+        <ul class="cards" aria-label="{TMC} organizations">
+          {#each shownOrganizations as organization (organization.slug)}
+            <CatalogCard name={organization.name} description={organization.description}>
+              {#snippet action()}
+                <Button
+                  secondary
+                  data-organization={organization.slug}
+                  aria-label="Show the courses of {organization.name}"
+                  onclick={() => void browse(organization)}
+                >
+                  Show Courses
+                </Button>
+              {/snippet}
+            </CatalogCard>
+          {/each}
+        </ul>
       {/if}
     </Section>
   {/if}
-
-  <Section title={TMC}>
-    {#if browsedOrganization}
-      <div class="organization-header">
-        <ToolbarButton
-          icon="arrow-left"
-          label="Back to Organizations"
-          onclick={leaveOrganization}
-        />
-        <h3 bind:this={organizationHeading} tabindex="-1">{browsedOrganization.name}</h3>
-      </div>
-      {#if organizationCourses.state === "loading"}
-        <Spinner label="Loading the courses of {browsedOrganization.name}…" />
-      {:else if organizationCourses.state === "failed"}
-        <ErrorNotice
-          error={organizationCourses.error}
-          title="Could not list the courses of {browsedOrganization.name}"
-        >
-          {#snippet actions()}
-            <Button
-              secondary
-              onclick={() =>
-                browsedOrganization && void loadOrganizationCourses(browsedOrganization.slug)}
-            >
-              Try Again
-            </Button>
-          {/snippet}
-        </ErrorNotice>
-      {:else if organizationCourses.value.length === 0}
-        <p class="muted">This organization has no courses.</p>
-      {:else if shownOrganizationCourses.length === 0}
-        {@render noMatches()}
-      {:else}
-        {@render courseList(shownOrganizationCourses, `Courses of ${browsedOrganization.name}`)}
-      {/if}
-    {:else if organizations.state === "loading"}
-      <Spinner label="Loading the organizations…" />
-    {:else if organizations.state === "failed"}
-      <!-- Most students have no course here, so its failure is news, not an error, and the
-           cause is not theirs to fix. -->
-      {@const detailsId = organizations.error.detailsId}
-      <Notice kind="info" title="The {TMC} course list is unavailable">
-        <p>Try again later.</p>
-        {#snippet actions()}
-          <Button secondary onclick={() => void loadOrganizations()}>Try Again</Button>
-          {#if detailsId !== undefined}
-            <Button
-              secondary
-              onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}
-            >
-              Show Details
-            </Button>
-          {/if}
-        {/snippet}
-      </Notice>
-    {:else if organizations.value.kind === "loggedOut"}
-      <Notice kind="info" title="Not logged in">
-        <p>Log in with your MOOC.fi account to see the courses on {TMC}.</p>
-        {#snippet actions()}
-          <Button secondary onclick={logIn}>Log In</Button>
-        {/snippet}
-      </Notice>
-    {:else if organizations.value.items.length === 0}
-      <p class="muted">{TMC} lists no organizations.</p>
-    {:else if shownOrganizations.length === 0}
-      {@render noMatches()}
-    {:else}
-      <p class="muted">Courses on {TMC} are listed under their organization.</p>
-      <ul class="cards" aria-label="{TMC} organizations">
-        {#each shownOrganizations as organization (organization.slug)}
-          <CatalogCard name={organization.name} description={organization.description}>
-            {#snippet action()}
-              <Button
-                secondary
-                data-organization={organization.slug}
-                aria-label="Show the courses of {organization.name}"
-                onclick={() => void browse(organization)}
-              >
-                Show Courses
-              </Button>
-            {/snippet}
-          </CatalogCard>
-        {/each}
-      </ul>
-    {/if}
-  </Section>
 </div>
 
 <style>

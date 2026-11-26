@@ -585,6 +585,14 @@ async function activateInner(
     init.registerSettingsCallbacks(readyContext)
     const account = new AccountStatusBarItem(authState)
     authState.subscribe(() => account.update(authState))
+    // Only on a login or logout: a session naming its account changes no listing.
+    let isAddCourseLoggedIn = authState.loggedIn
+    authState.subscribe((loggedIn) => {
+      if (loggedIn !== isAddCourseLoggedIn) {
+        isAddCourseLoggedIn = loggedIn
+        TmcPanel.reloadAddCourse()
+      }
+    })
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
       accountLabel: () => accountLabel(authState.session),

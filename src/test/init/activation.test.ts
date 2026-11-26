@@ -37,6 +37,7 @@ const recorded = vi.hoisted(() => ({
   panelTypes: [] as string[],
   /** How many times activation registered the panel serializer. */
   serializerRegistrations: 0,
+  addCourseReloads: 0,
   uiDisposals: 0,
   windowStateListeners: [] as ((state: { focused: boolean }) => void)[],
 }))
@@ -171,6 +172,9 @@ vi.mock("../../panels/TmcPanel", () => ({
     showSubmissionViews: () => ({ dispose: () => {} }),
     showLoginScreens: () => ({ dispose: () => {} }),
     isAnyScreenVisible: () => false,
+    reloadAddCourse: () => {
+      recorded.addCourseReloads += 1
+    },
     registerSerializers: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }
@@ -367,6 +371,7 @@ function resetActivationRecording(): void {
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
   recorded.serializerRegistrations = 0
+  recorded.addCourseReloads = 0
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
   courseRefresh.runs = 0
@@ -1315,6 +1320,23 @@ suite("status bar", function () {
     await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
     expect(account.text).toContain("Logged Out")
+  })
+
+  test("a login or logout reloads the add-course screen, and a check that changes neither does not", async function () {
+    langsStub.authenticated = true
+    vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
+    await activate(createContext())
+    const logout = langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>
+
+    await logout(false)
+    expect(recorded.addCourseReloads).toBe(0)
+
+    langsStub.authenticated = false
+    await logout(false)
+    expect(recorded.addCourseReloads).toBe(1)
+
+    await (langsStub.handlers.get("login") as () => Promise<void>)()
+    expect(recorded.addCourseReloads).toBe(2)
   })
 
   // The other credential may still be good, so a rejected one is checked, not trusted.

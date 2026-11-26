@@ -77,6 +77,10 @@ export const addCourseHandlers = {
       if (!panel) {
         return Err(NOT_SHOWN)
       }
+      // tmc.mooc.fi lists its organizations to anyone, but its courses need a login to add.
+      if (!actionContext.authState.loggedIn) {
+        return Ok({ kind: "loggedOut" })
+      }
       const listing = await actions.listTmcOrganizations(actionContext)
       if (listing.err) {
         if (listing.val instanceof AuthorizationError) {
@@ -104,6 +108,9 @@ export const addCourseHandlers = {
       const panel = shownAddCourse(host, message.sourcePanel.id)
       if (!panel) {
         return Err(NOT_SHOWN)
+      }
+      if (!actionContext.authState.loggedIn) {
+        return Err(LOGGED_OUT)
       }
       const { organizationSlug } = message
       const organization = catalogOf(panel.id).organizations.get(organizationSlug)
@@ -184,6 +191,7 @@ export const addCourseHandlers = {
 } satisfies Partial<HandlerMap>
 
 const NOT_SHOWN = new Error("The add-course screen is no longer shown.")
+const LOGGED_OUT = new Error("Log in to see the courses.")
 
 /** A listed course, as `addCourse` needs it. */
 interface ListedCourse {
