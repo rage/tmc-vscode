@@ -91,6 +91,12 @@ const deferral = vi.hoisted(() => ({ isAllowed: false }))
 
 // jest-mock-vscode lacks the `env` and `extensions` namespaces, which activation reads, and its
 // registration functions return nothing where the real API returns a `Disposable`.
+// Past the redesign, so that an update from a redesigned version can be tested.
+vi.mock("../../config/constants", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../config/constants")>()),
+  EXTENSION_VERSION: "4.2.0",
+}))
+
 vi.mock("vscode", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   return {
@@ -1187,7 +1193,7 @@ suite("the first start of a new version", function () {
   })
 
   // Opening a panel, or even a toast, unasked on every update covers whatever the user was doing.
-  test("a major update tells once what moved, with the changelog a click away", async function () {
+  test("an update from before the redesign tells once what moved, with the changelog a click away", async function () {
     sessionState.previousVersion = "0.1.0"
 
     await activate(createContext())

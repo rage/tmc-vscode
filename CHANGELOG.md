@@ -2,9 +2,9 @@
 
 ## [Unreleased]
 
-## [4.1.0] - 2026-11-26
+## [3.9.0] - 2026-11-26
 
-Version 4 is a redesign of TestMyCode. Your courses, downloaded exercises and login carry over from 3.5.5.
+This pre-release previews TestMyCode 4, a redesign. Your courses, downloaded exercises and login carry over from 3.5.5.
 
 ### New
 
