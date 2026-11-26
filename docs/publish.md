@@ -15,9 +15,9 @@ A release is published by pushing a tag. CI (`.github/workflows/build-and-upload
 The marketplaces take only `X.Y.Z` versions, so a pre-release is told apart by its tag, not its version:
 
 - `vX.Y.Z` publishes a stable release.
-- `vX.Y.Z-prerelease` publishes the same build with `--pre-release`. Users get it only after choosing "Switch to Pre-Release Version" on the extension's page in VS Code; see [insider.md](insider.md).
+- `vX.Y.Z-prerelease` publishes the same build with `--pre-release`, and with `testMyCode.experimental.coursesMoocFi` on by default (`bin/package.bash`). Users get it only after choosing "Switch to Pre-Release Version" on the extension's page in VS Code; see [insider.md](insider.md).
 
-VS Code updates a pre-release user to the highest version, stable or pre-release. Follow the marketplace's convention of even minor versions for stable releases and odd ones for pre-releases (for example stable 4.0.x and 4.2.x, pre-release 4.1.x).
+VS Code updates a pre-release user to the highest version, stable or pre-release. Follow the marketplace's convention of even minor versions for stable releases and odd ones for pre-releases (for example stable 4.0.x and 4.2.x, pre-release 4.1.x). The pre-releases before 4.0.0 are 3.9.x, so that 4.0.0 replaces them.
 
 ## Steps
 

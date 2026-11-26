@@ -229,6 +229,8 @@ let lastBackgroundRefreshAt = 0
 
 /** Set by a logout and cleared by a login, so a later start does not report an expired session. */
 const LOGGED_OUT_KEY = "loggedOut"
+/** The first version with the redesigned UI; an update from before it says what moved. */
+const REDESIGN_VERSION = "3.9.0"
 
 function refreshInBackground(
   ready: ReadyActionContext,
@@ -834,7 +836,7 @@ async function activateInner(
       isUnasked: true,
     }).catch((e) => Logger.warn("Could not open the walkthrough", e))
   } else if (readyContext && versionChange === "updated") {
-    if ((semVerCompare(EXTENSION_VERSION, previousVersion ?? "", "major") ?? 0) > 0) {
+    if ((semVerCompare(previousVersion ?? "", REDESIGN_VERSION, "patch") ?? 0) < 0) {
       void dialog.notification(
         `TestMyCode ${EXTENSION_VERSION} looks different: your courses are in the TestMyCode view, ` +
           "Run Tests and Submit are buttons in the editor title, and the old Ctrl+Shift+T, C and A " +
