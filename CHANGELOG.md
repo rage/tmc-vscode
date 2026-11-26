@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises and login carry over from 3.5.5.
+## [4.1.0] - 2026-11-26
+
+Version 4 is a redesign of TestMyCode. Your courses, downloaded exercises and login carry over from 3.5.5.
 
 ### New
 
@@ -20,7 +22,7 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - Your MOOC.fi account's name and email show in the status bar, the Accounts menu and the account menu. An old tmc.mooc.fi login from an earlier version is shown as one.
 - Results of a submission link to its page on courses.mooc.fi, a submission can be cancelled while it uploads, and a grading still running when VS Code restarts can be waited for again.
 - After a major update, one notification says what moved and opens the changelog.
-- **courses.mooc.fi courses (experimental).** Turn on `testMyCode.experimental.coursesMoocFi` to add the courses you are enrolled in on courses.mooc.fi. It is off by default; a course already added keeps working when it is off.
+- **courses.mooc.fi courses (experimental).** Turn on `testMyCode.experimental.coursesMoocFi` to add the courses you are enrolled in on courses.mooc.fi. It is on by default in pre-release versions and off in stable ones; a course already added keeps working when it is off.
 
 ### Changed
 
@@ -44,7 +46,7 @@ Version 4.0.0 is a redesign of TestMyCode. Your courses, downloaded exercises an
 - On Windows the TestMyCode tools are kept in the local profile instead of the roaming one, and on musl Linux the musl build is used. A security policy that blocks them is named, with advice to ask IT support.
 - VS Code's `http.proxy` settings are passed to the TestMyCode tools.
 - Dates in sentences are formatted in English with their time zone. Screens keep focus after actions and dismissals, and the login code is spelled out for screen readers.
-- Updated TMC-langs to 0.42.1.
+- Updated TMC-langs to 0.43.1.
 
 ### Removed
 
