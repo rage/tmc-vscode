@@ -298,9 +298,16 @@ export const customTestFixtures: Fixtures<
 
       if (isTracing) {
         const isDiscarded = traceMode.startsWith("retain-on-") && testInfo.status === "passed"
-        await electronApp
-          .context()
-          .tracing.stop(isDiscarded ? {} : { path: testInfo.outputPath("trace.zip") })
+        // Not `trace.zip`: Playwright writes its own trace there after teardown, overwriting this.
+        const tracePath = testInfo.outputPath("vscode-trace.zip")
+        await electronApp.context().tracing.stop(isDiscarded ? {} : { path: tracePath })
+        if (!isDiscarded) {
+          testInfo.attachments.push({
+            name: "trace",
+            path: tracePath,
+            contentType: "application/zip",
+          })
+        }
       }
     } finally {
       await closeElectron(electronApp)
