@@ -156,6 +156,11 @@ async function runUpgradeScenario(
           await legacy.closeExercise(CLOSED_EXERCISE.label)
           await expect(legacy.exerciseStatus(OPENED_EXERCISE.label)).toHaveText("opened")
         })
+        // Tells a 3.5.5 that never saved its courses apart from a 4.x that did not read them.
+        expect(readGlobalState(profile)).toHaveProperty(
+          ["user-data-v1", "courses", "0", "name"],
+          PYTHON_COURSE.name,
+        )
         const dir = exerciseDir(profile, OPENED_EXERCISE.slug)
         expect(dir).toBeDefined()
         const file = join(dir ?? "", ...EDITED_FILE)
