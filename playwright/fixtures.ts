@@ -104,9 +104,9 @@ export function launchArgs(
     "--disable-backgrounding-occluded-windows",
     "--disable-background-timer-throttling",
     "--disable-updates",
-    // A run's own HOME (`isWorkspaceTrustEnabled`) has no login keychain, so macOS would show a
-    // native "Keychain Not Found" dialog that Playwright cannot see, stalling the window.
-    ...(process.platform === "darwin" ? ["--use-mock-keychain"] : []),
+    // The run's own HOME has no login keychain, so macOS would show a native "Keychain Not Found"
+    // dialog that Playwright cannot see, stalling the window.
+    ...(isWorkspaceTrustEnabled && process.platform === "darwin" ? ["--use-mock-keychain"] : []),
     // The trust prompt interrupts at unpredictable points once a course workspace opens.
     ...(isWorkspaceTrustEnabled ? [] : ["--disable-workspace-trust"]),
     "developmentPath" in extension
