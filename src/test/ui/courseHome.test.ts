@@ -95,6 +95,17 @@ function onDisk(id: number, exerciseSlug: string, status: ExerciseStatus): Works
   }
 }
 
+const isAllDone = (course: LocalCourseData): boolean =>
+  buildCourseHomeView(contextFor(course), LocalCourseDataNs.getCourseId(course), NOW).unwrap()
+    .isAllDone
+
+const examDescription = (examAnswerableUntil: string): string | null =>
+  buildCourseHomeView(
+    contextFor(moocLocalCourse({ examAnswerableUntil })),
+    idOfMoocCourse(MOOC_COURSE_ID),
+    NOW,
+  ).unwrap().description
+
 suite("buildCourseHomeView", function () {
   test("gives each mooc row its tries and why a submission would be refused, and a locked chapter its lock", function () {
     const course = moocLocalCourse({
@@ -182,15 +193,8 @@ suite("buildCourseHomeView", function () {
   })
 
   test("says when an exam's answers close, and once they have, that it ended", function () {
-    const view = (examAnswerableUntil: string): string | null =>
-      buildCourseHomeView(
-        contextFor(moocLocalCourse({ examAnswerableUntil })),
-        idOfMoocCourse(MOOC_COURSE_ID),
-        NOW,
-      ).unwrap().description
-
-    expect(view("2999-06-01T12:00:00Z")).toMatch(/^An exam\. Its answers close on /)
-    expect(view("2020-06-01T12:00:00Z")).toBe("An exam. It ended on Jun 1, 2020.")
+    expect(examDescription("2999-06-01T12:00:00Z")).toMatch(/^An exam\. Its answers close on /)
+    expect(examDescription("2020-06-01T12:00:00Z")).toBe("An exam. It ended on Jun 1, 2020.")
   })
 
   test("says when a mooc course has ended and offers the version that continues it", function () {
@@ -610,10 +614,6 @@ suite("buildCourseHomeView", function () {
       exercises: [passed, tmcCourseExercise({ id: 3, name: "part01-03_todo" })],
     })
     const empty = tmcLocalCourse({ exercises: [] })
-
-    const isAllDone = (course: LocalCourseData): boolean =>
-      buildCourseHomeView(contextFor(course), LocalCourseDataNs.getCourseId(course), NOW).unwrap()
-        .isAllDone
 
     expect(isAllDone(done)).toBe(true)
     expect(isAllDone(notDone)).toBe(false)

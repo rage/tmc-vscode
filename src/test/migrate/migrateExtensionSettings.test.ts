@@ -18,6 +18,10 @@ suite("Extension settings migration", function () {
   let settingsMock: vscode.WorkspaceConfiguration
   let root: string
 
+  function expectWritten(section: string, value: unknown): void {
+    expect(settingsMock.update).toHaveBeenCalledWith(section, value, expect.anything())
+  }
+
   beforeEach(function () {
     memento = createMockMemento()
     settingsMock = createMockWorkspaceConfiguration()
@@ -85,10 +89,6 @@ suite("Extension settings migration", function () {
   })
 
   suite("between versions", function () {
-    function expectWritten(section: string, value: unknown): void {
-      expect(settingsMock.update).toHaveBeenCalledWith(section, value, expect.anything())
-    }
-
     test("should succeed with version 0.5.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_5_0(root))
       await migrateExtensionSettings(memento, settingsMock)

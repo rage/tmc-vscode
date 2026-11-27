@@ -56,7 +56,7 @@ vsCodeTest("can add new course", async ({ page, webview }) => {
     const addCourse = await coursesView.openAddCourse()
     await addCourse
       .section("tmc.mooc.fi")
-      .getByRole("button", { name: "Show the courses of Test Organization" })
+      .getByRole("button", { name: "Show courses of Test Organization" })
       .click()
     await addCourse.search("python course")
     const card = addCourse.card("Python Course")

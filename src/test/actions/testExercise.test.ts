@@ -190,16 +190,16 @@ suite("testExercise action", () => {
   })
 })
 
+function testBody(actionContext: ReadyActionContext) {
+  return (exercise: WorkspaceExercise) =>
+    testExercise(actionContext, exercise, noToken).then((result) =>
+      result.err ? failure("Exercise test run failed.", result.val) : Ok.EMPTY,
+    )
+}
+
 // Drives the action through the real `runForExercise`/`withOperation` boundary to prove
 // the busy notice is shown exactly once, as information rather than an error.
 suite("testExercise action, through the real runForExercise boundary", () => {
-  function testBody(actionContext: ReadyActionContext) {
-    return (exercise: WorkspaceExercise) =>
-      testExercise(actionContext, exercise, noToken).then((result) =>
-        result.err ? failure("Exercise test run failed.", result.val) : Ok.EMPTY,
-      )
-  }
-
   test("a busy rejection notifies exactly once and reports no error", async () => {
     let finishTest!: () => void
     const running = new Promise((resolve) => {

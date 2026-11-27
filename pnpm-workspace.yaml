@@ -15,7 +15,7 @@ minimumReleaseAgeIgnoreMissingTime: false
 # pnpm needs an exact version here and cannot read package.json's
 # `devEngines.runtime.version`; .github/actions/setup-node-pnpm asserts the two
 # agree, and that field is the one to edit.
-nodeVersion: 24.18.0
+nodeVersion: 24.22.3
 
 # Resolve as of lockfile time; the npm registry exposes no per-version time field,
 # so pnpm infers it.
@@ -63,10 +63,10 @@ patchedDependencies:
 overrides:
   # GHSA-v2hh-gcrm-f6hx: fast-uri mis-parses a backslash authority delimiter.
   # Reached via ajv in the mock backend's OpenAPI validation.
-  fast-uri@3: 3.1.4
+  fast-uri@3: 3.1.9
   # GHSA-52cp-r559-cp3m: js-yaml prototype pollution. @hey-api/json-schema-ref-parser
-  # pins the vulnerable 4.2.0; `pnpm run generate:langs-schema` exercises 4.3.0.
-  js-yaml@4: 4.3.0
+  # pins the vulnerable 4.2.0; `pnpm run generate:langs-schema` exercises 4.3.2.
+  js-yaml@4: 4.3.2
 
 # One shared lockfile on purpose: sharedWorkspaceLockfile and the link-protocol
 # settings (linkWorkspacePackages, preferWorkspacePackages, saveWorkspaceProtocol)

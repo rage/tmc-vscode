@@ -85,6 +85,14 @@ test("the harness build lists its scenarios", () => {
 })
 
 for (const scenarioId of SCENARIO_IDS) {
+  function check(name: string, body: () => Promise<void> | void): void {
+    test(name, async () => {
+      const knownFailure = KNOWN_FAILURES[`${scenarioId} › ${name}`]
+      test.fail(knownFailure !== undefined, knownFailure)
+      await body()
+    })
+  }
+
   test.describe(scenarioId, () => {
     let page: Page
     let cdp: CDPSession
@@ -113,14 +121,6 @@ for (const scenarioId of SCENARIO_IDS) {
     test.afterAll(async () => {
       await page.context().close()
     })
-
-    function check(name: string, body: () => Promise<void> | void): void {
-      test(name, async () => {
-        const knownFailure = KNOWN_FAILURES[`${scenarioId} › ${name}`]
-        test.fail(knownFailure !== undefined, knownFailure)
-        await body()
-      })
-    }
 
     const visible = () => nodes.filter((node) => !node.ignored)
     const byId = () => new Map(nodes.map((node) => [node.nodeId, node]))

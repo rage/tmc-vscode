@@ -2,7 +2,10 @@
 
 // Loaded by test-electron (see bin/runIntegrationTests.js) as --extensionTestsPath: runs the
 // bundled suite (dist/integration.spec.js) with mocha's tdd UI inside the extension host.
-const Mocha = require("mocha")
+// Mocha's entry is ESM: require() returns its namespace on the Node 20 that VS Code 1.100's
+// Electron ships, and the class itself on Node 22.12+.
+const mochaEntry = require("mocha")
+const Mocha = "default" in mochaEntry ? mochaEntry.default : mochaEntry
 const path = require("path")
 
 // Zero tests are zero failures, so a suite that stopped reaching the bundle or skipped every

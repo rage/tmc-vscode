@@ -32,6 +32,11 @@ suite("walkthrough", function () {
   let executeCommand: ReturnType<typeof vi.spyOn>
   const initialTabGroups = vscode.window.tabGroups
 
+  const opensWalkthrough = (): boolean =>
+    executeCommand.mock.calls.some(
+      (call: unknown[]) => call[0] === "workbench.action.openWalkthrough",
+    )
+
   beforeEach(function () {
     executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
   })
@@ -139,10 +144,6 @@ suite("walkthrough", function () {
       value: { onDidChangeTabs: tabsChanged.event },
       configurable: true,
     })
-    const opensWalkthrough = (): boolean =>
-      executeCommand.mock.calls.some(
-        (call: unknown[]) => call[0] === "workbench.action.openWalkthrough",
-      )
     const tabOpened = (input: unknown): void =>
       tabsChanged.fire({ opened: [{ input } as vscode.Tab], closed: [], changed: [] })
     vi.useFakeTimers()

@@ -33,38 +33,39 @@ interface FakeChildProcess extends FakeStream {
 const spawnedProcesses: FakeChildProcess[] = vi.hoisted(() => [])
 const killedPids: number[] = vi.hoisted(() => [])
 
-vi.mock("child_process", () => {
-  // Buffers are delivered decoded only once an encoding is set, the way a real
-  // stream does it -- otherwise a character split across two chunks is not observable.
-  const makeStream = (): FakeStream => {
-    const listeners = new Map<string, FakeListener[]>()
-    let decoder: InstanceType<typeof TextDecoder> | undefined
-    const stream: FakeStream = {
-      on: (event, listener) => {
-        listeners.set(event, [...(listeners.get(event) ?? []), listener])
-        return stream
-      },
-      setEncoding: (encoding) => {
-        decoder = new TextDecoder(encoding)
-        return stream
-      },
-      destroy: (): void => {},
-      emit: (event, ...args) => {
-        let params = args
-        if (event === "data" && decoder && Buffer.isBuffer(args[0])) {
-          const text = decoder.decode(args[0], { stream: true })
-          if (text === "") {
-            return
-          }
-          params = [text, ...args.slice(1)]
+// Buffers are delivered decoded only once an encoding is set, the way a real
+// stream does it -- otherwise a character split across two chunks is not observable.
+const makeStream = (): FakeStream => {
+  const listeners = new Map<string, FakeListener[]>()
+  let decoder: InstanceType<typeof TextDecoder> | undefined
+  const stream: FakeStream = {
+    on: (event, listener) => {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener])
+      return stream
+    },
+    setEncoding: (encoding) => {
+      decoder = new TextDecoder(encoding)
+      return stream
+    },
+    destroy: (): void => {},
+    emit: (event, ...args) => {
+      let params = args
+      if (event === "data" && decoder && Buffer.isBuffer(args[0])) {
+        const text = decoder.decode(args[0], { stream: true })
+        if (text === "") {
+          return
         }
-        for (const listener of listeners.get(event) ?? []) {
-          listener(...params)
-        }
-      },
-    }
-    return stream
+        params = [text, ...args.slice(1)]
+      }
+      for (const listener of listeners.get(event) ?? []) {
+        listener(...params)
+      }
+    },
   }
+  return stream
+}
+
+vi.mock("child_process", () => {
   return {
     spawn: (): FakeChildProcess => {
       const langsProcess: FakeChildProcess = {

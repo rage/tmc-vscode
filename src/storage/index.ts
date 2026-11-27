@@ -340,18 +340,18 @@ function parseReadable<T>(list: unknown[], schema: z.ZodType<T>): T[] {
   })
 }
 
+const unreadable = <T>(list: unknown[], schema: z.ZodType, kept: { id: T }[]): unknown[] => {
+  const keptIds = new Set(kept.map((course) => course.id))
+  return list.filter(
+    (course) => !isReadable(course, schema) && !keptIds.has((course as { id?: T } | null)?.id as T),
+  )
+}
+
 /** `written` with the stored courses this version could not read put back as they were. */
 function withUnreadableCourses(written: storage.UserData, stored: unknown): storage.UserData {
   const lists = storedCourseLists(stored)
   if (!lists) {
     return written
-  }
-  const unreadable = <T>(list: unknown[], schema: z.ZodType, kept: { id: T }[]): unknown[] => {
-    const keptIds = new Set(kept.map((course) => course.id))
-    return list.filter(
-      (course) =>
-        !isReadable(course, schema) && !keptIds.has((course as { id?: T } | null)?.id as T),
-    )
   }
   return {
     courses: [

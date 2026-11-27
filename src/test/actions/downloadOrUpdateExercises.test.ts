@@ -900,16 +900,16 @@ function recordedStatuses(
   )
 }
 
+// Mirrors what the CLI reports back for a leg that downloaded everything it was given.
+const downloadedAll = (ids: ExerciseIdentifier[]): Result<ExerciseDownloads, Error> =>
+  createDownloadResult(
+    ids.map((id) => ({ id, path: "/exercise" })),
+    [],
+  )
+
 suite("downloadOrUpdateExercises cancellation and progress", function () {
   const tmcIds = [idOfTmcExercise(1), idOfTmcExercise(2)]
   const moocIds = [idOfMoocExercise("mooc-1"), idOfMoocExercise("mooc-2")]
-
-  // Mirrors what the CLI reports back for a leg that downloaded everything it was given.
-  const downloadedAll = (ids: ExerciseIdentifier[]): Result<ExerciseDownloads, Error> =>
-    createDownloadResult(
-      ids.map((id) => ({ id, path: "/exercise" })),
-      [],
-    )
 
   let cancel: () => void
   let token: vscode.CancellationToken

@@ -198,32 +198,32 @@ suite("paste action", () => {
   })
 })
 
+function moocWorkspaceContext(): {
+  actionContext: ReadyActionContext
+  exercise: WorkspaceExercise
+} {
+  const exercise = moocExercise
+  const actionContext = createMockActionContext({
+    startup: {
+      langs: {} as unknown as ReadyStartup["langs"],
+      userData: {
+        getCourse: () => Ok({ kind: "mooc", data: {} }),
+      } as unknown as ReadyStartup["userData"],
+      workspaceManager: {
+        getExercise: () => exercise,
+        get activeExercise() {
+          return exercise
+        },
+        getExerciseContaining: () => exercise,
+      } as unknown as ReadyStartup["workspaceManager"],
+    },
+  })
+  return { actionContext, exercise }
+}
+
 // Drives the action through the real `runForExercise`/`withOperation` boundary: the busy
 // notice is the boundary's to show, exactly once.
 suite("paste action, through the real runForExercise boundary", () => {
-  function moocWorkspaceContext(): {
-    actionContext: ReadyActionContext
-    exercise: WorkspaceExercise
-  } {
-    const exercise = moocExercise
-    const actionContext = createMockActionContext({
-      startup: {
-        langs: {} as unknown as ReadyStartup["langs"],
-        userData: {
-          getCourse: () => Ok({ kind: "mooc", data: {} }),
-        } as unknown as ReadyStartup["userData"],
-        workspaceManager: {
-          getExercise: () => exercise,
-          get activeExercise() {
-            return exercise
-          },
-          getExerciseContaining: () => exercise,
-        } as unknown as ReadyStartup["workspaceManager"],
-      },
-    })
-    return { actionContext, exercise }
-  }
-
   test("a busy rejection notifies exactly once and reports no error", async () => {
     let finish!: () => void
     const { actionContext } = moocWorkspaceContext()

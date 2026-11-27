@@ -200,6 +200,13 @@
       }
     },
     {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "no-redeclare": "off",
+        "no-inner-declarations": ["error", "functions", { "namespaces": "allow" }]
+      }
+    },
+    {
       "files": ["**/*.js", "**/*.cjs"],
       "rules": {
         "typescript/no-require-imports": "off",

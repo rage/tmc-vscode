@@ -69,6 +69,21 @@ suite("Storage migration safety", function () {
   let settings: vscode.WorkspaceConfiguration
   let storage: Storage
 
+  async function storeUnreadableCourses(): Promise<unknown> {
+    const unreadable = { courses: [{ id: "a" }, { id: 1, name: 2 }] }
+    await memento.update(v1.USER_DATA_KEY, unreadable)
+    return unreadable
+  }
+
+  /** Changes `user-data-v1` the way 3.5.5 would while 4.x is not running. */
+  async function asIf355Changed(change: (courses: V355UserData) => V355UserData): Promise<void> {
+    const stored = structuredClone(memento.get<V355UserData>(v1.USER_DATA_KEY))
+    if (!stored) {
+      throw new Error("4.x left no copy for 3.5.5")
+    }
+    await memento.update(v1.USER_DATA_KEY, change(stored))
+  }
+
   beforeEach(function () {
     Logger.configure(LogLevel.Verbose)
     context = createMockContext()
@@ -230,15 +245,6 @@ suite("Storage migration safety", function () {
         mooc_courses: [moocCourse],
       })
     })
-
-    /** Changes `user-data-v1` the way 3.5.5 would while 4.x is not running. */
-    async function asIf355Changed(change: (courses: V355UserData) => V355UserData): Promise<void> {
-      const stored = structuredClone(memento.get<V355UserData>(v1.USER_DATA_KEY))
-      if (!stored) {
-        throw new Error("4.x left no copy for 3.5.5")
-      }
-      await memento.update(v1.USER_DATA_KEY, change(stored))
-    }
 
     test("keeps every course when 3.5.5 changed nothing", async function () {
       expect((await migrate()).kind).toBe("done")
@@ -539,12 +545,6 @@ suite("Storage migration safety", function () {
   })
 
   suite("total failure", function () {
-    async function storeUnreadableCourses(): Promise<unknown> {
-      const unreadable = { courses: [{ id: "a" }, { id: 1, name: 2 }] }
-      await memento.update(v1.USER_DATA_KEY, unreadable)
-      return unreadable
-    }
-
     test("fails loudly without writing v3 over the old data", async function () {
       const unreadable = await storeUnreadableCourses()
 

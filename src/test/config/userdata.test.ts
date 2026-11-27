@@ -599,30 +599,30 @@ suite("UserData persistence round-trip", function () {
   })
 })
 
+/** A tmc course and a mooc course that share the slug `shared-slug`. */
+async function collidingCourses(): Promise<UserData> {
+  const [userData] = await makeUserData({
+    courses: [
+      tmcCourse({
+        id: 11,
+        name: "shared-slug",
+        exercises: [tmcExercise({ id: 101, name: "tmc_only" })],
+      }),
+    ],
+    mooc_courses: [
+      moocCourse({
+        id: "inst-11",
+        name: "shared-slug",
+        exercises: [moocExercise({ id: "mooc-ex-uuid", name: "mooc_only" })],
+      }),
+    ],
+  })
+  return userData
+}
+
 // By-slug lookups are qualified by backend, so a mooc course sharing a slug with a tmc
 // course stays reachable.
 suite("UserData slug collision across backends (Bug 3 regression)", function () {
-  /** A tmc course and a mooc course that share the slug `shared-slug`. */
-  async function collidingCourses(): Promise<UserData> {
-    const [userData] = await makeUserData({
-      courses: [
-        tmcCourse({
-          id: 11,
-          name: "shared-slug",
-          exercises: [tmcExercise({ id: 101, name: "tmc_only" })],
-        }),
-      ],
-      mooc_courses: [
-        moocCourse({
-          id: "inst-11",
-          name: "shared-slug",
-          exercises: [moocExercise({ id: "mooc-ex-uuid", name: "mooc_only" })],
-        }),
-      ],
-    })
-    return userData
-  }
-
   test("resolves the slug-colliding course itself per backend", async function () {
     const userData = await collidingCourses()
     expect(userData.getCourseBySlug("mooc", "shared-slug").unwrap().data.id).toBe("inst-11")
@@ -674,18 +674,18 @@ suite("UserData setExerciseAsPassed", function () {
   })
 })
 
-suite("UserData setMoocExerciseStanding", function () {
-  async function withPassedExercise(): ReturnType<typeof makeUserData> {
-    return makeUserData({
-      courses: [],
-      mooc_courses: [
-        moocCourse({
-          exercises: [moocExercise({ id: "exercise-uuid-1", name: "mooc_hello", passed: true })],
-        }),
-      ],
-    })
-  }
+async function withPassedExercise(): ReturnType<typeof makeUserData> {
+  return makeUserData({
+    courses: [],
+    mooc_courses: [
+      moocCourse({
+        exercises: [moocExercise({ id: "exercise-uuid-1", name: "mooc_hello", passed: true })],
+      }),
+    ],
+  })
+}
 
+suite("UserData setMoocExerciseStanding", function () {
   test("records the backend's standing and points in memory and in storage", async function () {
     const [userData, store] = await withPassedExercise()
     const result = await userData.setMoocExerciseStanding(
@@ -799,19 +799,19 @@ suite("UserData wipe", function () {
   })
 })
 
-suite("UserData write failures", function () {
-  /** A `UserData` whose every persistence write rejects. */
-  async function withFailingWrites(
-    data: storage.UserData,
-  ): Promise<[UserData, ReturnType<typeof vi.fn>]> {
-    const [userData, store] = await makeUserData(data)
-    const updateUserData = vi.fn(async () => {
-      throw new Error("globalState is full")
-    })
-    vi.spyOn(store, "updateUserData").mockImplementation(updateUserData)
-    return [userData, updateUserData]
-  }
+/** A `UserData` whose every persistence write rejects. */
+async function withFailingWrites(
+  data: storage.UserData,
+): Promise<[UserData, ReturnType<typeof vi.fn>]> {
+  const [userData, store] = await makeUserData(data)
+  const updateUserData = vi.fn(async () => {
+    throw new Error("globalState is full")
+  })
+  vi.spyOn(store, "updateUserData").mockImplementation(updateUserData)
+  return [userData, updateUserData]
+}
 
+suite("UserData write failures", function () {
   test("addCourse reports the failed write instead of appearing to succeed", async function () {
     const [userData, updateUserData] = await withFailingWrites({ courses: [], mooc_courses: [] })
     const result = await userData.addCourse(makeTmcKind(tmcCourse({ id: 7 })))

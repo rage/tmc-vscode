@@ -151,6 +151,30 @@ suite("CoursesTree", function () {
     return item ? (tree.resolveTreeItem(item, item).tooltip as vscode.MarkdownString).value : ""
   }
 
+  function openEditorOn(fsPath: string): void {
+    vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
+      document: { uri: vscode.Uri.file(fsPath) },
+    } as vscode.TextEditor)
+    activeEditorChanged.fire(vscode.window.activeTextEditor)
+  }
+
+  function onlyExercise(
+    overrides: Record<string, unknown> = {},
+    courseOverrides: Record<string, unknown> = {},
+  ): ExerciseTreeItem {
+    const [course] = show(
+      tmcCourse({
+        exercises: [tmcExercise(1, "part01-01_hello", overrides)],
+        ...courseOverrides,
+      }),
+    )
+    const [item] = exercisesOf(course)
+    if (!item) {
+      throw new Error("no exercise")
+    }
+    return item
+  }
+
   beforeEach(function () {
     vi.useFakeTimers({ now: NOW, toFake: ["Date", "setTimeout", "clearTimeout"] })
     courses = []
@@ -479,23 +503,6 @@ suite("CoursesTree", function () {
   })
 
   suite("an exercise", function () {
-    function onlyExercise(
-      overrides: Record<string, unknown> = {},
-      courseOverrides: Record<string, unknown> = {},
-    ): ExerciseTreeItem {
-      const [course] = show(
-        tmcCourse({
-          exercises: [tmcExercise(1, "part01-01_hello", overrides)],
-          ...courseOverrides,
-        }),
-      )
-      const [item] = exercisesOf(course)
-      if (!item) {
-        throw new Error("no exercise")
-      }
-      return item
-    }
-
     test("not downloaded offers the download", function () {
       const item = onlyExercise()
 
@@ -941,13 +948,6 @@ suite("CoursesTree", function () {
   })
 
   suite("revealing the active exercise", function () {
-    function openEditorOn(fsPath: string): void {
-      vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
-        document: { uri: vscode.Uri.file(fsPath) },
-      } as vscode.TextEditor)
-      activeEditorChanged.fire(vscode.window.activeTextEditor)
-    }
-
     beforeEach(function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
       show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))

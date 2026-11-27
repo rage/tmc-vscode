@@ -893,14 +893,14 @@ suite("ExerciseTestController while AI may be on", function () {
   })
 })
 
-suite("ExerciseTestController in Restricted Mode", function () {
-  function restrictedSetup(): Setup & { retries: (() => void)[] } {
-    const s = setup()
-    const { trustGate, retries } = restrictedTrustGate()
-    s.actionContext.startup.trustGate = trustGate
-    return { ...s, retries }
-  }
+function restrictedSetup(): Setup & { retries: (() => void)[] } {
+  const s = setup()
+  const { trustGate, retries } = restrictedTrustGate()
+  s.actionContext.startup.trustGate = trustGate
+  return { ...s, retries }
+}
 
+suite("ExerciseTestController in Restricted Mode", function () {
   test("a Test Explorer run errors every item with a link that trusts the workspace", async function () {
     const s = restrictedSetup()
     const item = itemOf(s, exerciseAt(s))

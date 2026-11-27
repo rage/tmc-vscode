@@ -1005,6 +1005,9 @@ suite("the Courses view on startup", function () {
   })
 })
 
+const focus = (): void =>
+  recorded.windowStateListeners.forEach((listener) => listener({ focused: true }))
+
 suite("the refresh on regaining focus", function () {
   beforeEach(function () {
     resetActivationRecording()
@@ -1018,9 +1021,6 @@ suite("the refresh on regaining focus", function () {
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-
-  const focus = (): void =>
-    recorded.windowStateListeners.forEach((listener) => listener({ focused: true }))
 
   test("refreshes once a while has passed since the last refresh, and not sooner", async function () {
     await activate(createContext())
@@ -1096,6 +1096,14 @@ suite("notifications from the CLI", function () {
   })
 })
 
+function createContextWithUnwritableWorkspaceFile(): vscode.ExtensionContext {
+  const context = createContext()
+  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+  fs.mkdirSync(workspaceFileFolder, { recursive: true })
+  fs.writeFileSync(path.join(workspaceFileFolder, "not-a-folder"), "")
+  return context
+}
+
 suite("activation in a workspace the migration cannot use in place", function () {
   const workspaceName = "python-course.code-workspace"
 
@@ -1134,14 +1142,6 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
   suite("when the workspace cannot be reopened", function () {
     const unwritableWorkspaceName = path.join("not-a-folder", workspaceName)
-
-    function createContextWithUnwritableWorkspaceFile(): vscode.ExtensionContext {
-      const context = createContext()
-      const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
-      fs.mkdirSync(workspaceFileFolder, { recursive: true })
-      fs.writeFileSync(path.join(workspaceFileFolder, "not-a-folder"), "")
-      return context
-    }
 
     test("degrades when the courses are not migrated yet", async function () {
       storedMigration.outcome = {

@@ -238,14 +238,14 @@ suite("exercise operations", () => {
   })
 })
 
-suite("failed updates", () => {
-  const failure = (exerciseId: number): Parameters<typeof failedUpdates.record>[0][number] => ({
-    courseId: tmcCourse,
-    exerciseId: idOfTmcExercise(exerciseId),
-    exerciseName: `exercise_${exerciseId}`,
-    reason: "The download did not complete.",
-  })
+const failure = (exerciseId: number): Parameters<typeof failedUpdates.record>[0][number] => ({
+  courseId: tmcCourse,
+  exerciseId: idOfTmcExercise(exerciseId),
+  exerciseName: `exercise_${exerciseId}`,
+  reason: "The download did not complete.",
+})
 
+suite("failed updates", () => {
   test("forgets an exercise once it updates", () => {
     updateablesRegistry.setMany([[tmcCourse, [idOfTmcExercise(1), idOfTmcExercise(2)]]])
     failedUpdates.record([failure(1), failure(2)], [])

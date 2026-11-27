@@ -100,6 +100,22 @@ suite("openExercises open-exercise-count limit", function () {
   })
 })
 
+const contextFor = (onDisk: WorkspaceExercise[] = []): ReadyActionContext => {
+  const onDiskById = new Map(onDisk.map((x) => [ExerciseIdentifier.key(x.id), x]))
+  const workspaceManager = {
+    openCourseExercises: vi.fn(
+      async (_backend: string, _course: string, ids: ExerciseIdentifier[]) =>
+        Ok(compact(ids.map((id) => onDiskById.get(ExerciseIdentifier.key(id))))),
+    ),
+    getExercise: (id: ExerciseIdentifier) => onDiskById.get(ExerciseIdentifier.key(id)),
+    getExercisesByCourseSlug: () => [],
+  } as unknown as WorkspaceManager
+  const userData = {
+    getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
+  } as unknown as UserData
+  return createMockActionContext({ startup: { userData, workspaceManager } })
+}
+
 suite("downloadAndOpenExercises action", function () {
   const MOOC_ID = idOfMoocExercise("mooc-ex-uuid-1")
   const COURSE_ID = idOfMoocCourse("instance-uuid-1")
@@ -113,22 +129,6 @@ suite("downloadAndOpenExercises action", function () {
     exerciseSlug: "mooc_hello_renamed",
     status: ExerciseStatus.Closed,
   } as WorkspaceExercise
-
-  const contextFor = (onDisk: WorkspaceExercise[] = []): ReadyActionContext => {
-    const onDiskById = new Map(onDisk.map((x) => [ExerciseIdentifier.key(x.id), x]))
-    const workspaceManager = {
-      openCourseExercises: vi.fn(
-        async (_backend: string, _course: string, ids: ExerciseIdentifier[]) =>
-          Ok(compact(ids.map((id) => onDiskById.get(ExerciseIdentifier.key(id))))),
-      ),
-      getExercise: (id: ExerciseIdentifier) => onDiskById.get(ExerciseIdentifier.key(id)),
-      getExercisesByCourseSlug: () => [],
-    } as unknown as WorkspaceManager
-    const userData = {
-      getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
-    } as unknown as UserData
-    return createMockActionContext({ startup: { userData, workspaceManager } })
-  }
 
   test("does not re-download an exercise that is already on disk under another slug", async function () {
     const result = await downloadAndOpenExercises(contextFor([renamedOnDisk]), [MOOC_ID], COURSE_ID)

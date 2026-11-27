@@ -343,6 +343,22 @@ function stubHandlers(): {
   }
 }
 
+/** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
+async function paste(
+  actionContext: ActionContext,
+  backend: BackendKind = "tmc",
+): Promise<{ panel: vscode.WebviewPanel; shown: Panel }> {
+  const shown: Panel = {
+    ...exerciseSubmissionPanel(),
+    exerciseId: backend === "tmc" ? idOfTmcExercise(7) : idOfMoocExercise("loops-uuid"),
+    backend,
+    exerciseName: "loops",
+  }
+  const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+  await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
+  return { panel, shown }
+}
+
 suite("TmcPanel handler dispatch", () => {
   test("reports a handler that rejects instead of dropping it", async () => {
     // The webview host discards listener rejections; nothing else would tell the user.
@@ -427,22 +443,6 @@ suite("TmcPanel handler dispatch", () => {
       idOfTmcCourse(42),
     )
   })
-
-  /** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
-  async function paste(
-    actionContext: ActionContext,
-    backend: BackendKind = "tmc",
-  ): Promise<{ panel: vscode.WebviewPanel; shown: Panel }> {
-    const shown: Panel = {
-      ...exerciseSubmissionPanel(),
-      exerciseId: backend === "tmc" ? idOfTmcExercise(7) : idOfMoocExercise("loops-uuid"),
-      backend,
-      exerciseName: "loops",
-    }
-    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
-    await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
-    return { panel, shown }
-  }
 
   test("a paste link goes back to the panel that asked for it", async () => {
     const handlers = stubHandlers()
@@ -804,21 +804,21 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
   })
 })
 
-suite("TmcPanel inbound message guard", () => {
-  // Webview messages are the extension's one untrusted input; nothing downstream re-checks.
-  async function drive(message: unknown): Promise<{
-    handlers: ReturnType<typeof stubHandlers>
-    posted: ReturnType<typeof vi.fn>
-  }> {
-    const handlers = stubHandlers()
-    const actionContext = createMockActionContext({
-      startup: { userData: storedCourses(() => Ok(courseWith(0))) },
-    })
-    const { panel, listener } = await mountSidePanel(actionContext)
-    await listener(message)
-    return { handlers, posted: vi.mocked(panel.webview.postMessage) }
-  }
+// Webview messages are the extension's one untrusted input; nothing downstream re-checks.
+async function drive(message: unknown): Promise<{
+  handlers: ReturnType<typeof stubHandlers>
+  posted: ReturnType<typeof vi.fn>
+}> {
+  const handlers = stubHandlers()
+  const actionContext = createMockActionContext({
+    startup: { userData: storedCourses(() => Ok(courseWith(0))) },
+  })
+  const { panel, listener } = await mountSidePanel(actionContext)
+  await listener(message)
+  return { handlers, posted: vi.mocked(panel.webview.postMessage) }
+}
 
+suite("TmcPanel inbound message guard", () => {
   const courseId = idOfTmcCourse(42)
 
   test("ignores a message whose type it does not know", async () => {
@@ -1059,18 +1059,18 @@ function submissionViewFor(
   }
 }
 
+function mountHideable(route: Panel): ReturnType<typeof createFakeWebviewPanel> {
+  const fake = createFakeWebviewPanel()
+  const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+  createWebviewPanel.mockClear()
+  createWebviewPanel.mockReturnValue(fake.panel)
+  renderSidePanel(route)
+  return fake
+}
+
 suite("TmcPanel hidden webviews", () => {
   beforeEach(resetPanels)
   afterEach(resetPanels)
-
-  function mountHideable(route: Panel): ReturnType<typeof createFakeWebviewPanel> {
-    const fake = createFakeWebviewPanel()
-    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
-    createWebviewPanel.mockClear()
-    createWebviewPanel.mockReturnValue(fake.panel)
-    renderSidePanel(route)
-    return fake
-  }
 
   test("tells whether either panel's screen is in sight", async () => {
     expect(TmcPanel.isAnyScreenVisible()).toBe(false)
@@ -1873,6 +1873,67 @@ function renderSidePanel(panel: Panel): void {
   TmcPanel.renderSide(createMockContext(), createMockActionContext(), panel)
 }
 
+function shownPhases(panel: vscode.WebviewPanel): string[] {
+  return (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+    message.type === "submissionView" ? [message.view.phase] : [],
+  )
+}
+
+/** A side panel showing a failed submission, with an auth state the test drives. */
+async function mountFailedSubmission(error: SubmissionView["error"]): Promise<{
+  panel: vscode.WebviewPanel
+  shown: ExerciseSubmissionPanel
+  setAuth: (loggedIn: boolean) => void
+  exercise: { current: ReturnType<typeof moocCourseExercise> }
+}> {
+  const { panel, sendReady } = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+  const exercise = { current: moocCourseExercise({ name: "loops" }) }
+  const changed = new vscode.EventEmitter<undefined>()
+  const actionContext = createMockActionContext({
+    startup: {
+      workspaceManager: {
+        getExercise: () => ({}),
+        onDidChangeExercises: changed.event,
+      } as unknown as WorkspaceManager,
+      userData: {
+        getExercise: () => Ok({ exercise: makeMoocKind(exercise.current) }),
+        onDidChangeCourses: changed.event,
+      } as unknown as UserData,
+    },
+  })
+  const listeners: ((loggedIn: boolean) => void)[] = []
+  let isLoggedIn = true
+  actionContext.authState = {
+    ...actionContext.authState,
+    get loggedIn() {
+      return isLoggedIn
+    },
+    subscribe: (listener) => void listeners.push(listener),
+  }
+  const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
+  onTestFinished(() => subscription.dispose())
+  const shown = exerciseSubmissionPanel()
+  submissionViews.open(shown)
+  await sendReady()
+  submissionViews.update({
+    panel: shown,
+    view: submitFailedView(error ?? { message: "Failed." }),
+    shouldReopen: false,
+  })
+  return {
+    panel,
+    shown,
+    exercise,
+    setAuth: (loggedIn) => {
+      isLoggedIn = loggedIn
+      for (const listener of listeners) {
+        listener(loggedIn)
+      }
+    },
+  }
+}
+
 suite("TmcPanel side panel placement", () => {
   beforeEach(resetPanels)
   afterEach(resetPanels)
@@ -2119,67 +2180,6 @@ suite("TmcPanel side panel placement", () => {
     )
     expect(views).toEqual([undefined, true])
   })
-
-  /** A side panel showing a failed submission, with an auth state the test drives. */
-  async function mountFailedSubmission(error: SubmissionView["error"]): Promise<{
-    panel: vscode.WebviewPanel
-    shown: ExerciseSubmissionPanel
-    setAuth: (loggedIn: boolean) => void
-    exercise: { current: ReturnType<typeof moocCourseExercise> }
-  }> {
-    const { panel, sendReady } = createFakeWebviewPanel()
-    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const exercise = { current: moocCourseExercise({ name: "loops" }) }
-    const changed = new vscode.EventEmitter<undefined>()
-    const actionContext = createMockActionContext({
-      startup: {
-        workspaceManager: {
-          getExercise: () => ({}),
-          onDidChangeExercises: changed.event,
-        } as unknown as WorkspaceManager,
-        userData: {
-          getExercise: () => Ok({ exercise: makeMoocKind(exercise.current) }),
-          onDidChangeCourses: changed.event,
-        } as unknown as UserData,
-      },
-    })
-    const listeners: ((loggedIn: boolean) => void)[] = []
-    let isLoggedIn = true
-    actionContext.authState = {
-      ...actionContext.authState,
-      get loggedIn() {
-        return isLoggedIn
-      },
-      subscribe: (listener) => void listeners.push(listener),
-    }
-    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
-    onTestFinished(() => subscription.dispose())
-    const shown = exerciseSubmissionPanel()
-    submissionViews.open(shown)
-    await sendReady()
-    submissionViews.update({
-      panel: shown,
-      view: submitFailedView(error ?? { message: "Failed." }),
-      shouldReopen: false,
-    })
-    return {
-      panel,
-      shown,
-      exercise,
-      setAuth: (loggedIn) => {
-        isLoggedIn = loggedIn
-        for (const listener of listeners) {
-          listener(loggedIn)
-        }
-      },
-    }
-  }
-
-  function shownPhases(panel: vscode.WebviewPanel): string[] {
-    return (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
-      message.type === "submissionView" ? [message.view.phase] : [],
-    )
-  }
 
   const LOGGED_OUT_ERROR = {
     message: "You were logged out. Log in again.",
@@ -2801,26 +2801,26 @@ suite("TmcPanel requestCourseDetailsData", () => {
   })
 })
 
-suite("TmcPanel keeps Course Details on the stored course", () => {
-  function contextWithChangingCourse(): {
-    actionContext: ActionContext
-    changed: vscode.EventEmitter<CourseIdentifier | undefined>
-    course: { current: LocalCourseData | undefined }
-  } {
-    const changed = new vscode.EventEmitter<CourseIdentifier | undefined>()
-    const course: { current: LocalCourseData | undefined } = { current: courseWith(2) }
-    const actionContext = createMockActionContext({
-      startup: {
-        userData: {
-          getCourse: () =>
-            course.current ? Ok(course.current) : Err(new Error("The course is not stored.")),
-          onDidChangeCourses: changed.event,
-        } as unknown as UserData,
-      },
-    })
-    return { actionContext, changed, course }
-  }
+function contextWithChangingCourse(): {
+  actionContext: ActionContext
+  changed: vscode.EventEmitter<CourseIdentifier | undefined>
+  course: { current: LocalCourseData | undefined }
+} {
+  const changed = new vscode.EventEmitter<CourseIdentifier | undefined>()
+  const course: { current: LocalCourseData | undefined } = { current: courseWith(2) }
+  const actionContext = createMockActionContext({
+    startup: {
+      userData: {
+        getCourse: () =>
+          course.current ? Ok(course.current) : Err(new Error("The course is not stored.")),
+        onDidChangeCourses: changed.event,
+      } as unknown as UserData,
+    },
+  })
+  return { actionContext, changed, course }
+}
 
+suite("TmcPanel keeps Course Details on the stored course", () => {
   test("sends the course again whenever it changes", async () => {
     const { actionContext, changed, course } = contextWithChangingCourse()
     const { panel, shown } = await mountCourseDetails(actionContext)

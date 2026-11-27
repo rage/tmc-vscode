@@ -91,13 +91,11 @@ export const addCourseHandlers = {
       }
       // The ones the TMC server pins are its most used.
       const sorted = listing.val.toSorted((a, b) => Number(b.pinned) - Number(a.pinned))
-      const items = sorted.map(
-        (organization): CatalogOrganization => ({
-          slug: organization.slug,
-          name: organization.name,
-          ...optionalDescription(organization.information),
-        }),
-      )
+      const items = sorted.map((organization): CatalogOrganization => ({
+        slug: organization.slug,
+        name: organization.name,
+        ...optionalDescription(organization.information),
+      }))
       catalogOf(panel.id).organizations = new Map(items.map((item) => [item.slug, item.name]))
       return Ok({ kind: "listed", items })
     },

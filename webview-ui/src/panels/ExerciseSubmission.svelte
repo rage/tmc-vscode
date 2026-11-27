@@ -141,12 +141,10 @@
     view?.error && view.isLoggedOut ? withoutLogIn(view.error) : view?.error,
   )
   const remedies = $derived(
-    (shownError?.actions ?? []).map(
-      ({ label, command }): BarAction => ({
-        label,
-        onclick: () => vscode.postMessage({ type: "runCommand", command }),
-      }),
-    ),
+    (shownError?.actions ?? []).map(({ label, command }): BarAction => ({
+      label,
+      onclick: () => vscode.postMessage({ type: "runCommand", command }),
+    })),
   )
 
   /** The state's one suggested next step and its alternative; the rest is in `menuActions`. */
