@@ -919,6 +919,13 @@ const neverCalled = (): Record<string, ReturnType<typeof vi.fn>> => ({
   runCheckstyle: vi.fn(),
 })
 
+const row = (): ExerciseTreeItem =>
+  Object.assign(exerciseRow("opened"), { exerciseUri: exercise.uri })
+
+// The restriction itself holds: only the extension check refuses.
+const refusingHarness = (langs: Record<string, unknown> = {}): Promise<Harness> =>
+  harness({ langs, aiUseGate: new AiUseGate({ enforce: async () => undefined }) })
+
 suite("refused while an AI extension runs: every entry point", function () {
   const reason =
     "AI assistance must be off in this course. Disable Cline for this workspace" +
@@ -935,17 +942,10 @@ suite("refused while an AI extension runs: every entry point", function () {
     })
   }
 
-  // The restriction itself holds: only the extension check refuses.
-  const refusingHarness = (langs: Record<string, unknown> = {}): Promise<Harness> =>
-    harness({ langs, aiUseGate: new AiUseGate({ enforce: async () => undefined }) })
-
   beforeEach(function () {
     withEnabledExtensions(["saoudrizwan.claude-dev"])
     onTestFinished(() => withEnabledExtensions([]))
   })
-
-  const row = (): ExerciseTreeItem =>
-    Object.assign(exerciseRow("opened"), { exerciseUri: exercise.uri })
 
   test.each<[string, string, () => unknown[]]>([
     ["the palette", "tmc.submitExercise", () => []],

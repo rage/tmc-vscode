@@ -37,14 +37,15 @@ const ALLOWED: string[] = []
 
 const repoRoot = path.join(__dirname, "..", "..")
 
+const walk = (dir: string): string[] =>
+  fs
+    .readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf8" })
+    .map((file) => path.join(dir, file))
+    .filter((file) => /\.(ts|svelte|md)$/.test(file))
+    .filter((file) => !/(\.test\.ts$|[/\\](test|test-integration|generated)[/\\])/.test(file))
+
 /** The student-facing sources: host and webview code, shared code, the manifest, walkthrough. */
 function scannedFiles(): string[] {
-  const walk = (dir: string): string[] =>
-    fs
-      .readdirSync(path.join(repoRoot, dir), { recursive: true, encoding: "utf8" })
-      .map((file) => path.join(dir, file))
-      .filter((file) => /\.(ts|svelte|md)$/.test(file))
-      .filter((file) => !/(\.test\.ts$|[/\\](test|test-integration|generated)[/\\])/.test(file))
   return [
     ...walk("src"),
     ...walk("shared"),

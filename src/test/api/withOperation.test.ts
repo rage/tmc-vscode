@@ -84,6 +84,7 @@ suite("withOperation", function () {
 
   test("turns a thrown non-Error into an Error", async function () {
     const result = await withOperation(dialog, { failure: "Failed." }, () =>
+      // oxlint-disable-next-line prefer-promise-reject-errors -- the non-Error is the input under test
       Promise.reject("just a string"),
     )
 

@@ -18,6 +18,10 @@ import {
 
 const TOKEN = "super-secret-refresh-token"
 
+function namedHelper(): string {
+  return TOKEN
+}
+
 suite("Logger redaction", function () {
   test("an OAuth token is not loggable under any spelling of its key", function () {
     const loggable = Logger.toLoggable({
@@ -123,10 +127,6 @@ suite("Logger redaction", function () {
   })
 
   test("a function is named, not dumped in full", function () {
-    function namedHelper(): string {
-      return TOKEN
-    }
-
     expect(Logger.toLoggable(namedHelper)).toBe("[Function namedHelper]")
   })
 

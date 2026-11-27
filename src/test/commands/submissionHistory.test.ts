@@ -296,15 +296,15 @@ suite("Submission history", function () {
   })
 })
 
-suite("Restoring a submission from the History", function () {
-  async function firstListed(context: ReadyActionContext): Promise<OldSubmission> {
-    const [submission] = await listed(context)
-    if (!submission) {
-      throw new Error("nothing listed")
-    }
-    return submission
+async function firstListed(context: ReadyActionContext): Promise<OldSubmission> {
+  const [submission] = await listed(context)
+  if (!submission) {
+    throw new Error("nothing listed")
   }
+  return submission
+}
 
+suite("Restoring a submission from the History", function () {
   test("restores the entry's submission without keeping the current code unless asked", async function () {
     const context = actionContext()
 

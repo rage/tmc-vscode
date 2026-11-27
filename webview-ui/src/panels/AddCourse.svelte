@@ -423,7 +423,7 @@
                 <Button
                   secondary
                   data-organization={organization.slug}
-                  aria-label="Show the courses of {organization.name}"
+                  aria-label="Show Courses of {organization.name}"
                   onclick={() => void browse(organization)}
                 >
                   Show Courses

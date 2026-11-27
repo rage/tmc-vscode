@@ -264,7 +264,7 @@ suite("the add-course screen", () => {
       ["MOOC", "University of Helsinki"],
     )
 
-    await fireEvent.click(within(tmc).getByRole("button", { name: "Show the courses of MOOC" }))
+    await fireEvent.click(within(tmc).getByRole("button", { name: "Show Courses of MOOC" }))
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestTmcCourses",
       requestId: expect.any(Number),
@@ -287,7 +287,7 @@ suite("the add-course screen", () => {
 
   test("an organization with no courses says so", async () => {
     await renderScreen()
-    await fireEvent.click(screen.getByRole("button", { name: "Show the courses of MOOC" }))
+    await fireEvent.click(screen.getByRole("button", { name: "Show Courses of MOOC" }))
     replyToRequest("requestTmcCourses", { ok: true, value: [] })
 
     expect(await screen.findByText("This organization has no courses.")).toBeInTheDocument()
@@ -311,6 +311,6 @@ suite("the add-course screen", () => {
 
     expect(screen.queryByRole("region", { name: "courses.mooc.fi" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "More Actions" })).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Show the courses of MOOC" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Show Courses of MOOC" })).toBeInTheDocument()
   })
 })

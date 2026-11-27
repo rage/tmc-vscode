@@ -88,6 +88,26 @@ describe("mooc mock conformance", () => {
 
   const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
 
+  const statusOf = async (p: string): Promise<number> => (await authFetch(api(p))).status
+
+  const checksum = async (): Promise<string> => {
+    const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}`))
+    const body = (await res.json()) as { tasks: { public_spec: { checksum: string } }[] }
+    return body.tasks[0]!.public_spec.checksum
+  }
+
+  const currentUser = async (): Promise<unknown> => (await authFetch(api("/me"))).json()
+
+  const listing = async (id: string): Promise<number> =>
+    (await authFetch(api(`/courses/${id}/exercises`))).status
+
+  const policy = async (): Promise<unknown> =>
+    (
+      (await (await authFetch(api(`/courses/${pythonCourse.id}`))).json()) as {
+        ai_policy?: unknown
+      }
+    ).ai_policy
+
   test("GET courses returns the enrolled courses and only those", async () => {
     const res = await authFetch(api("/courses"))
     assert.equal(res.status, 200)
@@ -113,12 +133,6 @@ describe("mooc mock conformance", () => {
   })
 
   test("a teacher's AI policy change shows in the course until a reset", async () => {
-    const policy = async (): Promise<unknown> =>
-      (
-        (await (await authFetch(api(`/courses/${pythonCourse.id}`))).json()) as {
-          ai_policy?: unknown
-        }
-      ).ai_policy
     try {
       assert.equal(mock.setAiPolicy(pythonCourse.id, "no_ai"), true)
       assert.equal(await policy(), "no_ai")
@@ -134,13 +148,12 @@ describe("mooc mock conformance", () => {
     const exerciseId = passingExercise.slide.exercise_id
     try {
       assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
-      const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
-      assert.equal(await status(`/courses/${pythonCourse.id}`), 403)
-      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 403)
+      assert.equal(await statusOf(`/courses/${pythonCourse.id}`), 403)
+      assert.equal(await statusOf(`/courses/${pythonCourse.id}/progress`), 403)
       const exercises = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
       assert.equal(exercises.status, 403)
       assert.equal(((await exercises.json()) as { message_key: string }).message_key, "no_access")
-      assert.equal(await status(`/exercises/${exerciseId}`), 403)
+      assert.equal(await statusOf(`/exercises/${exerciseId}`), 403)
     } finally {
       mock.reset()
     }
@@ -149,26 +162,23 @@ describe("mooc mock conformance", () => {
 
   test("a deleted course is gone from every route, and back once opened", async () => {
     const exerciseId = passingExercise.slide.exercise_id
-    const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
     assert.equal(mock.setCourseAccess(pythonCourse.id, "deleted"), true)
     try {
-      assert.equal(await status(`/courses/${pythonCourse.id}`), 404)
-      assert.equal(await status(`/courses/${pythonCourse.id}/exercises`), 404)
-      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 404)
-      assert.equal(await status(`/exercises/${exerciseId}`), 404)
+      assert.equal(await statusOf(`/courses/${pythonCourse.id}`), 404)
+      assert.equal(await statusOf(`/courses/${pythonCourse.id}/exercises`), 404)
+      assert.equal(await statusOf(`/courses/${pythonCourse.id}/progress`), 404)
+      assert.equal(await statusOf(`/exercises/${exerciseId}`), 404)
       const listed = (await (await authFetch(api("/courses"))).json()) as { id: string }[]
       assert.ok(!listed.some((c) => c.id === pythonCourse.id))
     } finally {
       assert.equal(mock.setCourseAccess(pythonCourse.id, "open"), true)
     }
-    assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
+    assert.equal(await statusOf(`/courses/${pythonCourse.id}`), 200)
     assert.equal(mock.setCourseAccess("no-such-course", "forbidden"), false)
   })
 
   // tmc-langs' update check lists each course's exercises and leaves out only the ones refused.
   test("a closed or deleted course refuses its exercise listing alone", async () => {
-    const listing = async (id: string): Promise<number> =>
-      (await authFetch(api(`/courses/${id}/exercises`))).status
     try {
       assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
       assert.equal(await listing(pythonCourse.id), 403)
@@ -201,7 +211,6 @@ describe("mooc mock conformance", () => {
   })
 
   test("GET me names the account the token acts for, which a switch changes", async () => {
-    const currentUser = async (): Promise<unknown> => (await authFetch(api("/me"))).json()
     assert.deepEqual(await currentUser(), {
       id: MOCK_DEFAULT_USER_ID,
       name: MOCK_USER_NAME,
@@ -1020,11 +1029,6 @@ describe("mooc mock conformance", () => {
   })
 
   test("a published update changes the exercise's checksum until a reset", async () => {
-    const checksum = async (): Promise<string> => {
-      const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}`))
-      const body = (await res.json()) as { tasks: { public_spec: { checksum: string } }[] }
-      return body.tasks[0]!.public_spec.checksum
-    }
     const original = await checksum()
 
     assert.equal(mock.publishExerciseUpdate(passingExercise.slide.exercise_id), true)
@@ -1135,6 +1139,15 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 
   const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+  const variantsProgressOf = async (exerciseId: string) => {
+    const progress = (await (
+      await authFetch(api(`/courses/${variantsCourse.id}/progress`))
+    ).json()) as {
+      exercises: { exercise_id: string; max_tries: number | null; tries_left: number | null }[]
+    }
+    return progress.exercises.find((e) => e.exercise_id === exerciseId)
+  }
 
   // Returns the response, so a caller can assert on a refusal as well as the file id.
   const postUpload = (exerciseId: string): Promise<Response> => {
@@ -1348,19 +1361,11 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 
   test("progress counts the tries left on a limited exercise and none on an unlimited one", async () => {
-    const progressOf = async (exerciseId: string) => {
-      const progress = (await (
-        await authFetch(api(`/courses/${variantsCourse.id}/progress`))
-      ).json()) as {
-        exercises: { exercise_id: string; max_tries: number | null; tries_left: number | null }[]
-      }
-      return progress.exercises.find((e) => e.exercise_id === exerciseId)
-    }
     const exerciseId = limitedTriesExercise.slide.exercise_id
     assert.deepEqual(
       {
-        max: (await progressOf(exerciseId))?.max_tries,
-        left: (await progressOf(exerciseId))?.tries_left,
+        max: (await variantsProgressOf(exerciseId))?.max_tries,
+        left: (await variantsProgressOf(exerciseId))?.tries_left,
       },
       { max: 1, left: 1 },
     )
@@ -1368,8 +1373,8 @@ describe("mooc mock enrollment, answerability and ownership", () => {
       (await postSubmit(limitedTriesExercise, [await uploadFor(exerciseId)])).status,
       200,
     )
-    assert.equal((await progressOf(exerciseId))?.tries_left, 0)
-    const unlimited = await progressOf(futureDeadlineExercise.slide.exercise_id)
+    assert.equal((await variantsProgressOf(exerciseId))?.tries_left, 0)
+    const unlimited = await variantsProgressOf(futureDeadlineExercise.slide.exercise_id)
     assert.equal(unlimited?.max_tries, null)
     assert.equal(unlimited?.tries_left, null)
   })
@@ -2096,27 +2101,27 @@ describe("mooc mock error envelopes", () => {
 // its envelope is pinned in the error-envelope walk.
 const clientApi = (base: string, p: string): string => `${base}/api/v0/exercise-services/client${p}`
 
-describe("mooc mock client-version floor", () => {
-  const asClient = (base: string, p: string, clientVersion?: string): Promise<Response> =>
-    authFetch(clientApi(base, p), {
-      headers: clientVersion === undefined ? {} : { "x-client-version": clientVersion },
-    })
-
-  const getCourses = (base: string, clientVersion?: string): Promise<Response> =>
-    asClient(base, "/courses", clientVersion)
-
-  const withFloor = async (
-    minimumClientVersion: string,
-    drive: (base: string) => Promise<void>,
-  ): Promise<void> => {
-    const { server, base } = await listen(createMoocApp({ minimumClientVersion }))
-    try {
-      await drive(base)
-    } finally {
-      server.close()
-    }
+const withFloor = async (
+  minimumClientVersion: string,
+  drive: (base: string) => Promise<void>,
+): Promise<void> => {
+  const { server, base } = await listen(createMoocApp({ minimumClientVersion }))
+  try {
+    await drive(base)
+  } finally {
+    server.close()
   }
+}
 
+const asClient = (base: string, p: string, clientVersion?: string): Promise<Response> =>
+  authFetch(clientApi(base, p), {
+    headers: clientVersion === undefined ? {} : { "x-client-version": clientVersion },
+  })
+
+const getCourses = (base: string, clientVersion?: string): Promise<Response> =>
+  asClient(base, "/courses", clientVersion)
+
+describe("mooc mock client-version floor", () => {
   test("a client at or above the floor is served", async () => {
     await withFloor("1.2.3", async (base) => {
       assert.equal((await getCourses(base, "1.2.3")).status, 200)

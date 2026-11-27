@@ -192,6 +192,13 @@ suite("the course home's exercise actions", function () {
   })
 })
 
+const install = (extensionId: string): Promise<void> =>
+  courseDetailsHandlers.installLanguageExtension.handle({
+    type: "installLanguageExtension",
+    sourcePanel: SOURCE,
+    extensionId,
+  })
+
 suite("the course home's course actions", function () {
   beforeEach(function () {
     vi.clearAllMocks()
@@ -329,12 +336,6 @@ suite("the course home's course actions", function () {
   test("Install installs a language extension the course home offers, and no other", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     onTestFinished(() => executeCommand.mockRestore())
-    const install = (extensionId: string): Promise<void> =>
-      courseDetailsHandlers.installLanguageExtension.handle({
-        type: "installLanguageExtension",
-        sourcePanel: SOURCE,
-        extensionId,
-      })
 
     await install("ms-python.python")
     await install("evil.extension")

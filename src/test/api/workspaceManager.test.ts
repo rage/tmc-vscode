@@ -146,6 +146,17 @@ function configurationStub(
   } as unknown as vscode.WorkspaceConfiguration
 }
 
+function openDocument(fileName: string, languageId: string): WorkspaceManager {
+  openWorkspaceFile(workspaceFileName("test-python-course", "tmc"))
+  const manager = new WorkspaceManager(resources, persistForCourse)
+  const [listener] = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1) as [
+    (document: vscode.TextDocument) => void,
+  ]
+  vi.spyOn(manager, "addWorkspaceRecommendation").mockResolvedValue(undefined)
+  listener({ languageId, uri: vscode.Uri.file(`/exercises/hello/${fileName}`) } as never)
+  return manager
+}
+
 suite("WorkspaceManager class", function () {
   beforeEach(function () {
     resources = new Resources(WORKSPACE_FILE_FOLDER, PROJECTS_DIRECTORY)
@@ -942,17 +953,6 @@ suite("WorkspaceManager class", function () {
   })
 
   suite("a document opened in the course workspace", function () {
-    function openDocument(fileName: string, languageId: string): WorkspaceManager {
-      openWorkspaceFile(workspaceFileName("test-python-course", "tmc"))
-      const manager = new WorkspaceManager(resources, persistForCourse)
-      const [listener] = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1) as [
-        (document: vscode.TextDocument) => void,
-      ]
-      vi.spyOn(manager, "addWorkspaceRecommendation").mockResolvedValue(undefined)
-      listener({ languageId, uri: vscode.Uri.file(`/exercises/hello/${fileName}`) } as never)
-      return manager
-    }
-
     test("opens rendered when it is a README, as it is the exercise's instructions", function () {
       const executeCommand = vi
         .spyOn(vscode.commands, "executeCommand")

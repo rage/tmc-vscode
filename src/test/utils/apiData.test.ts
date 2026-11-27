@@ -311,6 +311,19 @@ function progressEntry(
   }
 }
 
+const closedProgress = (exerciseId: string): CourseProgress => ({
+  ...NO_PROGRESS,
+  closed_chapters: [
+    {
+      id: "chapter-3",
+      name: "Recursion",
+      chapter_number: 3,
+      opens_at: "2100-01-01T00:00:00Z",
+      exercises: [progressEntry(exerciseId, { score_given: 2, standing: "Passed" })],
+    },
+  ],
+})
+
 suite("mooc tries, chapter locking and closed chapters", function () {
   const [slide] = moocExerciseSlides
 
@@ -366,19 +379,6 @@ suite("mooc tries, chapter locking and closed chapters", function () {
       NO_PROGRESS,
     )[0]
     expect(locked?.chapter).toEqual({ name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" })
-  })
-
-  const closedProgress = (exerciseId: string): CourseProgress => ({
-    ...NO_PROGRESS,
-    closed_chapters: [
-      {
-        id: "chapter-3",
-        name: "Recursion",
-        chapter_number: 3,
-        opens_at: "2100-01-01T00:00:00Z",
-        exercises: [progressEntry(exerciseId, { score_given: 2, standing: "Passed" })],
-      },
-    ],
   })
 
   test("keeps a closed chapter's exercises apart with their points, as last seen open", function () {

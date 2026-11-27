@@ -1132,18 +1132,18 @@ suite("CourseDetails action failures", () => {
   })
 })
 
+async function failRefresh(error: { message: string }): Promise<void> {
+  await clickIconButton("Refresh")
+  replyToRequest("refreshCourseDetails", { ok: false, error })
+  await vi.waitFor(() =>
+    expect(document.querySelector('[title="Refresh"]')).toHaveAttribute("aria-disabled", "false"),
+  )
+}
+
 suite("CourseDetails after the session changes", () => {
   const LOGGED_OUT_ERROR = {
     message: LOGGED_OUT_MESSAGE,
     actions: [{ label: "Log In", command: "tmc.showMoocLogin" as const }],
-  }
-
-  async function failRefresh(error: { message: string }): Promise<void> {
-    await clickIconButton("Refresh")
-    replyToRequest("refreshCourseDetails", { ok: false, error })
-    await vi.waitFor(() =>
-      expect(document.querySelector('[title="Refresh"]')).toHaveAttribute("aria-disabled", "false"),
-    )
   }
 
   test("a refresh refused for the lost session leaves one Log In, the notice's", async () => {

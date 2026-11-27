@@ -152,6 +152,13 @@ function saveScroll(): void {
   }
 }
 
+// VS Code destroys a hidden panel's document without waiting for a delayed save.
+const flushScroll = (): void => {
+  if (scrollSaveTimeout !== undefined) {
+    saveScroll()
+  }
+}
+
 function trackScroll(): void {
   if (isScrollTracked) {
     return
@@ -165,12 +172,6 @@ function trackScroll(): void {
     },
     { passive: true },
   )
-  // VS Code destroys a hidden panel's document without waiting for a delayed save.
-  const flushScroll = (): void => {
-    if (scrollSaveTimeout !== undefined) {
-      saveScroll()
-    }
-  }
   window.addEventListener("pagehide", flushScroll)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {

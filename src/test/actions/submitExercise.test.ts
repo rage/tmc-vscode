@@ -879,25 +879,25 @@ function submitBody(actionContext: ReadyActionContext) {
     )
 }
 
+function contextWithWorkspace(
+  course: LocalCourseData,
+  langsMethods: Record<string, unknown>,
+  exercise: WorkspaceExercise,
+): ReadyActionContext {
+  const { actionContext } = contextFor(course, langsMethods)
+  const workspaceManager = {
+    get activeExercise() {
+      return exercise
+    },
+    getExerciseContaining: () => exercise,
+  } as unknown as ReadyStartup["workspaceManager"]
+  return { ...actionContext, startup: { ...actionContext.startup, workspaceManager } }
+}
+
 // Drives the action through the real `runForExercise`/`withOperation` boundary (bypassing only
 // `commands/submitExercise`): the busy notice is shown exactly once, and a failure the panel
 // shows, remedies included, is not also notified.
 suite("submitExercise action, through the real runForExercise boundary", () => {
-  function contextWithWorkspace(
-    course: LocalCourseData,
-    langsMethods: Record<string, unknown>,
-    exercise: WorkspaceExercise,
-  ): ReadyActionContext {
-    const { actionContext } = contextFor(course, langsMethods)
-    const workspaceManager = {
-      get activeExercise() {
-        return exercise
-      },
-      getExerciseContaining: () => exercise,
-    } as unknown as ReadyStartup["workspaceManager"]
-    return { ...actionContext, startup: { ...actionContext.startup, workspaceManager } }
-  }
-
   test("a busy rejection notifies exactly once and reports no error", async () => {
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
@@ -1010,28 +1010,28 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
   })
 })
 
+async function submitAskingFeedback(feedbackUrl: string): Promise<ReadyActionContext> {
+  viewUpdates.length = 0
+  const submitFeedback = vi.fn().mockResolvedValue(Ok({ api_version: 8, status: "ok" }))
+  const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
+    submitTmcExerciseAndWaitForResults: vi.fn().mockResolvedValue(
+      Ok({
+        status: "ok",
+        all_tests_passed: true,
+        points: [],
+        test_cases: [],
+        feedback_answer_url: feedbackUrl,
+        feedback_questions: [{ id: 3, question: "How was it?", kind: "Text" }],
+      }),
+    ),
+    submitSubmissionFeedback: submitFeedback,
+  })
+  await submitExercise(actionContext, tmcExercise)
+  return actionContext
+}
+
 suite("sendSubmissionFeedback action", () => {
   const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
-
-  async function submitAskingFeedback(feedbackUrl: string): Promise<ReadyActionContext> {
-    viewUpdates.length = 0
-    const submitFeedback = vi.fn().mockResolvedValue(Ok({ api_version: 8, status: "ok" }))
-    const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
-      submitTmcExerciseAndWaitForResults: vi.fn().mockResolvedValue(
-        Ok({
-          status: "ok",
-          all_tests_passed: true,
-          points: [],
-          test_cases: [],
-          feedback_answer_url: feedbackUrl,
-          feedback_questions: [{ id: 3, question: "How was it?", kind: "Text" }],
-        }),
-      ),
-      submitSubmissionFeedback: submitFeedback,
-    })
-    await submitExercise(actionContext, tmcExercise)
-    return actionContext
-  }
 
   test("sends the answers to the URL the submission result asked them at", async () => {
     const actionContext = await submitAskingFeedback(FEEDBACK_URL)

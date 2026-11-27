@@ -92,6 +92,16 @@ function contextWith(
   ]
 }
 
+function postponed(automaticallyUpdate: boolean): ReturnType<typeof contextWith> {
+  const context = contextWith(automaticallyUpdate)
+  context[0].startup.userData.getCourse = () =>
+    Ok({
+      kind: "tmc",
+      data: { notifyAfter: Date.now() + 60_000, disabled: false, title: "Course" },
+    } as LocalCourseData)
+  return context
+}
+
 suite("updateExercises command", function () {
   beforeEach(function () {
     checkForExerciseUpdates.mockReset()
@@ -176,16 +186,6 @@ suite("updateExercises command", function () {
   })
 
   suite("with the reminder postponed", function () {
-    function postponed(automaticallyUpdate: boolean): ReturnType<typeof contextWith> {
-      const context = contextWith(automaticallyUpdate)
-      context[0].startup.userData.getCourse = () =>
-        Ok({
-          kind: "tmc",
-          data: { notifyAfter: Date.now() + 60_000, disabled: false, title: "Course" },
-        } as LocalCourseData)
-      return context
-    }
-
     test("still downloads the updates when automatic updates are on", async function () {
       const updates = [outdated(1, 10)]
       checkForExerciseUpdates.mockResolvedValue(checked(updates))

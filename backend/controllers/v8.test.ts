@@ -85,6 +85,17 @@ interface FinishedBody {
 describe("legacy TMC mock contract", () => {
   let mock: Mock
 
+  const exerciseOf = async (): Promise<{ completed: boolean; awarded_points: unknown[] }> => {
+    const course = (await (
+      await authFetch(`${mock.base}/api/v8/core/courses/${pythonCourse.id}`)
+    ).json()) as {
+      course: { exercises: { id: number; completed: boolean; awarded_points: unknown[] }[] }
+    }
+    const exercise = course.course.exercises.find(({ id }) => id === passingExerciseId)
+    assert.ok(exercise)
+    return exercise
+  }
+
   before(async () => {
     mock = await listen(createTmcApp())
   })
@@ -278,16 +289,6 @@ describe("legacy TMC mock contract", () => {
   })
 
   test("a passing submission lists its points and completes the exercise, as tmc-server's do", async () => {
-    const exerciseOf = async (): Promise<{ completed: boolean; awarded_points: unknown[] }> => {
-      const course = (await (
-        await authFetch(`${mock.base}/api/v8/core/courses/${pythonCourse.id}`)
-      ).json()) as {
-        course: { exercises: { id: number; completed: boolean; awarded_points: unknown[] }[] }
-      }
-      const exercise = course.course.exercises.find(({ id }) => id === passingExerciseId)
-      assert.ok(exercise)
-      return exercise
-    }
     assert.equal((await exerciseOf()).completed, false)
 
     const graded = await gradeOf(passingExerciseId)

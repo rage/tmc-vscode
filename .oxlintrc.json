@@ -117,6 +117,7 @@
         "no-obj-calls": "error",
         "no-prototype-builtins": "error",
         "no-redeclare": "warn",
+        "no-inner-declarations": ["error", "functions", { "namespaces": "allow" }],
         "no-regex-spaces": "error",
         "no-self-assign": "error",
         "no-setter-return": "error",
@@ -197,6 +198,12 @@
       "env": {
         "browser": true,
         "node": true
+      }
+    },
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "no-redeclare": "off"
       }
     },
     {

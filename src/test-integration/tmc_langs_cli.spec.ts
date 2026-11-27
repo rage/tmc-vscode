@@ -95,6 +95,9 @@ const inChapter = async <T>(
   }
 }
 
+const setOutcome = (outcome: string): Promise<Response> =>
+  postJson("tmc-mock/set-introspection-outcome", { outcome })
+
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
   let runArtifactDir: string
@@ -115,6 +118,15 @@ suite("tmc langs cli spec", function () {
 
   let testDir: string
   let testIndex = 0
+
+  // Writes a minimal python project (`requirements.txt` makes tmc-langs recognise it).
+  const writeSubmittableProject = (name: string): string => {
+    const dir = path.join(testDir, name)
+    fs.mkdirSync(path.join(dir, "src"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "requirements.txt"), "")
+    fs.writeFileSync(path.join(dir, "src", "main.py"), "print('hi')\n")
+    return dir
+  }
 
   setup(function () {
     const fullTitle = this.currentTest?.fullTitle()
@@ -575,8 +587,50 @@ suite("tmc langs cli spec", function () {
     const PAST_DEADLINE_EXERCISE_ID = "f6f6f6f6-0000-4000-8000-000000000001"
     const VARIANTS_COURSE_ID = "33333333-3333-4333-8333-333333333333"
 
+    const setAccess = (access: string): Promise<Response> =>
+      postJson("mooc-mock/set-course-access", { course_id: PYTHON_COURSE_ID, access })
+
+    const setReview = (review: string | null): Promise<Response> =>
+      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-review`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID, review }),
+      })
+
+    const setCourseAccess = (access: string): Promise<Response> =>
+      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-course-access`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ course_id: PYTHON_COURSE_ID, access }),
+      })
+
+    const setEnrolled = (enrolled: boolean): Promise<Response> =>
+      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-enrolled`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ course_id: PYTHON_COURSE_ID, enrolled }),
+      })
+
     let configDir: string
     let tmc: Langs
+
+    const leavesUncheckedAlone = (
+      access: string,
+      refusal: typeof InsufficientScopeError | typeof NotFoundError,
+    ) =>
+      async function (): Promise<void> {
+        const ids = [PASSING_EXERCISE_ID, FAILING_EXERCISE_ID]
+        ;(await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
+        expect((await setCourseAccess(access)).status).to.equal(204)
+
+        const updates = (await tmc.checkExerciseUpdates("mooc", { forceRefresh: true })).unwrap()
+
+        expect(updates.removed).to.deep.equal([])
+        expect(updates.uncheckedCourses).to.have.length(1)
+        const [unchecked] = updates.uncheckedCourses ?? []
+        expect(unchecked?.courseId).to.deep.equal(idOfMoocCourse(PYTHON_COURSE_ID))
+        expect(unchecked?.refusal).to.be.instanceOf(refusal)
+      }
 
     setup(function () {
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
@@ -618,15 +672,6 @@ suite("tmc langs cli spec", function () {
       const { course } = (await tmc.getMoocCourseData(EXTRA_COURSE_ID)).unwrap()
       expect(course.ai_policy).to.equal("full_use")
     })
-
-    // Writes a minimal python project (`requirements.txt` makes tmc-langs recognise it).
-    const writeSubmittableProject = (name: string): string => {
-      const dir = path.join(testDir, name)
-      fs.mkdirSync(path.join(dir, "src"), { recursive: true })
-      fs.writeFileSync(path.join(dir, "requirements.txt"), "")
-      fs.writeFileSync(path.join(dir, "src", "main.py"), "print('hi')\n")
-      return dir
-    }
 
     test("should submit a mooc exercise and wait for a fully-graded result", async function () {
       const dir = writeSubmittableProject("mooc-submit-passing")
@@ -750,12 +795,6 @@ suite("tmc langs cli spec", function () {
     })
 
     test("should leave a course the student was withdrawn from out of the enrolled courses", async function () {
-      const setEnrolled = (enrolled: boolean): Promise<Response> =>
-        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-enrolled`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ course_id: PYTHON_COURSE_ID, enrolled }),
-        })
       expect((await setEnrolled(false)).status).to.equal(204)
       try {
         const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
@@ -766,13 +805,6 @@ suite("tmc langs cli spec", function () {
     })
 
     suite("a course students can no longer reach", function () {
-      const setCourseAccess = (access: string): Promise<Response> =>
-        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-course-access`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ course_id: PYTHON_COURSE_ID, access }),
-        })
-
       teardown(async function () {
         expect((await setCourseAccess("open")).status).to.equal(204)
       })
@@ -795,24 +827,6 @@ suite("tmc langs cli spec", function () {
         expect(data.val).to.be.instanceOf(NotFoundError)
         expect((data.val as NotFoundError).httpStatus).to.equal(404)
       })
-
-      const leavesUncheckedAlone = (
-        access: string,
-        refusal: typeof InsufficientScopeError | typeof NotFoundError,
-      ) =>
-        async function (): Promise<void> {
-          const ids = [PASSING_EXERCISE_ID, FAILING_EXERCISE_ID]
-          ;(await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
-          expect((await setCourseAccess(access)).status).to.equal(204)
-
-          const updates = (await tmc.checkExerciseUpdates("mooc", { forceRefresh: true })).unwrap()
-
-          expect(updates.removed).to.deep.equal([])
-          expect(updates.uncheckedCourses).to.have.length(1)
-          const [unchecked] = updates.uncheckedCourses ?? []
-          expect(unchecked?.courseId).to.deep.equal(idOfMoocCourse(PYTHON_COURSE_ID))
-          expect(unchecked?.refusal).to.be.instanceOf(refusal)
-        }
 
       // Langs reports the closed course as `forbidden`, which `Langs.checkExerciseUpdates` still
       // converts to NotFoundError, so only the CLI's own answer is pinned here.
@@ -876,12 +890,6 @@ suite("tmc langs cli spec", function () {
 
     test("should report a review holding the points back, and refuse a locked exercise", async function () {
       const dir = writeSubmittableProject("mooc-under-review")
-      const setReview = (review: string | null): Promise<Response> =>
-        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-review`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID, review }),
-        })
       expect((await setReview("awaits_teacher")).status).to.equal(204)
       try {
         const { progress } = (
@@ -1231,8 +1239,6 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should report a course the student may not open as forbidden", async function () {
-        const setAccess = (access: string): Promise<Response> =>
-          postJson("mooc-mock/set-course-access", { course_id: PYTHON_COURSE_ID, access })
         expect((await setAccess("forbidden")).status).to.equal(204)
         try {
           const refused = await runCli(testDir, ["mooc", "course", "--course-id", PYTHON_COURSE_ID])
@@ -1251,9 +1257,6 @@ suite("tmc langs cli spec", function () {
       })
 
       suite("tmc-server consulting courses.mooc.fi", function () {
-        const setOutcome = (outcome: string): Promise<Response> =>
-          postJson("tmc-mock/set-introspection-outcome", { outcome })
-
         teardown(async function () {
           await setOutcome("active")
         })

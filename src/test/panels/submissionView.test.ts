@@ -110,6 +110,8 @@ suite("submission views", () => {
   })
 })
 
+const failedRunTone = (points: string[]) =>
+  tmcResultView(tmcResult({ status: "fail", all_tests_passed: false, points }), [], 3).tone
 suite("tmcResultView", () => {
   test("a passed run has its points, links and no paste help", () => {
     expect(tmcResultView(tmcResult(), [], 3)).toMatchObject({
@@ -130,10 +132,8 @@ suite("tmcResultView", () => {
   })
 
   test("a failed run reads as partial success while it earned points, as a failure without", () => {
-    const failed = (points: string[]) =>
-      tmcResultView(tmcResult({ status: "fail", all_tests_passed: false, points }), [], 3).tone
-    expect(failed(["1.1"])).toBe("warning")
-    expect(failed([])).toBe("failed")
+    expect(failedRunTone(["1.1"])).toBe("warning")
+    expect(failedRunTone([])).toBe("failed")
   })
 
   test("a processing error carries the server's explanation", () => {

@@ -2,7 +2,9 @@
 
 // Loaded by test-electron (see bin/runIntegrationTests.js) as --extensionTestsPath: runs the
 // bundled suite (dist/integration.spec.js) with mocha's tdd UI inside the extension host.
-const Mocha = require("mocha")
+// Mocha's entry is ESM, which require() returns as a namespace or as the class depending on
+// the Node version VS Code ships; the CommonJS build it wraps loads the same everywhere.
+const Mocha = require("mocha/lib/mocha.cjs")
 const path = require("path")
 
 // Zero tests are zero failures, so a suite that stopped reaching the bundle or skipped every

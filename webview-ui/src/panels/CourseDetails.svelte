@@ -397,14 +397,12 @@
               title: "Nothing left to do right now",
               detail: "Every exercise is passed or closed for submissions.",
             }),
-      ...view.missingLanguageExtensions.map(
-        ({ extensionId, installSentence }): CourseNotice => ({
-          key: `extension:${extensionId}`,
-          tone: "info",
-          title: installSentence,
-          actions: [{ label: "Install", onclick: () => installExtension(extensionId) }],
-        }),
-      ),
+      ...view.missingLanguageExtensions.map(({ extensionId, installSentence }): CourseNotice => ({
+        key: `extension:${extensionId}`,
+        tone: "info",
+        title: installSentence,
+        actions: [{ label: "Install", onclick: () => installExtension(extensionId) }],
+      })),
       view.aiPolicyChange !== null && {
         key: "aiPolicyChange",
         tone: "info",
