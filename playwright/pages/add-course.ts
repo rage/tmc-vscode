@@ -46,7 +46,7 @@ export class AddCoursePage {
   /** Adds a tmc.mooc.fi course, which is listed under its organization. */
   public async addTmcCourse(organization: string, name: string): Promise<void> {
     const tmc = this.section("tmc.mooc.fi")
-    await tmc.getByRole("button", { name: `Show Courses of ${organization}` }).click()
+    await tmc.getByRole("button", { name: `Show courses of ${organization}` }).click()
     await tmc.getByRole("button", { name: `Add ${name}` }).click()
   }
 }

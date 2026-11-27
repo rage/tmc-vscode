@@ -98,8 +98,7 @@ describe("mooc mock conformance", () => {
 
   const currentUser = async (): Promise<unknown> => (await authFetch(api("/me"))).json()
 
-  const listing = async (id: string): Promise<number> =>
-    (await authFetch(api(`/courses/${id}/exercises`))).status
+  const listing = (id: string): Promise<number> => statusOf(`/courses/${id}/exercises`)
 
   const policy = async (): Promise<unknown> =>
     (

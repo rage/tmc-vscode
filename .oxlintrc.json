@@ -117,7 +117,6 @@
         "no-obj-calls": "error",
         "no-prototype-builtins": "error",
         "no-redeclare": "warn",
-        "no-inner-declarations": ["error", "functions", { "namespaces": "allow" }],
         "no-regex-spaces": "error",
         "no-self-assign": "error",
         "no-setter-return": "error",
@@ -203,7 +202,8 @@
     {
       "files": ["**/*.ts", "**/*.tsx"],
       "rules": {
-        "no-redeclare": "off"
+        "no-redeclare": "off",
+        "no-inner-declarations": ["error", "functions", { "namespaces": "allow" }]
       }
     },
     {

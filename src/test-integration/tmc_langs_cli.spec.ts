@@ -587,29 +587,14 @@ suite("tmc langs cli spec", function () {
     const PAST_DEADLINE_EXERCISE_ID = "f6f6f6f6-0000-4000-8000-000000000001"
     const VARIANTS_COURSE_ID = "33333333-3333-4333-8333-333333333333"
 
-    const setAccess = (access: string): Promise<Response> =>
-      postJson("mooc-mock/set-course-access", { course_id: PYTHON_COURSE_ID, access })
-
     const setReview = (review: string | null): Promise<Response> =>
-      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-review`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID, review }),
-      })
+      postJson("mooc-mock/set-exercise-review", { exercise_id: PASSING_EXERCISE_ID, review })
 
     const setCourseAccess = (access: string): Promise<Response> =>
-      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-course-access`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ course_id: PYTHON_COURSE_ID, access }),
-      })
+      postJson("mooc-mock/set-course-access", { course_id: PYTHON_COURSE_ID, access })
 
     const setEnrolled = (enrolled: boolean): Promise<Response> =>
-      fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-enrolled`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ course_id: PYTHON_COURSE_ID, enrolled }),
-      })
+      postJson("mooc-mock/set-enrolled", { course_id: PYTHON_COURSE_ID, enrolled })
 
     let configDir: string
     let tmc: Langs
@@ -1239,13 +1224,13 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should report a course the student may not open as forbidden", async function () {
-        expect((await setAccess("forbidden")).status).to.equal(204)
+        expect((await setCourseAccess("forbidden")).status).to.equal(204)
         try {
           const refused = await runCli(testDir, ["mooc", "course", "--course-id", PYTHON_COURSE_ID])
           expect(refused.result).to.equal("error")
           expect(errorKindOf(refused)).to.equal("forbidden")
         } finally {
-          await setAccess("open")
+          await setCourseAccess("open")
         }
       })
 
