@@ -186,7 +186,7 @@ importers:
         specifier: ^2.5.1
         version: 2.5.1(@vscode/codicons@0.0.46-24)
       '@vscode/codicons':
-        specifier: ^0.0.46-24
+        specifier: 0.0.46-24
         version: 0.0.46-24
       zod:
         specifier: ^4.6.7
