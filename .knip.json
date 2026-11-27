@@ -30,8 +30,6 @@
         ".husky/lint-staged-config.js",
         "playwright.real.config.ts"
       ],
-      // bin/package.bash runs it; knip does not read shell scripts.
-      "ignoreDependencies": ["@vscode/vsce"],
       "project": [
         "src/**/*.{ts,cjs}",
         "shared/**/*.ts",
