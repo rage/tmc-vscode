@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.9.1] - 2026-11-27
+
 ### Fixed
 
 - Add Course no longer lists the tmc.mooc.fi organizations before you log in. Logged out, it shows a single Log In, and lists the courses once you have logged in.
