@@ -73,9 +73,10 @@ function host(route: Panel | undefined): PanelHost {
 }
 
 /** A context whose user has added `added`. */
-function context(added: CourseIdentifier[] = []): ReadyActionContext {
+function context(added: CourseIdentifier[] = [], loggedIn = true): ReadyActionContext {
   const keys = new Set(added.map((id) => CourseIdentifiers.key(id)))
   return createMockActionContext({
+    loggedIn,
     startup: {
       userData: {
         getCourse: (id: CourseIdentifier) =>
@@ -233,6 +234,17 @@ suite("the add-course screen's handlers", function () {
       Err(new AuthorizationError("no session")),
     )
     expect((await listOrganizations(context(), panel)).unwrap()).toEqual({ kind: "loggedOut" })
+  })
+
+  test("lists neither the TMC organizations nor their courses without a login", async function () {
+    const panel = addCoursePanel()
+    await listOrganizations(context(), panel)
+    const loggedOut = context([], false)
+
+    expect((await listOrganizations(loggedOut, panel)).unwrap()).toEqual({ kind: "loggedOut" })
+    expect((await listTmcCourses(loggedOut, panel, "hy")).err).toBe(true)
+    expect(actions.listTmcOrganizations).toHaveBeenCalledOnce()
+    expect(actions.listOrganizationCourses).not.toHaveBeenCalled()
   })
 
   test("lists the courses of an organization it listed, and of no other", async function () {

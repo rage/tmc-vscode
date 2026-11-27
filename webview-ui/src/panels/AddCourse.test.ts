@@ -171,7 +171,7 @@ suite("the add-course screen", () => {
     ).toBeInTheDocument()
   })
 
-  test("logged out of courses.mooc.fi, offers to log in", async () => {
+  test("with only a tmc.mooc.fi login, offers a courses.mooc.fi login beside the organizations", async () => {
     await renderScreen({ kind: "loggedOut" })
 
     const mooc = section("courses.mooc.fi")
@@ -183,6 +183,33 @@ suite("the add-course screen", () => {
       sourcePanel: SOURCE,
       action: "logIn",
     })
+  })
+
+  test("logged out, offers one Log In instead of the listings and the search", async () => {
+    render(AddCourse, { props: { panel: PANEL } })
+    replyToRequest("requestMoocCatalog", { ok: true, value: { kind: "loggedOut" } })
+    replyToRequest("requestTmcOrganizations", { ok: true, value: { kind: "loggedOut" } })
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Log In" }))
+
+    expect(screen.getAllByRole("button", { name: "Log In" })).toHaveLength(1)
+    expect(screen.getAllByText("Not logged in")).toHaveLength(1)
+    expect(screen.queryByRole("region")).not.toBeInTheDocument()
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "addCourseAction",
+      sourcePanel: SOURCE,
+      action: "logIn",
+    })
+  })
+
+  test("logged out with courses.mooc.fi off, still offers to log in", async () => {
+    render(AddCourse, { props: { panel: PANEL } })
+    replyToRequest("requestMoocCatalog", { ok: true, value: { kind: "disabled" } })
+    replyToRequest("requestTmcOrganizations", { ok: true, value: { kind: "loggedOut" } })
+
+    expect(await screen.findByRole("button", { name: "Log In" })).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "tmc.mooc.fi" })).not.toBeInTheDocument()
   })
 
   test("enrolled on no course, points to courses.mooc.fi", async () => {

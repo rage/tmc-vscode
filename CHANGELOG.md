@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Add Course no longer lists the tmc.mooc.fi organizations before you log in. Logged out, it shows a single Log In, and lists the courses once you have logged in.
+
 ## [3.9.0] - 2026-11-26
 
 This pre-release previews TestMyCode 4, a redesign. Your courses, downloaded exercises and login carry over from 3.5.5.

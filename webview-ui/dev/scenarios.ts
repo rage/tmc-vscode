@@ -1247,6 +1247,10 @@ export const SCENARIOS: Scenario[] = [
     requestMoocCatalog: { ok: true, value: { kind: "listed", items: [] } },
     requestTmcOrganizations: { ok: true, value: tmcOrganizations },
   }),
+  addCourseScenario("logged-out", {
+    requestMoocCatalog: { ok: true, value: { kind: "loggedOut" } },
+    requestTmcOrganizations: { ok: true, value: { kind: "loggedOut" } },
+  }),
   addCourseScenario("unavailable", {
     requestMoocCatalog: { ok: true, value: { kind: "loggedOut" } },
     requestTmcOrganizations: {
